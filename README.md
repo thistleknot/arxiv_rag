@@ -7,7 +7,7 @@
 ### Architecture
 ```
 Document Sources
-  ├─ ArXiv Papers (Markdown) → Section-based grouping
+  ├─ ArXiv Papers (Markdown) → Paper-level output (hierarchical sections)
   └─ Quotes Dataset (HuggingFace) → Quote-level grouping
     ↓
 [Equidistant Chunking] → Log median + 2*MAD threshold
@@ -22,37 +22,48 @@ Document Sources
     ├─ vector(64) IVFFlat + cosine
     └─ sparsevec(vocab_size)
     ↓
-[GIST Pipeline] → 7-Stage Retrieval
+[GIST Pipeline] → 8-Stage Paper-Level Retrieval
   1. Parallel Retrieval (BM25 + Dense) at CHUNK level
   2. GIST Selection on BM25 pool (diversity)
   3. GIST Selection on Dense pool (diversity)
   4. RRF Fusion of chunks
-  5. GROUP chunks + RECONSTRUCT full text
-  6. ColBERT Late Interaction on FULL TEXT
-  7. Cross-Encoder Reranking on FULL TEXT
+  5. GROUP chunks into SECTIONS + RECONSTRUCT full text
+  6. GROUP sections into PAPERS
+  7. ColBERT Late Interaction on SECTION full text
+  8. Cross-Encoder Reranking on PAPER full text
 ```
 
 ### Key Features
 
 #### ✅ GIST Retrieval Pipeline
-**7-stage cascading pipeline for optimal relevance-diversity tradeoff**:
+**8-stage cascading pipeline for paper-level output with optimal relevance-diversity tradeoff**:
 1. **Parallel Retrieval**: BM25 + Dense at chunk level (top_k²)
 2. **GIST Selection BM25**: Greedy diversity on BM25 pool (λ=0.7)
 3. **GIST Selection Dense**: Greedy diversity on dense pool (λ=0.7)
 4. **RRF Fusion**: Combine pools with reciprocal rank fusion
-5. **Group Reconstruction**: Group chunks by parent ID, fetch ALL chunks, reconstruct full text
-6. **ColBERT Reranking**: Late interaction on FULL TEXT (token-level MaxSim)
-7. **Cross-Encoder Reranking**: Final scoring on FULL TEXT
+5. **Group Sections**: Group chunks by `(paper_id, section_idx)`, fetch ALL chunks, reconstruct full section text
+6. **Group Papers**: Aggregate sections into papers using Fibonacci cascade
+7. **ColBERT Reranking**: Late interaction on SECTION full text (token-level MaxSim)
+8. **Cross-Encoder Reranking**: Final scoring on PAPER full text (full attention)
 
-**Key Innovation**: Chunking for retrieval, reconstruction before neural reranking
+**Key Innovation**: Chunking for retrieval, hierarchical reconstruction before neural reranking
 - Retrieve granular chunks for precision
-- Reconstruct complete context for neural models
+- Reconstruct complete sections + papers for neural models
 - GIST ensures diversity (vs MMR pure relevance)
+- **Paper-level output**: Returns complete papers with all sections
+- **Fibonacci cascade**: top_k papers retrieved → fib_lower(top_k) papers returned
+
+**Example: top_k=21**
+- Retrieve 441 chunks → GIST 377 → sections 233 → papers 21 → ColBERT 21 → **Final 13 papers**
+- Each paper contains multiple sections with full text
+- Scores tracked at chunk, section, and paper levels
 
 #### ✅ Multiple Document Types
 **Unified GIST interface with document-specific implementations**:
-- **ArXiv Papers**: Groups by `(paper_id, section_idx)` → reconstructs full sections
+- **ArXiv Papers**: Groups by `(paper_id, section_idx)` → reconstructs full sections → aggregates into papers
+  - **Output**: `List[RetrievedPaper]` containing paper_id, sections, and hierarchical scores
 - **Quotes**: Groups by `quote_id` → reconstructs full quotes from chunks
+  - **Output**: `List[RetrievedGroup]` for backward compatibility
 
 #### ✅ BERT WordPiece Tokenization
 **Aligned lexical and semantic spaces**:
@@ -139,13 +150,17 @@ checkpoints/
 
 | Stage | Input | Output | Operation |
 |-------|-------|--------|-----------|
-| 1. Retrieve | Query | 625+625 chunks | Parallel BM25 + Dense |
-| 2. GIST BM25 | 625 chunks | 21 chunks | Greedy diversity (λ=0.7) |
-| 3. GIST Dense | 625 chunks | 21 chunks | Greedy diversity (λ=0.7) |
-| 4. RRF | 42 chunks | 20 chunks | Reciprocal rank fusion |
-| 5. Group | 20 chunks | 13 groups | Reconstruct full text |
-| 6. ColBERT | 13 groups | 5 groups | Token MaxSim on full text |
-| 7. Cross-Encoder | 5 groups | 3 groups | Attention scoring |
+| 1. Retrieve | Query | 441+441 chunks | Parallel BM25 + Dense (top_k²) |
+| 2. GIST BM25 | 441 chunks | ~188 chunks | Greedy diversity (λ=0.7, φ/2) |
+| 3. GIST Dense | 441 chunks | ~189 chunks | Greedy diversity (λ=0.7, φ/2) |
+| 4. RRF | 377 chunks | 377 chunks | Reciprocal rank fusion |
+| 5. Group Sections | 377 chunks | 233 sections | Reconstruct full section text |
+| 6. Group Papers | 233 sections | 21 papers | Aggregate by paper_id |
+| 7. ColBERT | 21 papers | 21 papers | Token MaxSim on section text |
+| 8. Cross-Encoder | 21 papers | **13 papers** | Attention on paper text (fib_lower(21)) |
+
+**Fibonacci Cascade**: top_k=21 → final output=13 papers (fib_lower function)
+**Score Tracking**: RRF at chunk level → aggregated to sections → max ColBERT across sections → Cross-Encoder on full paper
 
 ---
 
@@ -182,18 +197,63 @@ python pgvector_retriever.py --build
 
 #### 2. Search ArXiv
 ```bash
-python pgvector_retriever.py --search "transformer attention mechanism" --top_k 5
+python pgvector_retriever.py --search "transformer attention mechanism" --top_k 13
 ```
 
 **Output:**
 ```
-GIST Pipeline: retrieve 625 chunks → GIST 21 → group 13 → ColBERT 5 → Cross-Encoder 3
+GIST Pipeline: retrieve 169 chunks → GIST 144 → sections 89 → papers 13 → ColBERT 13 → Final 8 papers
 
-1. [2410_05258] Section 1
-   Score: 8.4521
-   Chunks: 8
+1. 2410_13276
+   Score: 7.2883
+   Sections: 1
    Preview: Transformer has garnered significant research...
+
+2. 2306_07303
+   Score: 6.5812
+   Sections: 3
+   Preview: The transformer architecture revolutionized...
 ```
+
+**Returns**: 8 papers (fib_lower(13) = 8) with complete section details
+
+#### 2a. Search ArXiv with Export to Markdown
+```bash
+python pgvector_retriever.py --search "agentic memory methods" --top_k 21 --export "search_results.md"
+```
+
+**Export Format** (hierarchical):
+```markdown
+## 1. 2502_12110
+
+**Final Score:** 5.1730
+**RRF Score:** 0.1772
+**ColBERT Score:** 6.3101
+**Cross-Encoder Score:** 5.1730
+**Sections:** 8
+
+### Section 1: 2502_12110:s0
+
+**Section RRF:** 0.0735
+**Section ColBERT:** 5.8342
+
+[Full section text...]
+
+### Section 2: 2502_12110:s1
+
+**Section RRF:** 0.0404
+**Section ColBERT:** 5.8909
+
+[Full section text...]
+```
+
+**Returns**: 13 papers (fib_lower(21) = 13), each with complete sections and multi-level scores
+
+**What happens:**
+- Runs full GIST 7-stage pipeline
+- Returns top 21 groups (after ColBERT reranking)
+- Exports complete section text to `search_results.md`
+- File contains: query, scores, metadata, and full section content
 
 #### 3. Clear ArXiv Database
 ```bash
@@ -229,6 +289,17 @@ python quotes_retriever.py --search "wisdom and knowledge" --top_k 5
    Chunks: 1
    Preview: "Wisdom comes from experience..."
 ```
+
+#### 2a. Search Quotes with Export to Markdown
+```bash
+python quotes_retriever.py --search "courage and fear" --top_k 10 --export "quotes_results.md"
+```
+
+**What happens:**
+- Runs full GIST 7-stage pipeline on quotes
+- Returns top 10 quotes (after ColBERT reranking)
+- Exports complete quote text with authors to `quotes_results.md`
+- File contains: query, scores, authors, tags, and full quote content
 
 ---
 

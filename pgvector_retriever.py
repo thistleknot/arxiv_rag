@@ -66,8 +66,9 @@ import psycopg2
 from psycopg2.extras import execute_values
 
 from gist_retriever import (
-    GISTRetriever, GISTConfig, RetrievedDoc, RetrievedGroup,
-    gist_select, compute_rrf_score, format_results_markdown, format_groups_markdown
+    GISTRetriever, GISTConfig, RetrievedDoc, RetrievedGroup, RetrievedPaper,
+    gist_select, compute_rrf_score, format_results_markdown, format_groups_markdown,
+    format_papers_markdown
 )
 
 
@@ -562,6 +563,9 @@ class PGVectorRetriever(GISTRetriever):
     def _get_group_key(self, doc: RetrievedDoc) -> Tuple:
         """
         Extract grouping key: (paper_id, section_idx) for arxiv.
+        
+        Groups chunks by section to maintain section-level granularity.
+        Each section becomes a separate retrievable unit.
         """
         return (
             doc.metadata.get('paper_id'),
@@ -570,7 +574,10 @@ class PGVectorRetriever(GISTRetriever):
     
     def _fetch_all_chunks_for_group(self, group_key: Tuple) -> List[RetrievedDoc]:
         """
-        Fetch ALL chunks for a (paper_id, section_idx) group.
+        Fetch ALL chunks from a specific section.
+        
+        Groups by (paper_id, section_idx) to reconstruct complete sections.
+        Each section is treated as an independent retrievable unit.
         """
         self.connect()
         paper_id, section_idx = group_key
@@ -601,6 +608,8 @@ class PGVectorRetriever(GISTRetriever):
     def _group_key_to_id(self, group_key: Tuple) -> str:
         """
         Convert (paper_id, section_idx) to string identifier.
+        
+        Format: "paper_id:s{section_idx}" (e.g., "1301_3781:s0")
         """
         paper_id, section_idx = group_key
         return f"{paper_id}:s{section_idx}"
@@ -878,6 +887,14 @@ if __name__ == "__main__":
             for c in chunks
         ]
         
+        # Save chunks to msgpack for diagnostics
+        import msgpack
+        import os
+        os.makedirs("checkpoints", exist_ok=True)
+        with open("checkpoints/chunks.msgpack", "wb") as f:
+            msgpack.pack(chunk_dicts, f)
+        print(f"Saved {len(chunk_dicts)} chunks to checkpoints/chunks.msgpack")
+        
         with PGVectorRetriever(config) as retriever:
             retriever.build_index(chunk_dicts, reset=args.reset)
     
@@ -909,18 +926,18 @@ if __name__ == "__main__":
                     print(f"Full content exported to {args.export}")
             
             else:
-                # Group-level search (default: sections)
+                # Paper-level search (returns papers with sections)
                 results = retriever.search(args.search, top_k=args.top_k)
                 
-                for i, group in enumerate(results, 1):
-                    print(f"\n{i}. {group.group_id}")
-                    print(f"   Score: {group.final_score:.4f}")
-                    print(f"   Chunks: {group.metadata.get('num_chunks', '?')}")
-                    preview = group.full_text[:150] + "..." if len(group.full_text) > 150 else group.full_text
+                for i, paper in enumerate(results, 1):
+                    print(f"\n{i}. {paper.paper_id}")
+                    print(f"   Score: {paper.final_score:.4f}")
+                    print(f"   Sections: {paper.metadata.get('num_sections', '?')}")
+                    preview = paper.full_text[:150] + "..." if len(paper.full_text) > 150 else paper.full_text
                     print(f"   Preview: {preview}")
                 
                 if args.save:
-                    md = format_groups_markdown(results, include_full_text=False)
+                    md = format_papers_markdown(results, include_sections=True)
                     with open(args.save, 'w', encoding='utf-8') as f:
                         f.write(md)
                     print(f"\nSummary saved to {args.save}")
@@ -929,19 +946,34 @@ if __name__ == "__main__":
                     with open(args.export, 'w', encoding='utf-8') as f:
                         f.write(f"# Search Results: {args.search}\n\n")
                         f.write(f"**Query:** {args.search}\n")
-                        f.write(f"**Results:** {len(results)} sections\n\n")
+                        f.write(f"**Results:** {len(results)} papers\n\n")
                         f.write("---\n\n")
                         
-                        for i, group in enumerate(results, 1):
-                            f.write(f"## {i}. {group.group_id}\n\n")
-                            f.write(f"**Score:** {group.final_score:.4f}\n")
-                            f.write(f"**Chunks in section:** {group.metadata.get('num_chunks', '?')}\n")
-                            f.write(f"**Matched chunks:** {group.metadata.get('num_matched', '?')}\n\n")
-                            f.write("### Full Section Text\n\n")
-                            f.write(group.full_text)
-                            f.write("\n\n---\n\n")
+                        for i, paper in enumerate(results, 1):
+                            f.write(f"## {i}. {paper.paper_id}\n\n")
+                            f.write(f"**Final Score:** {paper.final_score:.4f}\n")
+                            if paper.rrf_score is not None:
+                                f.write(f"**RRF Score:** {paper.rrf_score:.4f}\n")
+                            if paper.colbert_score is not None:
+                                f.write(f"**ColBERT Score:** {paper.colbert_score:.4f}\n")
+                            if paper.cross_encoder_score is not None:
+                                f.write(f"**Cross-Encoder Score:** {paper.cross_encoder_score:.4f}\n")
+                            f.write(f"**Sections:** {paper.metadata.get('num_sections', '?')}\n\n")
+                            
+                            # Write all sections
+                            for j, section in enumerate(paper.sections, 1):
+                                f.write(f"### Section {j}: {section.group_id}\n\n")
+                                if section.rrf_score is not None:
+                                    f.write(f"**Section RRF:** {section.rrf_score:.4f}\n")
+                                if section.colbert_score is not None:
+                                    f.write(f"**Section ColBERT:** {section.colbert_score:.4f}\n")
+                                f.write("\n")
+                                f.write(section.full_text)
+                                f.write("\n\n")
+                            
+                            f.write("---\n\n")
                     
-                    print(f"\nFull sections exported to {args.export}")
+                    print(f"\nFull papers with sections exported to {args.export}")
     
     else:
         parser.print_help()

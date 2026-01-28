@@ -627,6 +627,31 @@ class RetrievedGroup:
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass
+class RetrievedPaper:
+    """
+    Represents a paper with all its sections.
+    
+    Attributes:
+        paper_id: Paper identifier
+        sections: List of RetrievedGroup sections belonging to this paper
+        full_text: Concatenated text from all sections
+        rrf_score: Aggregated RRF score from all sections
+        colbert_score: Max ColBERT score across sections
+        cross_encoder_score: Cross-encoder score on full paper text
+        final_score: Final ranking score
+        metadata: Additional metadata
+    """
+    paper_id: str
+    sections: List[RetrievedGroup] = field(default_factory=list)
+    full_text: str = ""
+    rrf_score: Optional[float] = None
+    colbert_score: Optional[float] = None
+    cross_encoder_score: Optional[float] = None
+    final_score: Optional[float] = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
 # =============================================================================
 # Abstract GIST Retriever
 # =============================================================================
@@ -820,47 +845,53 @@ class GISTRetriever(ABC):
         query: str,
         top_k: int = 21,
         return_chunks: bool = False
-    ) -> List[RetrievedGroup]:
+    ) -> List[RetrievedPaper]:
         """
-        Execute full GIST retrieval pipeline with grouping.
+        Execute full GIST retrieval pipeline with paper-level grouping.
         
         Pipeline:
             1. Retrieve top_k² CHUNKS from BM25 and dense indexes
             2. GIST selection on each pool (chunk-level)
             3. RRF fusion (chunk-level)
-            4. GROUP chunks by parent (section/quote)
-            5. RECONSTRUCT full text for each group
-            6. ColBERT rerank on FULL TEXT
-            7. Cross-encoder rerank on FULL TEXT
+            4. GROUP chunks into SECTIONS
+            5. GROUP sections into PAPERS
+            6. Select sections from top (top_k × φ) papers for ColBERT
+            7. ColBERT rerank on section full text
+            8. Aggregate sections back to papers
+            9. Cross-encoder rerank papers
+            10. Return top_k PAPERS
         
         Args:
             query: Query text
-            top_k: Number of GROUPS to return
+            top_k: Number of PAPERS to return
             return_chunks: If True, include chunk details in results
         
         Returns:
-            List of RetrievedGroup sorted by final_score (descending)
+            List of RetrievedPaper sorted by final_score (descending)
         """
         fib = self.config.fibonacci_sequence
         
         # Fibonacci cascade sizing
         retrieval_limit = top_k * top_k  # Broad recall (chunks)
         gist_limit = get_fibonacci_lower(retrieval_limit, fib)  # Post-GIST (chunks)
-        group_limit = get_fibonacci_lower(gist_limit, fib)  # Groups for ColBERT
-        colbert_limit = top_k  # ColBERT target (groups)
-        final_limit = get_fibonacci_lower(top_k, fib)  # Cross-encoder target (groups)
+        section_limit = get_fibonacci_lower(gist_limit, fib)  # Sections to create
         
-        print(f"GIST Pipeline: retrieve {retrieval_limit} chunks → GIST {gist_limit} → group {group_limit} → ColBERT {colbert_limit} → Cross-Encoder {final_limit}")
+        # For paper-level cascade
+        paper_pool_size = top_k  # Papers to consider for ColBERT
+        colbert_papers = top_k  # ColBERT operates on sections from top_k papers
+        final_papers = get_fibonacci_lower(top_k, fib)  # Final output: fib_lower(top_k) papers
+        
+        print(f"GIST Pipeline: retrieve {retrieval_limit} chunks → GIST {gist_limit} → sections {section_limit} → papers {paper_pool_size} → ColBERT {colbert_papers} papers → Final {final_papers} papers")
         
         # Step 1: Parallel retrieval (chunks)
-        print(f"  [1/7] Retrieving {retrieval_limit} chunks from each pool...")
+        print(f"  [1/8] Retrieving {retrieval_limit} chunks from each pool...")
         bm25_pool = self._retrieve_bm25(query, retrieval_limit)
         dense_pool = self._retrieve_dense(query, retrieval_limit)
         
         print(f"        BM25: {len(bm25_pool)}, Dense: {len(dense_pool)}")
         
         # Step 2: GIST selection on BM25 pool
-        print(f"  [2/7] GIST selection on BM25 pool...")
+        print(f"  [2/8] GIST selection on BM25 pool...")
         bm25_selected = self._gist_select_pool(
             pool=bm25_pool,
             query=query,
@@ -870,7 +901,7 @@ class GISTRetriever(ABC):
         print(f"        Selected {len(bm25_selected)} chunks from BM25")
         
         # Step 3: GIST selection on dense pool
-        print(f"  [3/7] GIST selection on dense pool...")
+        print(f"  [3/8] GIST selection on dense pool...")
         dense_selected = self._gist_select_pool(
             pool=dense_pool,
             query=query,
@@ -880,43 +911,49 @@ class GISTRetriever(ABC):
         print(f"        Selected {len(dense_selected)} chunks from dense")
         
         # Step 4: RRF fusion (chunks)
-        print(f"  [4/7] RRF fusion...")
+        print(f"  [4/8] RRF fusion...")
         fused_chunks = self._rrf_fusion(bm25_selected, dense_selected)
         print(f"        Fused: {len(fused_chunks)} unique chunks")
         
-        # Step 5: Group chunks and reconstruct full text
-        print(f"  [5/7] Grouping and reconstructing...")
-        groups = self._group_and_reconstruct(fused_chunks, limit=group_limit)
-        print(f"        Created {len(groups)} groups")
+        # Step 5: Group chunks into sections
+        print(f"  [5/8] Grouping chunks into sections...")
+        sections = self._group_and_reconstruct(fused_chunks, limit=section_limit)
+        print(f"        Created {len(sections)} sections")
         
-        # Step 6: ColBERT reranking on full text
-        if self.config.use_colbert and len(groups) > colbert_limit:
-            print(f"  [6/7] ColBERT reranking {len(groups)} → {colbert_limit} groups...")
-            groups = self._colbert_rerank_groups(query, groups, colbert_limit)
-        else:
-            print(f"  [6/7] ColBERT skipped (groups={len(groups)}, limit={colbert_limit})")
+        # Step 6: Group sections into papers and select top papers
+        print(f"  [6/8] Grouping sections into papers...")
+        papers = self._group_sections_into_papers(sections, paper_pool_size)
+        print(f"        Created {len(papers)} papers from top scoring papers")
         
-        # Step 7: Cross-encoder reranking on full text
-        if self.config.use_cross_encoder and len(groups) > final_limit:
-            print(f"  [7/7] Cross-Encoder reranking {len(groups)} → {final_limit} groups...")
-            groups = self._cross_encoder_rerank_groups(query, groups, final_limit)
+        # Step 7: ColBERT rerank sections within selected papers
+        if self.config.use_colbert and len(papers) > 0:
+            print(f"  [7/8] ColBERT reranking sections from {len(papers)} papers...")
+            papers = self._colbert_rerank_papers(query, papers)
         else:
-            print(f"  [7/7] Cross-Encoder skipped (groups={len(groups)}, limit={final_limit})")
+            print(f"  [7/8] ColBERT skipped")
+        
+        # Step 8: Cross-encoder rerank papers
+        if self.config.use_cross_encoder and len(papers) > 0:
+            print(f"  [8/8] Cross-Encoder reranking papers...")
+            papers = self._cross_encoder_rerank_papers(query, papers, final_papers)
+        else:
+            print(f"  [8/8] Cross-Encoder skipped")
         
         # Ensure we don't exceed requested top_k
-        results = groups[:top_k]
+        results = papers[:top_k]
         
         # Set final scores
-        for group in results:
-            if group.final_score is None:
-                group.final_score = group.rrf_score
+        for paper in results:
+            if paper.final_score is None:
+                paper.final_score = paper.rrf_score
         
         # Optionally strip chunks to reduce memory
         if not return_chunks:
-            for group in results:
-                group.chunks = []
+            for paper in results:
+                for section in paper.sections:
+                    section.chunks = []
         
-        print(f"  Returning {len(results)} groups")
+        print(f"  Returning {len(results)} papers")
         return results
     
     def _gist_select_pool(
@@ -1045,27 +1082,82 @@ class GISTRetriever(ABC):
         # Reconstruct full text for top groups
         groups = []
         for key in sorted_keys:
-            # Fetch ALL chunks for this group (not just retrieved ones)
-            all_chunks = self._fetch_all_chunks_for_group(key)
+            matched_chunks = groups_dict[key]['chunks']
             
-            # Sort by chunk_idx and concatenate
+            # Fetch ALL chunks for this group (section or quote)
+            all_chunks = self._fetch_all_chunks_for_group(key)
             all_chunks.sort(key=lambda c: c.metadata.get('chunk_idx', 0))
+            
+            # Reconstruct full text
             full_text = "\n".join([c.content for c in all_chunks])
             
             group = RetrievedGroup(
                 group_id=self._group_key_to_id(key),
                 group_key=key,
                 full_text=full_text,
-                chunks=groups_dict[key]['chunks'],
+                chunks=matched_chunks,
                 rrf_score=groups_dict[key]['rrf_sum'],
                 metadata={
                     'num_chunks': len(all_chunks),
-                    'num_matched': len(groups_dict[key]['chunks'])
+                    'num_matched': len(matched_chunks)
                 }
             )
             groups.append(group)
         
         return groups
+    
+    def _group_sections_into_papers(
+        self,
+        sections: List[RetrievedGroup],
+        max_papers: int
+    ) -> List[RetrievedPaper]:
+        """
+        Group sections by paper and select top papers.
+        
+        Args:
+            sections: List of section groups
+            max_papers: Maximum number of papers to include
+        
+        Returns:
+            List of RetrievedPaper with sections grouped by paper_id
+        """
+        # Group sections by paper_id (first element of group_key)
+        papers_dict = defaultdict(lambda: {'sections': [], 'rrf_sum': 0.0})
+        
+        for section in sections:
+            # Extract paper_id from group_key (paper_id, section_idx)
+            paper_id = section.group_key[0]
+            papers_dict[paper_id]['sections'].append(section)
+            papers_dict[paper_id]['rrf_sum'] += section.rrf_score or 0.0
+        
+        # Sort papers by aggregated RRF score
+        sorted_paper_ids = sorted(
+            papers_dict.keys(),
+            key=lambda p: papers_dict[p]['rrf_sum'],
+            reverse=True
+        )[:max_papers]
+        
+        # Build RetrievedPaper objects
+        papers = []
+        for paper_id in sorted_paper_ids:
+            sections_list = papers_dict[paper_id]['sections']
+            sections_list.sort(key=lambda s: s.group_key[1])  # Sort by section_idx
+            
+            # Concatenate all section text
+            full_text = "\n\n".join([s.full_text for s in sections_list])
+            
+            paper = RetrievedPaper(
+                paper_id=paper_id,
+                sections=sections_list,
+                full_text=full_text,
+                rrf_score=papers_dict[paper_id]['rrf_sum'],
+                metadata={
+                    'num_sections': len(sections_list)
+                }
+            )
+            papers.append(paper)
+        
+        return papers
     
     def _colbert_rerank_groups(
         self,
@@ -1107,6 +1199,58 @@ class GISTRetriever(ABC):
         
         groups.sort(key=lambda g: g.cross_encoder_score, reverse=True)
         return groups[:limit]
+    
+    def _colbert_rerank_papers(
+        self,
+        query: str,
+        papers: List[RetrievedPaper]
+    ) -> List[RetrievedPaper]:
+        """Rerank papers by reranking their sections with ColBERT."""
+        if not self.colbert_scorer.available:
+            print("        ColBERT unavailable, skipping...")
+            return papers
+        
+        # Rerank all sections across all papers
+        all_sections = []
+        for paper in papers:
+            all_sections.extend(paper.sections)
+        
+        texts = [s.full_text for s in all_sections]
+        scores = self.colbert_scorer.score(query, texts)
+        
+        for section, score in zip(all_sections, scores):
+            section.colbert_score = float(score)
+        
+        # Update paper scores: max ColBERT score across sections
+        for paper in papers:
+            if paper.sections:
+                paper.colbert_score = max(s.colbert_score for s in paper.sections if s.colbert_score is not None)
+        
+        # Sort papers by max section score
+        papers.sort(key=lambda p: p.colbert_score or 0.0, reverse=True)
+        return papers
+    
+    def _cross_encoder_rerank_papers(
+        self,
+        query: str,
+        papers: List[RetrievedPaper],
+        limit: int
+    ) -> List[RetrievedPaper]:
+        """Rerank papers using cross-encoder on full paper text."""
+        if not self.cross_encoder_scorer.available:
+            print("        Cross-Encoder unavailable, skipping...")
+            return papers[:limit]
+        
+        # Score full paper text (concatenated sections)
+        texts = [p.full_text for p in papers]
+        scores = self.cross_encoder_scorer.score(query, texts)
+        
+        for paper, score in zip(papers, scores):
+            paper.cross_encoder_score = float(score)
+            paper.final_score = float(score)
+        
+        papers.sort(key=lambda p: p.cross_encoder_score, reverse=True)
+        return papers[:limit]
     
     # =========================================================================
     # Backward Compatibility: Chunk-Level Search
@@ -1286,6 +1430,59 @@ def format_groups_markdown(groups: List[RetrievedGroup], include_full_text: bool
         else:
             preview = group.full_text[:500] + "..." if len(group.full_text) > 500 else group.full_text
             lines.append(f"**Preview:**\n{preview}\n")
+        
+        lines.append("---\n")
+    
+    return "\n".join(lines)
+
+
+def format_papers_markdown(papers: List[RetrievedPaper], include_sections: bool = True) -> str:
+    """
+    Format paper-level retrieval results as markdown.
+    
+    Args:
+        papers: List of RetrievedPaper from search()
+        include_sections: If True, show individual sections
+    
+    Returns:
+        Markdown-formatted string
+    """
+    lines = ["# Retrieval Results (Papers)\n"]
+    
+    for i, paper in enumerate(papers, 1):
+        lines.append(f"## {i}. {paper.paper_id}\n")
+        
+        # Scores
+        scores = []
+        if paper.rrf_score is not None:
+            scores.append(f"RRF: {paper.rrf_score:.4f}")
+        if paper.colbert_score is not None:
+            scores.append(f"ColBERT: {paper.colbert_score:.4f}")
+        if paper.cross_encoder_score is not None:
+            scores.append(f"CrossEnc: {paper.cross_encoder_score:.4f}")
+        if paper.final_score is not None:
+            scores.append(f"**Final: {paper.final_score:.4f}**")
+        
+        lines.append(f"**Scores:** {' | '.join(scores)}\n")
+        
+        # Metadata
+        if paper.metadata:
+            meta_str = ", ".join([f"{k}={v}" for k, v in paper.metadata.items()])
+            lines.append(f"**Metadata:** {meta_str}\n")
+        
+        # Sections
+        if include_sections and paper.sections:
+            lines.append(f"\n**Sections ({len(paper.sections)}):**\n")
+            for j, section in enumerate(paper.sections, 1):
+                section_scores = []
+                if section.rrf_score is not None:
+                    section_scores.append(f"RRF: {section.rrf_score:.4f}")
+                if section.colbert_score is not None:
+                    section_scores.append(f"ColBERT: {section.colbert_score:.4f}")
+                
+                lines.append(f"  {j}. {section.group_id} | {' | '.join(section_scores)}")
+                preview = section.full_text[:200] + "..." if len(section.full_text) > 200 else section.full_text
+                lines.append(f"     {preview}\n")
         
         lines.append("---\n")
     
