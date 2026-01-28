@@ -89,11 +89,13 @@ class QuotesConfig(GISTConfig):
     # Embeddings
     embedding_dim: int = 64
     embedding_model: str = "minishlab/M2V_base_output"
+    use_full_embed: bool = False  # If True, disable model2vec and use full sentence embeddings
     
     # BM25
     bm25_cache_path: Path = Path("quotes_bm25_vocab.msgpack")
     bm25_k1: float = 1.5
     bm25_b: float = 0.75
+    use_lemmatized: bool = False  # If True, use lemmatization for BM25 instead of BERT tokenizer
 
 
 # =============================================================================
@@ -779,6 +781,8 @@ if __name__ == "__main__":
     # Build options
     parser.add_argument("--reset", action="store_true", help="Drop existing table before build")
     parser.add_argument("--quotes_file", type=str, help="Path to quotes data file for --build")
+    parser.add_argument("--lemma", action="store_true", help="Use lemmatization for BM25 (better coverage)")
+    parser.add_argument("--fullembed", action="store_true", help="Use full sentence embeddings instead of model2vec")
     
     # Database connection
     parser.add_argument("--host", type=str, default="192.168.3.18", help="Database host")
@@ -796,7 +800,9 @@ if __name__ == "__main__":
         db_name=args.db,
         db_user=args.user,
         db_password=args.password,
-        table_name=args.table
+        table_name=args.table,
+        use_lemmatized=args.lemma,
+        use_full_embed=args.fullembed
     )
     
     if args.clear:

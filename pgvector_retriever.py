@@ -96,11 +96,13 @@ class PGVectorConfig(GISTConfig):
     # Embeddings
     embedding_dim: int = 64
     embedding_model: str = "minishlab/M2V_base_output"
+    use_full_embed: bool = False  # If True, disable model2vec and use full sentence embeddings
     
     # BM25
     bm25_cache_path: Path = Path("bm25_vocab.msgpack")
     bm25_k1: float = 1.5
     bm25_b: float = 0.75
+    use_lemmatized: bool = False  # If True, use lemmatization for BM25 instead of BERT tokenizer
 
 
 # =============================================================================
@@ -137,6 +139,115 @@ class TextPreprocessor:
         
         tokens = TextPreprocessor._tokenizer.tokenize(text.lower())
         return [self.vocab.get(t, -1) for t in tokens if t in self.vocab]
+
+
+class LemmatizedTextPreprocessor:
+    """
+    Lemmatized tokenizer for BM25 with improved coverage.
+    
+    Custom tokenization strategy:
+      1. Split on transitions between alpha/numeric/punctuation
+         Example: "abc123???" → ["abc", "123", "???"]
+                  "s/n 1234-abc12" → ["s", "/", "n", "1234", "-", "abc", "12"]
+      2. Lemmatize each token
+      3. Map to vocab IDs
+    
+    This provides better BM25 coverage for technical text, serial numbers,
+    mixed alphanumeric strings, and punctuation-heavy content.
+    """
+    
+    _lemmatizer = None  # Class-level cache
+    
+    def __init__(self, vocab_dict: Dict[str, int] = None):
+        self.vocab = vocab_dict if vocab_dict else {}
+        self.vocab_size = len(self.vocab) if vocab_dict else 0
+        
+        # Lazy load lemmatizer (shared across instances)
+        if LemmatizedTextPreprocessor._lemmatizer is None:
+            import spacy
+            try:
+                LemmatizedTextPreprocessor._lemmatizer = spacy.load("en_core_web_sm", disable=["parser", "ner"])
+            except OSError:
+                print("Downloading spacy en_core_web_sm model...")
+                import subprocess
+                subprocess.run(["python", "-m", "spacy", "download", "en_core_web_sm"], check=True)
+                LemmatizedTextPreprocessor._lemmatizer = spacy.load("en_core_web_sm", disable=["parser", "ner"])
+    
+    @staticmethod
+    def custom_tokenize(text: str) -> List[str]:
+        """
+        Split text on transitions between character types.
+        
+        Character types: alphabetic, numeric, punctuation, whitespace
+        
+        Examples:
+          - "abc123???" → ["abc", "123", "???"]
+          - "Mrs. Reindeer" → ["Mrs", ".", "Reindeer"]
+          - "s/n 1234-abc12" → ["s", "/", "n", "1234", "-", "abc", "12"]
+          - "envelope?" → ["envelope", "?"]
+        """
+        import re
+        
+        if not text:
+            return []
+        
+        # Pattern: sequences of same character type
+        # \w+ matches alphanumeric (but we want to split alpha from numeric)
+        # So we use more specific patterns
+        pattern = r'[a-zA-Z]+|[0-9]+|[^a-zA-Z0-9\s]+|\s+'
+        tokens = re.findall(pattern, text)
+        
+        # Filter out whitespace-only tokens
+        return [t for t in tokens if t.strip()]
+    
+    def preprocess(self, text: str) -> List[int]:
+        """Tokenize text to vocab IDs using custom tokenization + lemmatization."""
+        if not isinstance(text, str):
+            text = str(text)
+        
+        # Custom tokenization
+        tokens = self.custom_tokenize(text)
+        
+        # Lemmatize
+        doc = LemmatizedTextPreprocessor._lemmatizer(" ".join(tokens))
+        lemmas = [token.lemma_.lower() for token in doc]
+        
+        # Map to vocab IDs
+        return [self.vocab.get(t, -1) for t in lemmas if t in self.vocab]
+    
+    @staticmethod
+    def build_vocab_from_corpus(
+        texts: List[str], 
+        min_df: int = 2
+    ) -> Dict[str, int]:
+        """Build vocabulary from corpus using lemmatization."""
+        from tqdm import tqdm
+        import spacy
+        
+        print(f"  Building lemmatized vocabulary from {len(texts):,} texts...")
+        
+        # Load spacy
+        try:
+            nlp = spacy.load("en_core_web_sm", disable=["parser", "ner"])
+        except OSError:
+            print("  Downloading spacy en_core_web_sm model...")
+            import subprocess
+            subprocess.run(["python", "-m", "spacy", "download", "en_core_web_sm"], check=True)
+            nlp = spacy.load("en_core_web_sm", disable=["parser", "ner"])
+        
+        word_counts = Counter()
+        for text in tqdm(texts, desc="  Tokenizing + Lemmatizing", leave=False):
+            tokens = LemmatizedTextPreprocessor.custom_tokenize(str(text))
+            doc = nlp(" ".join(tokens))
+            lemmas = [token.lemma_.lower() for token in doc]
+            word_counts.update(lemmas)
+        
+        # Filter and create vocab (1-indexed for PostgreSQL sparsevec)
+        filtered = [(w, c) for w, c in word_counts.items() if c >= min_df]
+        vocab = {word: idx + 1 for idx, (word, _) in enumerate(filtered)}
+        
+        print(f"  Vocabulary: {len(vocab):,} lemmatized tokens (min_df={min_df})")
+        return vocab
     
     @staticmethod
     def build_vocab_from_corpus(
@@ -248,21 +359,32 @@ class SparseBM25Index:
 
 class Model2VecEmbedder:
     """
-    Dense embeddings using model2vec with optional PCA reduction.
+    Dense embeddings using model2vec with optional PCA reduction,
+    or full sentence embeddings via sentence-transformers.
     """
     
-    def __init__(self, model_name: str = "minishlab/M2V_base_output", target_dim: int = 64):
-        from model2vec import StaticModel
-        
+    def __init__(self, model_name: str = "minishlab/M2V_base_output", target_dim: int = 64, use_full_embed: bool = False):
         self.target_dim = target_dim
-        self.model = StaticModel.from_pretrained(model_name)
+        self.use_full_embed = use_full_embed
+        self.model = self._load_model(model_name)
         
         # Check native dimension
-        test = self.model.encode(["test"])
+        test = self.encode(["test"])
         self.native_dim = test.shape[1]
         
         self.pca = None
         self._pca_fitted = False
+    
+    def _load_model(self, model_name: str):
+        """Load model based on embedding mode."""
+        if self.use_full_embed:
+            from sentence_transformers import SentenceTransformer
+            print(f"Loading full sentence embeddings: {model_name}")
+            return SentenceTransformer(model_name)
+        else:
+            from model2vec import StaticModel
+            print(f"Loading model2vec: {model_name}")
+            return StaticModel.from_pretrained(model_name)
     
     def fit_pca(self, texts: List[str], sample_size: int = 10000):
         """Fit PCA for dimension reduction (call once during index building)."""
@@ -277,7 +399,7 @@ class Model2VecEmbedder:
             return
         
         print(f"  Fitting PCA: {self.native_dim} → {self.target_dim}...")
-        embeddings = self.model.encode(texts[:n])
+        embeddings = self.encode(texts[:n])
         
         self.pca = PCA(n_components=self.target_dim)
         self.pca.fit(embeddings)
@@ -288,7 +410,12 @@ class Model2VecEmbedder:
     
     def encode(self, texts: List[str]) -> np.ndarray:
         """Encode texts to normalized embeddings."""
-        embeddings = self.model.encode(texts)
+        if self.use_full_embed:
+            # sentence-transformers returns numpy arrays
+            embeddings = self.model.encode(texts, convert_to_numpy=True)
+        else:
+            # model2vec returns numpy arrays
+            embeddings = self.model.encode(texts)
         
         if self.pca is not None:
             embeddings = self.pca.transform(embeddings)
@@ -364,7 +491,8 @@ class PGVectorRetriever(GISTRetriever):
         if self._embedder is None:
             self._embedder = Model2VecEmbedder(
                 model_name=self.pg_config.embedding_model,
-                target_dim=self.pg_config.embedding_dim
+                target_dim=self.pg_config.embedding_dim,
+                use_full_embed=self.pg_config.use_full_embed
             )
         return self._embedder
     
@@ -386,10 +514,13 @@ class PGVectorRetriever(GISTRetriever):
         return self._bm25_index
     
     @property
-    def preprocessor(self) -> TextPreprocessor:
+    def preprocessor(self):
         """Lazy-load preprocessor with BM25 vocab."""
         if self._preprocessor is None:
-            self._preprocessor = TextPreprocessor(self.bm25_index.vocab)
+            if self.pg_config.use_lemmatized:
+                self._preprocessor = LemmatizedTextPreprocessor(self.bm25_index.vocab)
+            else:
+                self._preprocessor = TextPreprocessor(self.bm25_index.vocab)
         return self._preprocessor
     
     # =========================================================================
@@ -837,6 +968,8 @@ if __name__ == "__main__":
     parser.add_argument("--reset", action="store_true", help="Drop existing table before build")
     parser.add_argument("--papers_dir", type=str, default=r"C:\Users\user\arxiv_id_lists\papers\post_processed", 
                         help="Directory with papers for --build")
+    parser.add_argument("--lemma", action="store_true", help="Use lemmatization for BM25 (better coverage)")
+    parser.add_argument("--fullembed", action="store_true", help="Use full sentence embeddings instead of model2vec")
     
     # Database connection args
     parser.add_argument("--host", type=str, default="192.168.3.18", help="Database host")
@@ -854,7 +987,9 @@ if __name__ == "__main__":
         db_name=args.db,
         db_user=args.user,
         db_password=args.password,
-        table_name=args.table
+        table_name=args.table,
+        use_lemmatized=args.lemma,
+        use_full_embed=args.fullembed
     )
     
     if args.clear:
