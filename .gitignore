@@ -1,0 +1,78 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+ENV/
+env/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data and checkpoints (large files)
+checkpoints/
+*.msgpack
+*.npy
+*.pkl
+*.csv
+Shares.csv
+
+# Model weights and embeddings
+model2vec_jina/
+*.safetensors
+
+# Papers and processed content
+papers/
+*.md
+!README.md
+
+# Build artifacts
+archive/
+docker/
+mkdocs/
+
+# Dataset files
+arxiv_ids_*.json
+arxiv_ids_*.txt
+quotes_dataset.json
+bm25_vocab.msgpack
+quotes_bm25_vocab.msgpack
+
+# Results and outputs
+results*.md
+search_results*.md
+sections.md
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Logs
+*.log
