@@ -374,6 +374,48 @@ def get_fibonacci_upper(n: int, fib_sequence: List[int]) -> int:
     return candidates[0] if candidates else n
 
 
+def de_overlap_strings(strings: List[str]) -> List[str]:
+    """
+    Remove overlapping suffixes from consecutive strings.
+    
+    When chunks are created with overlap, this function removes the duplicate
+    content by detecting where the end of one string matches the beginning of the next.
+    
+    Args:
+        strings: List of text chunks (ordered)
+    
+    Returns:
+        List of de-overlapped chunks
+    
+    Example:
+        >>> chunks = ['abcdefg', 'defghij', 'hijklmn']
+        >>> de_overlap_strings(chunks)
+        ['abcd', 'efgh', 'ijklmn']
+    """
+    if len(strings) <= 1:
+        return strings
+    
+    def find_overlap(s1: str, s2: str) -> str:
+        """Find the longest suffix of s1 that matches a prefix of s2."""
+        max_len = min(len(s1), len(s2))
+        for i in range(max_len, 0, -1):
+            if s1[-i:] == s2[:i]:
+                return s1[-i:]
+        return ""
+    
+    result = []
+    for i in range(len(strings) - 1):
+        s1, s2 = strings[i], strings[i + 1]
+        overlap = find_overlap(s1, s2)
+        if overlap:
+            s1 = s1[:-len(overlap)]
+        result.append(s1)
+    
+    # Add the last string as is
+    result.append(strings[-1])
+    return result
+
+
 # =============================================================================
 # Reranker Components
 # =============================================================================
@@ -1088,8 +1130,10 @@ class GISTRetriever(ABC):
             all_chunks = self._fetch_all_chunks_for_group(key)
             all_chunks.sort(key=lambda c: c.metadata.get('chunk_idx', 0))
             
-            # Reconstruct full text
-            full_text = "\n".join([c.content for c in all_chunks])
+            # Reconstruct full text with overlap removal
+            chunk_texts = [c.content for c in all_chunks]
+            de_overlapped = de_overlap_strings(chunk_texts)
+            full_text = "".join(de_overlapped)  # No separator - overlaps already removed
             
             group = RetrievedGroup(
                 group_id=self._group_key_to_id(key),
