@@ -163,15 +163,34 @@ class GISTConfig:
         colbert_batch_size: Batch size for ColBERT scoring
         cross_encoder_batch_size: Batch size for cross-encoder scoring
         fibonacci_sequence: Fibonacci numbers for cascade sizing
+        
+    Doc-Doc Matrix Diversity:
+        use_doc_doc_diversity: Enable dual-GIST with ColBERT and Cross-Encoder
+                               doc-doc matrices, then RRF fuse both selections
     """
     rrf_k: int = 60
     gist_lambda: float = 0.7
     use_colbert: bool = True
     use_cross_encoder: bool = True
+    use_hnsw_diversity: bool = False  # LEGACY: MMR-based diversity
+    use_doc_doc_diversity: bool = True  # NEW: Full doc-doc matrices + RRF fusion
+    
+    # UNIFIED RELEVANCE FILTERING: Applied at every pipeline stage
+    # Positive-only filters drastically reduce search space
+    bm25_min_score: float = 0.0         # BM25 must be positive (lexical match)
+    dense_min_similarity: float = 0.0   # Cosine similarity must be positive (semantic match)
+    colbert_min_score: float = 0.0      # ColBERT MaxSim must be positive (token alignment)
+    cross_encoder_min_score: float = 0.0  # CE must be positive (holistic relevance)
+    
     colbert_model: str = "bert-base-uncased"
     cross_encoder_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
     colbert_batch_size: int = 8
     cross_encoder_batch_size: int = 8
+    # HNSW diversity parameters (LEGACY - MMR-based)
+    hnsw_mmr_lambda: float = 0.7      # 70% relevance, 30% diversity
+    hnsw_k_neighbors: int = 20         # k-NN for sparse similarity matrix
+    hnsw_n_diverse: int = 15          # Output diverse subset size
+    # Doc-Doc Matrix: Uses gist_lambda for both GIST selections, rrf_k for fusion
     fibonacci_sequence: List[int] = field(default_factory=lambda: [
         1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987, 1597
     ])
@@ -636,6 +655,425 @@ class CrossEncoderScorer:
 
 
 # =============================================================================
+# HNSW Diversity Control (MMR)
+# =============================================================================
+
+class HNSWDiversity:
+    """
+    HNSW-based Maximal Marginal Relevance for diversity control.
+    
+    Operates BETWEEN ColBERT and Cross-Encoder stages:
+      - Input: ColBERT scores (relevance to query)
+      - Process: Build HNSW index on averaged embeddings
+      - Output: Diverse subset via greedy MMR selection
+    
+    Key Insight:
+      ColBERT uses token embeddings for query-doc relevance.
+      HNSW uses averaged embeddings for doc-doc similarity.
+      These are orthogonal concerns at different pipeline stages.
+    """
+    
+    def __init__(self, lambda_param: float = 0.7, k_neighbors: int = 20):
+        """
+        Initialize HNSW diversity controller.
+        
+        Args:
+            lambda_param: Balance relevance (high) vs diversity (low). Default 0.7.
+            k_neighbors: k-NN neighbors for sparse similarity matrix.
+        """
+        self.lambda_param = lambda_param
+        self.k_neighbors = k_neighbors
+        self.available = self._check_faiss()
+    
+    def _check_faiss(self) -> bool:
+        """Check if FAISS is available."""
+        try:
+            import faiss
+            return True
+        except ImportError:
+            print("FAISS not available. HNSW diversity disabled.")
+            return False
+    
+    def apply_mmr(
+        self,
+        texts: List[str],
+        relevance_scores: np.ndarray,
+        n_diverse: int,
+        embeddings: Optional[np.ndarray] = None
+    ) -> Tuple[List[int], List[float]]:
+        """
+        Apply MMR diversity selection with HNSW k-NN.
+        
+        Args:
+            texts: Document texts (for embedding if not provided)
+            relevance_scores: ColBERT scores [n_docs]
+            n_diverse: Number of diverse documents to select
+            embeddings: Pre-computed averaged embeddings [n_docs, dim] (optional)
+        
+        Returns:
+            Tuple of (selected_indices, mmr_scores)
+        """
+        if not self.available:
+            # Fallback: return top-k by relevance
+            top_indices = np.argsort(relevance_scores)[::-1][:n_diverse]
+            return list(top_indices), list(relevance_scores[top_indices])
+        
+        import faiss
+        from scipy.sparse import lil_matrix
+        
+        n_docs = len(texts)
+        if n_docs <= n_diverse:
+            return list(range(n_docs)), list(relevance_scores)
+        
+        # Compute averaged embeddings if not provided
+        if embeddings is None:
+            embeddings = self._compute_averaged_embeddings(texts)
+        
+        # Build HNSW index
+        dim = embeddings.shape[1]
+        index = faiss.IndexHNSWFlat(dim, 16)  # M=16 connections
+        index.hnsw.efConstruction = 64
+        index.hnsw.efSearch = 32
+        index.add(embeddings.astype('float32'))
+        
+        # Get k-NN sparse similarity matrix
+        k = min(self.k_neighbors, n_docs - 1)
+        D, I = index.search(embeddings.astype('float32'), k + 1)  # +1 to exclude self
+        
+        # Build sparse matrix (exclude self-similarity)
+        similarity_matrix = lil_matrix((n_docs, n_docs))
+        for i in range(n_docs):
+            for j_idx in range(1, len(I[i])):  # Skip index 0 (self)
+                j = I[i][j_idx]
+                if j < n_docs:
+                    # Convert L2 distance to cosine similarity proxy
+                    sim = 1.0 / (1.0 + D[i][j_idx])
+                    similarity_matrix[i, j] = sim
+        
+        similarity_matrix = similarity_matrix.tocsr()
+        
+        # Greedy MMR selection
+        selected_indices = []
+        selected_mask = np.zeros(n_docs, dtype=bool)
+        
+        # Normalize relevance scores to [0, 1]
+        rel_norm = relevance_scores / (np.max(relevance_scores) + 1e-8)
+        
+        for _ in range(n_diverse):
+            best_score = -np.inf
+            best_idx = -1
+            
+            for i in range(n_docs):
+                if selected_mask[i]:
+                    continue
+                
+                # Relevance component
+                relevance = rel_norm[i]
+                
+                # Diversity component: max similarity to already selected
+                if selected_indices:
+                    # Get similarities to selected documents
+                    max_sim = 0.0
+                    for sel_idx in selected_indices:
+                        sim = similarity_matrix[i, sel_idx]
+                        max_sim = max(max_sim, sim)
+                    diversity_penalty = max_sim
+                else:
+                    diversity_penalty = 0.0
+                
+                # MMR score
+                mmr_score = self.lambda_param * relevance - (1 - self.lambda_param) * diversity_penalty
+                
+                if mmr_score > best_score:
+                    best_score = mmr_score
+                    best_idx = i
+            
+            if best_idx >= 0:
+                selected_indices.append(best_idx)
+                selected_mask[best_idx] = True
+        
+        # Compute final MMR scores for selected
+        mmr_scores = [rel_norm[i] for i in selected_indices]
+        
+        return selected_indices, mmr_scores
+    
+    def _compute_averaged_embeddings(self, texts: List[str]) -> np.ndarray:
+        """
+        Compute averaged sentence embeddings.
+        
+        Uses a lightweight embedding model (e.g., sentence-transformers).
+        For production, cache these embeddings in the database.
+        
+        Args:
+            texts: Document texts
+        
+        Returns:
+            Array of shape [n_docs, dim]
+        """
+        try:
+            from sentence_transformers import SentenceTransformer
+            
+            # Use a fast model for averaged embeddings
+            model = SentenceTransformer('all-MiniLM-L6-v2')
+            embeddings = model.encode(texts, show_progress_bar=False, convert_to_numpy=True)
+            return embeddings
+            
+        except ImportError:
+            # Fallback: random embeddings (FOR TESTING ONLY)
+            print("Warning: sentence-transformers not available. Using random embeddings.")
+            return np.random.randn(len(texts), 384).astype('float32')
+        except Exception as e:
+            print(f"Error computing averaged embeddings: {e}")
+            return np.random.randn(len(texts), 384).astype('float32')
+
+
+# =============================================================================
+# Doc-Doc Matrix Diversity (ColBERT + Cross-Encoder + RRF)
+# =============================================================================
+
+class DocDocMatrixDiversity:
+    """
+    GIST selection on doc-doc similarity matrices using BOTH ColBERT and Cross-Encoder.
+    
+    Architecture:
+        Papers (n=21)
+            │
+            ├──────────────────────────────────────────┐
+            │                                          │
+            ▼                                          ▼
+        ColBERT GIST                           Cross-Encoder GIST
+        ┌─────────────────┐                   ┌─────────────────┐
+        │ coverage: doc-doc│                   │ coverage: doc-doc│
+        │ utility: query-doc│                  │ utility: query-doc│
+        │ → GIST select    │                   │ → GIST select    │
+        └────────┬────────┘                   └────────┬────────┘
+                 │                                      │
+                 └──────────────┬───────────────────────┘
+                                │
+                                ▼
+                          RRF Fusion
+                                │
+                                ▼
+                          Final top_k
+    
+    This uses the EXISTING gist_select() function with:
+    - coverage_matrix = doc-doc similarity (n×n)
+    - utility_vector = query-doc relevance scores (n×1)
+    - lambda = gist_lambda from config
+    """
+    
+    def __init__(
+        self,
+        colbert_scorer: 'ColBERTScorer',
+        cross_encoder_scorer: 'CrossEncoderScorer',
+        gist_lambda: float = 0.7,
+        rrf_k: int = 60,
+        colbert_min_score: float = 0.0
+    ):
+        self.colbert_scorer = colbert_scorer
+        self.cross_encoder_scorer = cross_encoder_scorer
+        self.gist_lambda = gist_lambda
+        self.rrf_k = rrf_k
+        self.colbert_min_score = colbert_min_score
+    
+    def compute_colbert_doc_doc_matrix(self, texts: List[str]) -> np.ndarray:
+        """Compute n×n ColBERT similarity matrix (each doc as query)."""
+        n = len(texts)
+        matrix = np.zeros((n, n), dtype=np.float32)
+        
+        if not self.colbert_scorer.available:
+            return matrix
+        
+        print(f"      Computing ColBERT doc-doc matrix ({n}×{n})...")
+        for i in range(n):
+            scores = self.colbert_scorer.score(texts[i], texts)
+            matrix[i, :] = scores
+        
+        return matrix
+    
+    def compute_cross_encoder_doc_doc_matrix(self, texts: List[str]) -> np.ndarray:
+        """Compute n×n Cross-Encoder similarity matrix."""
+        n = len(texts)
+        matrix = np.zeros((n, n), dtype=np.float32)
+        
+        if not self.cross_encoder_scorer.available:
+            return matrix
+        
+        print(f"      Computing Cross-Encoder doc-doc matrix ({n}×{n})...")
+        for i in range(n):
+            scores = self.cross_encoder_scorer.score(texts[i], texts)
+            matrix[i, :] = scores
+        
+        return matrix
+    
+    def rerank_with_gist(
+        self,
+        query: str,
+        papers: List['RetrievedPaper'],
+        final_k: int,
+        ce_min_score: float = 0.0
+    ) -> List['RetrievedPaper']:
+        """
+        Run GIST on both ColBERT and Cross-Encoder doc-doc matrices, then RRF fuse.
+        
+        Applies Cross-Encoder filtering before computing diversity matrices.
+        
+        Args:
+            query: User query
+            papers: Papers with ColBERT scores from step 7 (already filtered)
+            final_k: Number to return
+            ce_min_score: Minimum CE score (default 0.0 = positive correlation only)
+        
+        Returns:
+            Top-k papers ranked by RRF fusion of both GIST selections
+        """
+        n = len(papers)
+        if n == 0:
+            return papers
+        if n <= final_k:
+            return papers
+        
+        # JOINT COLBERT+CE FILTER: Score with CE, then filter both at once
+        # Compute CE scores
+        texts = [p.full_text for p in papers]
+        ce_scores = self.cross_encoder_scorer.score(query, texts)
+        
+        # Cache CE scores on papers
+        for paper, ce_score in zip(papers, ce_scores):
+            paper.cross_encoder_score = float(ce_score)
+        
+        # Show CE score distribution BEFORE filtering
+        import numpy as np
+        from scipy.stats import median_abs_deviation
+        
+        colbert_array = np.array([p.colbert_score for p in papers])
+        ce_array = np.array([p.cross_encoder_score for p in papers])
+        
+        print(f"      [CE Score Distribution] min={ce_array.min():.2f}, max={ce_array.max():.2f}, mean={ce_array.mean():.2f}, median={np.median(ce_array):.2f}")
+        print(f"      [Score Breakdown] Papers with CE > 0: {(ce_array > 0).sum()}/{len(papers)}")
+        
+        # Compute MAD-based dynamic thresholds (more lenient when distribution is skewed)
+        colbert_mad = median_abs_deviation(colbert_array, scale='normal')
+        ce_mad = median_abs_deviation(ce_array, scale='normal')
+        
+        colbert_median = np.median(colbert_array)
+        ce_median = np.median(ce_array)
+        
+        # Dynamic lower bounds: median - (MAD * 2) [removes extreme outliers only]
+        colbert_dynamic = colbert_median - (colbert_mad * 2)
+        ce_dynamic = ce_median - (ce_mad * 2)
+        
+        # Effective thresholds: use MINIMUM (more lenient) of fixed vs dynamic
+        colbert_effective = min(self.colbert_min_score, colbert_dynamic)
+        ce_effective = min(ce_min_score, ce_dynamic)
+        
+        print(f"      [Adaptive Thresholds]")
+        print(f"        ColBERT: fixed={self.colbert_min_score:.2f}, MAD-based={colbert_dynamic:.2f} → effective={colbert_effective:.2f}")
+        print(f"        CE: fixed={ce_min_score:.2f}, MAD-based={ce_dynamic:.2f} → effective={ce_effective:.2f}")
+        
+        # Filter: ColBERT > effective_threshold AND CE > effective_threshold
+        original_count = len(papers)
+        papers_filtered = [
+            p for p in papers 
+            if p.colbert_score > colbert_effective and p.cross_encoder_score > ce_effective
+        ]
+        
+        # Show what got filtered out
+        filtered_out = [p for p in papers if p not in papers_filtered]
+        if filtered_out:
+            print(f"      [Filtered Out {len(filtered_out)} papers]:")
+            for p in sorted(filtered_out, key=lambda x: x.cross_encoder_score, reverse=True)[:5]:
+                print(f"        {p.paper_id}: ColBERT={p.colbert_score:.2f}, CE={p.cross_encoder_score:.2f}")
+        
+        papers = papers_filtered
+        n = len(papers)
+        
+        print(f"      [Joint Filter] {original_count} -> {n} papers (ColBERT > {colbert_effective:.2f} AND CE > {ce_effective:.2f})")
+        
+        if n == 0:
+            print(f"      WARNING: No papers meet CE threshold {ce_min_score}")
+            return []
+        
+        if n <= final_k:
+            print(f"      Filtered set already <= final_k, returning all {n} papers")
+            return papers
+        
+        texts = [p.full_text for p in papers]
+        
+        # === ColBERT GIST ===
+        print(f"      [1/4] ColBERT doc-doc matrix...")
+        colbert_coverage = self.compute_colbert_doc_doc_matrix(texts)
+        colbert_utility = np.array([p.colbert_score or 0.0 for p in papers])
+        
+        print(f"      [2/4] ColBERT GIST selection...")
+        colbert_indices = gist_select(
+            coverage_matrix=colbert_coverage,
+            utility_vector=colbert_utility,
+            k=final_k,
+            lambda_param=self.gist_lambda
+        )
+        
+        # === Cross-Encoder GIST ===
+        print(f"      [3/4] Cross-Encoder doc-doc matrix + query-doc scores...")
+        ce_coverage = self.compute_cross_encoder_doc_doc_matrix(texts)
+        
+        # Use cached CE scores if available (from CE filter), otherwise compute
+        if hasattr(papers[0], 'cross_encoder_score'):
+            ce_utility = np.array([p.cross_encoder_score for p in papers])
+        else:
+            ce_utility = self.cross_encoder_scorer.score(query, texts)
+            # Store CE scores
+            for i, paper in enumerate(papers):
+                paper.cross_encoder_score = float(ce_utility[i])
+        
+        print(f"      [4/4] Cross-Encoder GIST selection...")
+        ce_indices = gist_select(
+            coverage_matrix=ce_coverage,
+            utility_vector=ce_utility,
+            k=final_k,
+            lambda_param=self.gist_lambda
+        )
+        
+        # === RRF Fusion ===
+        # Convert indices to ranks
+        colbert_ranks = {idx: rank + 1 for rank, idx in enumerate(colbert_indices)}
+        ce_ranks = {idx: rank + 1 for rank, idx in enumerate(ce_indices)}
+        
+        # RRF score for all papers
+        rrf_scores = {}
+        all_indices = set(colbert_indices) | set(ce_indices)
+        
+        for idx in range(n):
+            score = 0.0
+            if idx in colbert_ranks:
+                score += 1.0 / (self.rrf_k + colbert_ranks[idx])
+            if idx in ce_ranks:
+                score += 1.0 / (self.rrf_k + ce_ranks[idx])
+            rrf_scores[idx] = score
+        
+        # Sort by RRF score
+        sorted_indices = sorted(range(n), key=lambda i: rrf_scores[i], reverse=True)
+        
+        # Update papers with final scores
+        for idx in sorted_indices[:final_k]:
+            papers[idx].metadata['colbert_gist_rank'] = colbert_ranks.get(idx, n+1)
+            papers[idx].metadata['ce_gist_rank'] = ce_ranks.get(idx, n+1)
+            papers[idx].metadata['rrf_score'] = rrf_scores[idx]
+            papers[idx].final_score = rrf_scores[idx]
+        
+        result = [papers[i] for i in sorted_indices[:final_k]]
+        
+        print(f"      Results (top 5):")
+        for i, p in enumerate(result[:5]):
+            print(f"        [{i+1}] {p.paper_id}: "
+                  f"CB_GIST=#{p.metadata.get('colbert_gist_rank', 'N/A')}, "
+                  f"CE_GIST=#{p.metadata.get('ce_gist_rank', 'N/A')}, "
+                  f"RRF={p.final_score:.4f}")
+        
+        return result
+
+
+# =============================================================================
 # Grouped Result Container
 # =============================================================================
 
@@ -898,10 +1336,10 @@ class GISTRetriever(ABC):
             4. GROUP chunks into SECTIONS
             5. GROUP sections into PAPERS
             6. Select sections from top (top_k × φ) papers for ColBERT
-            7. ColBERT rerank on section full text
-            8. Aggregate sections back to papers
-            9. Cross-encoder rerank papers
-            10. Return top_k PAPERS
+            7. ColBERT rerank on section full text (21 papers)
+            7.5. HNSW diversity control via MMR (optional, 21 → 15 papers)
+            8. Cross-encoder rerank papers (13 papers)
+            9. Return top_k PAPERS
         
         Args:
             query: Query text
@@ -923,17 +1361,61 @@ class GISTRetriever(ABC):
         colbert_papers = top_k  # ColBERT operates on sections from top_k papers
         final_papers = get_fibonacci_lower(top_k, fib)  # Final output: fib_lower(top_k) papers
         
-        print(f"GIST Pipeline: retrieve {retrieval_limit} chunks → GIST {gist_limit} → sections {section_limit} → papers {paper_pool_size} → ColBERT {colbert_papers} papers → Final {final_papers} papers")
+        print(f"GIST Pipeline: retrieve {retrieval_limit} chunks -> GIST {gist_limit} -> sections {section_limit} -> papers {paper_pool_size} -> ColBERT {colbert_papers} papers -> Final {final_papers} papers")
         
-        # Step 1: Parallel retrieval (chunks)
-        print(f"  [1/8] Retrieving {retrieval_limit} chunks from each pool...")
+        # Step 1: Retrieve BM25 chunks (unfiltered)
+        print(f"  [1/8] Retrieving {retrieval_limit} chunks from BM25...")
         bm25_pool = self._retrieve_bm25(query, retrieval_limit)
+        print(f"        Retrieved {len(bm25_pool)} chunks")
+        
+        # Step 2: Retrieve Dense chunks (unfiltered)
+        print(f"  [2/8] Retrieving {retrieval_limit} chunks from dense...")
         dense_pool = self._retrieve_dense(query, retrieval_limit)
+        print(f"        Retrieved {len(dense_pool)} chunks")
         
-        print(f"        BM25: {len(bm25_pool)}, Dense: {len(dense_pool)}")
+        # Step 2.5: Joint BM25+Dense filtering (optional)
+        # Skip filtering if thresholds are -inf (ECDF-RRF default)
+        # Apply MAD * 2 adaptive thresholds if None
+        if self.config.bm25_min_score > -float('inf') or self.config.dense_min_similarity > -float('inf'):
+            print(f"  [2.5/8] Applying joint BM25+Dense filtering...")
+            bm25_before = len(bm25_pool)
+            dense_before = len(dense_pool)
+            
+            # Compute MAD * 2 thresholds if None (adaptive filtering)
+            bm25_threshold = self.config.bm25_min_score
+            if bm25_threshold is None and len(bm25_pool) > 0:
+                bm25_scores = [d.bm25_score for d in bm25_pool if d.bm25_score is not None]
+                if bm25_scores:
+                    median = np.median(bm25_scores)
+                    mad = np.median([abs(s - median) for s in bm25_scores])
+                    bm25_threshold = median - (2 * mad)
+                else:
+                    bm25_threshold = 0.0
+            
+            dense_threshold = self.config.dense_min_similarity
+            if dense_threshold is None and len(dense_pool) > 0:
+                dense_scores = [d.dense_score for d in dense_pool if d.dense_score is not None]
+                if dense_scores:
+                    median = np.median(dense_scores)
+                    mad = np.median([abs(s - median) for s in dense_scores])
+                    dense_threshold = median - (2 * mad)
+                else:
+                    dense_threshold = 0.0
+            
+            # Apply filtering
+            bm25_pool = [d for d in bm25_pool if d.bm25_score > bm25_threshold]
+            dense_pool = [d for d in dense_pool if d.dense_score > dense_threshold]
+            print(f"        [Joint Filter] BM25: {bm25_before} -> {len(bm25_pool)} (score > {bm25_threshold:.4f})")
+            print(f"        [Joint Filter] Dense: {dense_before} -> {len(dense_pool)} (sim > {dense_threshold:.4f})")
+            
+            if len(bm25_pool) == 0 and len(dense_pool) == 0:
+                print(f"        WARNING: No chunks passed joint filtering")
+                return []
+        else:
+            print(f"  [2.5/8] Joint filtering skipped (disabled for ECDF-RRF)")
         
-        # Step 2: GIST selection on BM25 pool
-        print(f"  [2/8] GIST selection on BM25 pool...")
+        # Step 3: GIST selection on filtered BM25 pool
+        print(f"  [3/8] GIST selection on filtered BM25 pool...")
         bm25_selected = self._gist_select_pool(
             pool=bm25_pool,
             query=query,
@@ -942,8 +1424,8 @@ class GISTRetriever(ABC):
         )
         print(f"        Selected {len(bm25_selected)} chunks from BM25")
         
-        # Step 3: GIST selection on dense pool
-        print(f"  [3/8] GIST selection on dense pool...")
+        # Step 4: GIST selection on filtered dense pool
+        print(f"  [4/8] GIST selection on filtered dense pool...")
         dense_selected = self._gist_select_pool(
             pool=dense_pool,
             query=query,
@@ -952,34 +1434,52 @@ class GISTRetriever(ABC):
         )
         print(f"        Selected {len(dense_selected)} chunks from dense")
         
-        # Step 4: RRF fusion (chunks)
-        print(f"  [4/8] RRF fusion...")
+        # Step 5: RRF fusion (chunks)
+        print(f"  [5/8] RRF fusion...")
         fused_chunks = self._rrf_fusion(bm25_selected, dense_selected)
         print(f"        Fused: {len(fused_chunks)} unique chunks")
         
-        # Step 5: Group chunks into sections
-        print(f"  [5/8] Grouping chunks into sections...")
+        # Step 6: Group chunks into sections
+        print(f"  [6/8] Grouping chunks into sections...")
         sections = self._group_and_reconstruct(fused_chunks, limit=section_limit)
         print(f"        Created {len(sections)} sections")
         
-        # Step 6: Group sections into papers and select top papers
-        print(f"  [6/8] Grouping sections into papers...")
+        # Step 7: Group sections into papers and select top papers
+        print(f"  [7/8] Grouping sections into papers...")
         papers = self._group_sections_into_papers(sections, paper_pool_size)
         print(f"        Created {len(papers)} papers from top scoring papers")
         
-        # Step 7: ColBERT rerank sections within selected papers
+        # Step 8: ColBERT rerank sections within selected papers
         if self.config.use_colbert and len(papers) > 0:
-            print(f"  [7/8] ColBERT reranking sections from {len(papers)} papers...")
+            print(f"  [8/9] ColBERT reranking sections from {len(papers)} papers...")
             papers = self._colbert_rerank_papers(query, papers)
         else:
-            print(f"  [7/8] ColBERT skipped")
+            print(f"  [8/9] ColBERT skipped")
         
-        # Step 8: Cross-encoder rerank papers
-        if self.config.use_cross_encoder and len(papers) > 0:
-            print(f"  [8/8] Cross-Encoder reranking papers...")
-            papers = self._cross_encoder_rerank_papers(query, papers, final_papers)
+        # Step 8.5: Diversity Control (choose one approach)
+        if self.config.use_doc_doc_diversity and len(papers) > 1:
+            # NEW: Full n×n doc-doc matrices using ColBERT AND Cross-Encoder + RRF fusion
+            print(f"  [8.5/9] Computing doc-doc diversity matrices (ColBERT + Cross-Encoder + RRF)...")
+            papers = self._apply_doc_doc_diversity_to_papers(query, papers, final_papers)
+            # Cross-encoder is already applied within doc-doc diversity, skip step 8
+            cross_encoder_already_applied = True
+        elif self.config.use_hnsw_diversity and len(papers) > 0:
+            # LEGACY: MMR-based HNSW diversity
+            print(f"  [8.5/9] Applying HNSW diversity (MMR)...")
+            papers = self._apply_hnsw_diversity_to_papers(query, papers)
+            cross_encoder_already_applied = False
         else:
-            print(f"  [8/8] Cross-Encoder skipped")
+            print(f"  [8.5/9] Diversity control skipped")
+            cross_encoder_already_applied = False
+        
+        # Step 9: Cross-encoder rerank papers (skipped if doc-doc diversity was used)
+        if not cross_encoder_already_applied and self.config.use_cross_encoder and len(papers) > 0:
+            print(f"  [9/9] Cross-Encoder reranking papers...")
+            papers = self._cross_encoder_rerank_papers(query, papers, final_papers)
+        elif cross_encoder_already_applied:
+            print(f"  [9/9] Cross-Encoder skipped (already applied in doc-doc diversity)")
+        else:
+            print(f"  [9/9] Cross-Encoder skipped")
         
         # Ensure we don't exceed requested top_k
         results = papers[:top_k]
@@ -1270,9 +1770,133 @@ class GISTRetriever(ABC):
             if paper.sections:
                 paper.colbert_score = max(s.colbert_score for s in paper.sections if s.colbert_score is not None)
         
-        # Sort papers by max section score
+        # Sort papers by max section score (NO FILTERING - will filter jointly with CE)
         papers.sort(key=lambda p: p.colbert_score or 0.0, reverse=True)
         return papers
+    
+    def _apply_hnsw_diversity_to_papers(
+        self,
+        query: str,
+        papers: List[RetrievedPaper]
+    ) -> List[RetrievedPaper]:
+        """
+        Apply HNSW diversity control to papers BETWEEN ColBERT and Cross-Encoder.
+        
+        This stage:
+          1. Uses ColBERT scores as relevance scores (already computed)
+          2. Computes averaged embeddings from paper full_text
+          3. Applies MMR to select diverse subset
+          4. Returns filtered papers for cross-encoder reranking
+        
+        Args:
+            query: User query (unused, diversity is relevance-agnostic)
+            papers: Papers with ColBERT scores
+        
+        Returns:
+            Diverse subset of papers (size = config.hnsw_n_diverse)
+        """
+        if not self.config.use_hnsw_diversity:
+            return papers
+        
+        print(f"      Applying HNSW diversity (λ={self.config.hnsw_mmr_lambda}, "
+              f"k={self.config.hnsw_k_neighbors}, n={self.config.hnsw_n_diverse})...")
+        
+        # Initialize diversity selector
+        hnsw_selector = HNSWDiversity(
+            lambda_param=self.config.hnsw_mmr_lambda,
+            k_neighbors=self.config.hnsw_k_neighbors
+        )
+        
+        # Extract texts and relevance scores
+        texts = [p.full_text for p in papers]
+        relevance_scores = np.array([p.colbert_score or 0.0 for p in papers])
+        
+        # Apply MMR
+        selected_indices, mmr_scores = hnsw_selector.apply_mmr(
+            texts=texts,
+            relevance_scores=relevance_scores,
+            n_diverse=min(self.config.hnsw_n_diverse, len(papers))
+        )
+        
+        # Filter papers
+        diverse_papers = [papers[i] for i in selected_indices]
+        
+        # Store MMR scores
+        for paper, mmr_score in zip(diverse_papers, mmr_scores):
+            paper.metadata['hnsw_mmr_score'] = mmr_score
+        
+        print(f"      -> Reduced {len(papers)} papers to {len(diverse_papers)} diverse papers")
+        
+        return diverse_papers
+    
+    def _apply_doc_doc_diversity_to_papers(
+        self,
+        query: str,
+        papers: List[RetrievedPaper],
+        final_k: int
+    ) -> List[RetrievedPaper]:
+        """
+        Apply FULL doc-doc matrix diversity using BOTH ColBERT AND Cross-Encoder.
+        
+        This is the NEW expensive but accurate approach that:
+          1. Uses ColBERT scores from step 7 as query-doc relevance
+          2. Computes n×n ColBERT doc-doc similarity matrix
+          3. Computes n×n Cross-Encoder doc-doc similarity matrix
+          4. Derives diversity scores from both matrices
+          5. RRF fuses: ColBERT relevance + CE relevance + diversity
+          6. Returns top-k papers by fused score
+        
+        Architecture:
+            Papers (n=21)
+                │
+                ▼
+            ┌────────────────────────────────────────────────────┐
+            │ PARALLEL SCORING (n×n matrices)                    │
+            ├───────────────┬───────────────┬───────────────────┤
+            │ ColBERT       │ Cross-Encoder │ Diversity         │
+            │ doc-doc n×n   │ doc-doc n×n   │ from both         │
+            └───────────────┴───────────────┴───────────────────┘
+                │                 │                   │
+                ▼                 ▼                   ▼
+            RRF Fusion (4 signals: 2 relevance + 2 diversity)
+                │
+                ▼
+            Final top_k=13
+        
+        Args:
+            query: User query for cross-encoder relevance scores
+            papers: Papers with ColBERT scores from step 7
+            final_k: Number of papers to return
+        
+        Returns:
+            Top-k papers ranked by RRF fusion of all signals
+        """
+        if not self.config.use_doc_doc_diversity:
+            return papers[:final_k]
+        
+        print(f"      Doc-Doc GIST (ColBERT + CE) -> RRF (n={len(papers)}, "
+              f"gist_lambda={self.config.gist_lambda})...")
+        
+        # Initialize the doc-doc matrix GIST scorer
+        doc_doc_scorer = DocDocMatrixDiversity(
+            colbert_scorer=self.colbert_scorer,
+            cross_encoder_scorer=self.cross_encoder_scorer,
+            gist_lambda=self.config.gist_lambda,
+            rrf_k=self.config.rrf_k,
+            colbert_min_score=self.config.colbert_min_score
+        )
+        
+        # Run GIST on both doc-doc matrices, then RRF fuse
+        diverse_papers = doc_doc_scorer.rerank_with_gist(
+            query=query,
+            papers=papers,
+            final_k=final_k,
+            ce_min_score=self.config.cross_encoder_min_score
+        )
+        
+        print(f"      -> Returned {len(diverse_papers)} papers with RRF-fused scores")
+        
+        return diverse_papers
     
     def _cross_encoder_rerank_papers(
         self,
