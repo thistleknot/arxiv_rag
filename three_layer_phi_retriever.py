@@ -566,14 +566,38 @@ class ThreeLayerPhiRetriever:
         expansion_chunks = [chunk_id for chunk_id, _ in expansion_results]
         print(f"  ✓ Merged to {len(expansion_chunks)} unique expansions")
         
-        # Expand to full sections from papers containing the 144 expansion chunks
+        # Expand to full sections from papers containing the expansion chunks
         print(f"\nSection Expansion: Expanding {len(expansion_chunks)} chunks to full sections...")
         expansion_papers = set(self.chunks[cid].get('paper_id', 'unknown') for cid in expansion_chunks)
-        all_chunks = [
+        raw_section_ids = [
             cid for cid in range(len(self.chunks))
             if self.chunks[cid].get('paper_id', 'unknown') in expansion_papers
         ]
-        print(f"  ✓ Expanded to {len(all_chunks)} sections from {len(expansion_papers)} papers")
+        print(f"  Raw: {len(raw_section_ids)} sections from {len(expansion_papers)} papers")
+        
+        # Deduplicate by section text (overlapping chunks produce duplicates)
+        seen_texts = set()
+        all_chunks = []
+        for cid in raw_section_ids:
+            text = self.chunks[cid]['text']
+            if text not in seen_texts:
+                seen_texts.add(text)
+                all_chunks.append(cid)
+        print(f"  Deduped: {len(all_chunks)} unique sections")
+        
+        # Cap at prev_fib(top_k^2) using Qwen3 embedding pre-scoring
+        rerank_cap = self.config.layer2_expand  # prev_fib(top_k^2) = 144 for top_k=13
+        if len(all_chunks) > rerank_cap:
+            # Use ECDF-weighted centroid from seeds to pre-rank sections
+            seed_ecdf = midpoint_ecdf_weights(np.array(seed_scores, dtype=np.float64))
+            seed_embs = self.qwen3_embeddings[seed_chunks]
+            centroid = np.average(seed_embs, axis=0, weights=seed_ecdf).reshape(1, -1)
+            section_embs = self.qwen3_embeddings[all_chunks]
+            pre_scores = cosine_similarity(centroid, section_embs)[0]
+            top_idx = np.argsort(pre_scores)[-rerank_cap:][::-1]
+            all_chunks = [all_chunks[i] for i in top_idx]
+            n_papers = len(set(self.chunks[cid].get('paper_id', 'unknown') for cid in all_chunks))
+            print(f"  Capped to {rerank_cap} sections ({n_papers} papers) via Qwen3 pre-scoring")
         
         # ===================================================================
         # LAYER 3: DUAL RERANKING (ColBERTv2 + Cross-Encoder) with RRF → FINAL TOP_K
@@ -585,15 +609,15 @@ class ThreeLayerPhiRetriever:
         # Get chunk texts for reranking
         chunk_texts = [self.chunks[cid]['text'] for cid in all_chunks]
         
-        # 1. ColBERTv2 Late Interaction Reranking (ALL candidates)
+        # 1. ColBERTv2 Late Interaction Reranking
         print(f"ColBERTv2: Reranking {len(chunk_texts)} candidates...")
-        colbert_scores = []
-        for text in chunk_texts:
-            query_emb = self.colbert_model.encode([query], convert_to_tensor=False)[0]
-            doc_emb = self.colbert_model.encode([text], convert_to_tensor=False)[0]
-            score = float(np.dot(query_emb, doc_emb) / (np.linalg.norm(query_emb) * np.linalg.norm(doc_emb)))
-            colbert_scores.append(score)
-        colbert_scores = np.array(colbert_scores)
+        query_emb = self.colbert_model.encode([query], convert_to_tensor=False)[0]
+        doc_embs = self.colbert_model.encode(chunk_texts, convert_to_tensor=False)
+        q_norm = np.linalg.norm(query_emb)
+        colbert_scores = np.array([
+            float(np.dot(query_emb, d) / (q_norm * np.linalg.norm(d)))
+            for d in doc_embs
+        ])
         print(f"  ✓ ColBERTv2 scores range: [{np.min(colbert_scores):.4f}, {np.max(colbert_scores):.4f}]")
         
         # Rank ALL candidates by ColBERTv2 score
