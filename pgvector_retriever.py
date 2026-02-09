@@ -94,8 +94,8 @@ class PGVectorConfig(GISTConfig):
     table_name: str = "arxiv_chunks"
     
     # Embeddings
-    embedding_dim: int = 64
-    embedding_model: str = "minishlab/M2V_base_output"
+    embedding_dim: int = 256
+    embedding_model: str = "./qwen3_static_embeddings"  # Model2Vec Qwen3 256d
     use_full_embed: bool = False  # If True, disable model2vec and use full sentence embeddings
     
     # BM25
@@ -366,14 +366,13 @@ class Model2VecEmbedder:
     def __init__(self, model_name: str = "minishlab/M2V_base_output", target_dim: int = 64, use_full_embed: bool = False):
         self.target_dim = target_dim
         self.use_full_embed = use_full_embed
+        self.pca = None
+        self._pca_fitted = False
         self.model = self._load_model(model_name)
         
         # Check native dimension
         test = self.encode(["test"])
         self.native_dim = test.shape[1]
-        
-        self.pca = None
-        self._pca_fitted = False
     
     def _load_model(self, model_name: str):
         """Load model based on embedding mode."""
@@ -417,10 +416,12 @@ class Model2VecEmbedder:
             # model2vec returns numpy arrays
             embeddings = self.model.encode(texts)
         
-        if self.pca is not None:
-            embeddings = self.pca.transform(embeddings)
-        elif self.native_dim != self.target_dim:
-            embeddings = embeddings[:, :self.target_dim]
+        # Apply PCA or truncation if native_dim is set
+        if hasattr(self, 'native_dim'):
+            if self.pca is not None:
+                embeddings = self.pca.transform(embeddings)
+            elif self.native_dim != self.target_dim:
+                embeddings = embeddings[:, :self.target_dim]
         
         # L2 normalize
         norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
@@ -528,23 +529,48 @@ class PGVectorRetriever(GISTRetriever):
     # =========================================================================
     
     def _retrieve_bm25(self, query: str, limit: int) -> List[RetrievedDoc]:
-        """Retrieve from BM25 (sparsevec inner product)."""
+        """Retrieve from BM25 (JSONB sparse representation)."""
         self.connect()
         
-        # Convert query to sparse vector
+        # Convert query to token IDs
         token_ids = self.preprocessor.preprocess(query)
-        query_sparse = self.bm25_index.query_to_sparse(token_ids)
+        
+        # Build query sparse vector manually (same logic as query_to_sparse but returns dict)
+        from collections import Counter
+        import json
+        
+        if not token_ids:
+            query_json = json.dumps({})
+        else:
+            tf = Counter(token_ids)
+            query_dict = {}
+            
+            for token_id, freq in tf.items():
+                if token_id not in self.bm25_index.idf:
+                    continue
+                weight = self.bm25_index.idf[token_id] * freq
+                if weight > 0:
+                    query_dict[int(token_id)] = float(weight)
+            
+            query_json = json.dumps(query_dict)
         
         with self.conn.cursor() as cur:
-            # Use negative inner product operator (<#>) for ordering
-            # (pgvector returns negative for inner product to make ORDER BY work)
+            # Compute dot product manually with JSONB
+            # For each doc: SUM(query_val * doc_val) for matching indices
             cur.execute(f"""
+                WITH query_sparse AS (
+                    SELECT key::int as idx, value::float as val
+                    FROM jsonb_each_text(%s::jsonb)
+                )
                 SELECT chunk_id, content, paper_id, section_idx, chunk_idx,
-                       (bm25_sparse <#> %s::sparsevec) as neg_score
+                       COALESCE(SUM((bm25_sparse->>q.idx::text)::float * q.val), 0) as score
                 FROM {self.pg_config.table_name}
-                ORDER BY bm25_sparse <#> %s::sparsevec
+                CROSS JOIN query_sparse q
+                WHERE bm25_sparse ? q.idx::text
+                GROUP BY chunk_id, content, paper_id, section_idx, chunk_idx
+                ORDER BY score DESC
                 LIMIT %s
-            """, (query_sparse, query_sparse, limit))
+            """, (query_json, limit))
             
             results = []
             for rank, row in enumerate(cur.fetchall(), 1):
@@ -556,7 +582,7 @@ class PGVectorRetriever(GISTRetriever):
                         'section_idx': row[3],
                         'chunk_idx': row[4]
                     },
-                    bm25_score=-row[5],  # Negate back to positive
+                    bm25_score=row[5],
                     bm25_rank=rank
                 )
                 results.append(doc)
@@ -596,6 +622,57 @@ class PGVectorRetriever(GISTRetriever):
                 results.append(doc)
         
         return results
+    
+    def _rrf_fusion(
+        self,
+        bm25_results: List[RetrievedDoc],
+        dense_results: List[RetrievedDoc]
+    ) -> List[RetrievedDoc]:
+        """
+        Fuse BM25 and dense results using Reciprocal Rank Fusion.
+        
+        Args:
+            bm25_results: BM25 retrieval results (with bm25_score and bm25_rank)
+            dense_results: Dense retrieval results (with dense_score and dense_rank)
+        
+        Returns:
+            Fused results sorted by RRF score
+        """
+        # Build lookups
+        bm25_by_id = {doc.doc_id: doc for doc in bm25_results}
+        dense_by_id = {doc.doc_id: doc for doc in dense_results}
+        
+        # Merge both pools
+        all_ids = set(bm25_by_id.keys()) | set(dense_by_id.keys())
+        
+        fused = []
+        for doc_id in all_ids:
+            bm25_doc = bm25_by_id.get(doc_id)
+            dense_doc = dense_by_id.get(doc_id)
+            
+            # Use whichever doc we have (prefer BM25 if both)
+            doc = bm25_doc or dense_doc
+            
+            # Preserve component scores and ranks
+            if bm25_doc:
+                doc.bm25_score = bm25_doc.bm25_score
+                doc.bm25_rank = bm25_doc.bm25_rank
+            if dense_doc:
+                doc.dense_score = dense_doc.dense_score
+                doc.dense_rank = dense_doc.dense_rank
+            
+            # Compute RRF score from ranks (NOT gist_rank!)
+            ranks = [
+                bm25_doc.bm25_rank if bm25_doc else None,
+                dense_doc.dense_rank if dense_doc else None
+            ]
+            doc.rrf_score = compute_rrf_score(ranks, k=self.config.rrf_k)
+            
+            fused.append(doc)
+        
+        # Sort by RRF score (descending)
+        fused.sort(key=lambda d: d.rrf_score, reverse=True)
+        return fused
     
     def _get_bm25_doc_doc_scores(self, doc_ids: List[str]) -> np.ndarray:
         """

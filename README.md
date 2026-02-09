@@ -1,1037 +1,1096 @@
-# GIST Hybrid Retrieval System
+# Hybrid Retrieval & Knowledge Extraction System
 
-**Production-ready GIST retrieval system with PostgreSQL/pgvector backend supporting multiple document types (ArXiv papers, quotes).**
+> Auto-generated from feature catalogs on 2026-02-07 23:21.
+> Source databases: `retriever_feature_catalog.sqlite3`, `bio_tagger_features.sqlite3`, `graph_transformer_feature_catalog.sqlite3`
+> Generator: `generate_readme.py`
 
-## 🎯 System Overview
-
-### Architecture
-```
-Document Sources
-  ├─ ArXiv Papers (Markdown) → Paper-level output (hierarchical sections)
-  └─ Quotes Dataset (HuggingFace) → Quote-level grouping
-    ↓
-[Equidistant Chunking] → Log median + 2*MAD threshold
-    ↓
-[Checkpointing] → msgpack cache (incremental)
-    ↓
-[Dual Indexing]
-    ├─ Dense: model2vec (256→64 PCA)
-    └─ Sparse: BM25 (BERT WordPiece tokenizer)
-    ↓
-[PostgreSQL + pgvector]
-    ├─ vector(64) IVFFlat + cosine
-    └─ sparsevec(vocab_size)
-    ↓
-[GIST Pipeline] → 8-Stage Paper-Level Retrieval
-  1. Parallel Retrieval (BM25 + Dense) at CHUNK level
-  2. GIST Selection on BM25 pool (diversity)
-  3. GIST Selection on Dense pool (diversity)
-  4. RRF Fusion of chunks
-  5. GROUP chunks into SECTIONS + RECONSTRUCT full text
-  6. GROUP sections into PAPERS
-  7. ColBERT Late Interaction on SECTION full text
-  8. Cross-Encoder Reranking on PAPER full text
-```
-
-### Key Features
-
-#### ✅ GIST Retrieval Pipeline
-**8-stage cascading pipeline for paper-level output with optimal relevance-diversity tradeoff**:
-1. **Parallel Retrieval**: BM25 + Dense at chunk level (top_k²)
-2. **GIST Selection BM25**: Greedy diversity on BM25 pool (λ=0.7)
-3. **GIST Selection Dense**: Greedy diversity on dense pool (λ=0.7)
-4. **RRF Fusion**: Combine pools with reciprocal rank fusion
-5. **Group Sections**: Group chunks by `(paper_id, section_idx)`, fetch ALL chunks, reconstruct full section text
-6. **Group Papers**: Aggregate sections into papers using Fibonacci cascade
-7. **ColBERT Reranking**: Late interaction on SECTION full text (token-level MaxSim)
-8. **Cross-Encoder Reranking**: Final scoring on PAPER full text (full attention)
-
-**Key Innovation**: Chunking for retrieval, hierarchical reconstruction before neural reranking
-- Retrieve granular chunks for precision
-- Reconstruct complete sections + papers for neural models
-- GIST ensures diversity (vs MMR pure relevance)
-- **Paper-level output**: Returns complete papers with all sections
-- **Fibonacci cascade**: top_k papers retrieved → fib_lower(top_k) papers returned
-
-**Example: top_k=21**
-- Retrieve 441 chunks → GIST 377 → sections 233 → papers 21 → ColBERT 21 → **Final 13 papers**
-- Each paper contains multiple sections with full text
-- Scores tracked at chunk, section, and paper levels
-
-#### ✅ Multiple Document Types
-**Unified GIST interface with document-specific implementations**:
-- **ArXiv Papers**: Groups by `(paper_id, section_idx)` → reconstructs full sections → aggregates into papers
-  - **Output**: `List[RetrievedPaper]` containing paper_id, sections, and hierarchical scores
-- **Quotes**: Groups by `quote_id` → reconstructs full quotes from chunks
-  - **Output**: `List[RetrievedGroup]` for backward compatibility
-
-#### ✅ BERT WordPiece Tokenization
-**Aligned lexical and semantic spaces**:
-- Uses `bert-base-uncased` tokenizer for BM25
-- Produces subword tokens (`##ing`, `##tion`)
-- Vocabulary aligned with dense embedding space
-- **Benefits**: Improved hybrid retrieval coherence over regex tokenization
-- **ArXiv**: 114,523 tokens | **Quotes**: 5,445 tokens
-
-#### ✅ Equidistant Chunking
-**Robust threshold-based chunking with log statistics**:
-- **Method**: Compute log median + MAD * 2 on document lengths
-- **ArXiv**: Threshold on section content → large sections split
-- **Quotes**: Threshold on quote text → long quotes split
-- **SlidingAggregator**: Character-based overlap control for splits
-- **Result**: Preserves small items whole, chunks large items consistently
-
-#### ✅ Neural Reranking
-**Two-stage reranking on reconstructed full text**:
-- **ColBERT**: Token-level late interaction (MaxSim)
-  - Model: `bert-base-uncased` with linear projection
-  - Scoring: Σᵢ maxⱼ dot(qᵢ, dⱼ) per query token
-  - Fast GPU batch processing
-- **Cross-Encoder**: Full attention query-document pairs
-  - Model: `cross-encoder/ms-marco-MiniLM-L-6-v2`
-  - Direct relevance scoring
-  - Final ranking authority
-
-#### ✅ Efficient Data Checkpointing
-**msgpack-based caching** for fast restart/resume:
-```
-checkpoints/
-├── chunks.msgpack          # Processed chunks
-├── bm25_index.msgpack      # BM25 vocab + IDF + avgdl
-├── embeddings.npy          # Dense vectors (64-dim)
-└── sparse_vectors.msgpack  # Sparse BM25 vectors
-```
-
-**Pattern**: 
-1. Check if checkpoint exists → load
-2. Else: compute → save checkpoint
-3. Next run: instant reload from checkpoint
-
-#### ✅ Incremental Loading
-**Smart checkpoint management**: Only processes documents not already in PostgreSQL
-- Query existing `paper_id` or `quote_id` from database
-- Filter chunks to skip processed documents
-- Spot-add new documents without full rebuild
-- **Performance**: <5s vs 36min for no-op runs (288x speedup)
+**Three subsystems:**
+1. **Hybrid Retriever** — BM25 + dense embedding retrieval with GIST pipeline, RRF fusion, ColBERT/CrossEncoder reranking, pgvector backend
+2. **BIO Tagger** — BERT-based SPO triplet extraction, Augmented Ontological Knowledge Graph (AOKG), Streamlit demo
+3. **Graph Transformer** — Node2Vec distillation for fast graph embeddings, precision reranking over hybrid results
 
 ---
 
-## 📊 Performance Metrics
+## 🏗️ Architecture
 
-### ArXiv Dataset
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                    HYBRID RETRIEVER PIPELINE                     │
+│                                                                  │
+│  Document Sources → Equidistant Chunking → Checkpointing        │
+│       ↓                                                          │
+│  Dual Indexing: Dense (model2vec 256→64 PCA) + Sparse (BM25)    │
+│       ↓                                                          │
+│  PostgreSQL + pgvector (IVFFlat + sparsevec)                     │
+│       ↓                                                          │
+│  GIST 8-Stage Pipeline                                           │
+│    1. Parallel Retrieval (BM25 + Dense) at CHUNK level           │
+│    2. GIST Selection on BM25 pool (diversity)                    │
+│    3. GIST Selection on Dense pool (diversity)                   │
+│    4. RRF Fusion of chunks                                       │
+│    5. GROUP chunks into SECTIONS + RECONSTRUCT full text         │
+│    6. ColBERT Late Interaction reranking                         │
+│    7. Cross-Encoder reranking (BAAI/bge-reranker-v2-m3)         │
+│    8. Final section-level output                                 │
+│       ↓                                                          │
+│  [PLANNED] Graph Transformer Reranking via AOKG                  │
+└──────────────────────────────────────────────────────────────────┘
 
-| Metric | Value | Notes |
-|--------|-------|-------|
-| Papers | 1,607 | Post-processed markdown |
-| Chunks | 172,272 | After equidistant chunking |
-| Avg chunks/paper | 107 | Variable (depends on section sizes) |
-| Embedding dim | 64 | PCA from 256 |
-| Sparse vocab | 114,523 | BERT WordPiece tokens |
-| Database size | ~500 MB | Including indexes |
-| **Build time (full)** | 36 min | All papers |
-| **Build time (incremental)** | <5 s | No new papers |
-| **Search time** | <500 ms | Full GIST pipeline |
-
-### Quotes Dataset
-
-| Metric | Value | Notes |
-|--------|-------|-------|
-| Quotes | 2,508 | HuggingFace abirate/english_quotes |
-| Chunks | 3,516 | After equidistant chunking |
-| Quotes > threshold | 405 | Exceeded 229 char threshold |
-| Chunking threshold | 229 chars | log median + 2*MAD |
-| Chunk target | 98 chars | SlidingAggregator target |
-| Embedding dim | 64 | PCA from 256 |
-| Sparse vocab | 5,445 | BERT WordPiece tokens |
-| **Build time** | ~30 s | Full index creation |
-| **Search time** | <500 ms | Full GIST pipeline |
-
-### GIST Pipeline Stages (Example: top_k=21)
-
-| Stage | Input | Output | Operation |
-|-------|-------|--------|-----------|
-| 1. Retrieve | Query | 441+441 chunks | Parallel BM25 + Dense (top_k²) |
-| 2. GIST BM25 | 441 chunks | ~188 chunks | Greedy diversity (λ=0.7, φ/2) |
-| 3. GIST Dense | 441 chunks | ~189 chunks | Greedy diversity (λ=0.7, φ/2) |
-| 4. RRF | 377 chunks | 377 chunks | Reciprocal rank fusion |
-| 5. Group Sections | 377 chunks | 233 sections | Reconstruct full section text |
-| 6. Group Papers | 233 sections | 21 papers | Aggregate by paper_id |
-| 7. ColBERT | 21 papers | 21 papers | Token MaxSim on section text |
-| 8. Cross-Encoder | 21 papers | **13 papers** | Attention on paper text (fib_lower(21)) |
-
-**Fibonacci Cascade**: top_k=21 → final output=13 papers (fib_lower function)
-**Score Tracking**: RRF at chunk level → aggregated to sections → max ColBERT across sections → Cross-Encoder on full paper
+┌──────────────────────────────────────────────────────────────────┐
+│                    BIO TAGGER PIPELINE                            │
+│                                                                  │
+│  Source Chunks (checkpoints/chunks.msgpack — 161,389 chunks)     │
+│       ↓                                                          │
+│  Stanza Dep Parser (teacher) → Multi-hot BIO Labels              │
+│       ↓                                                          │
+│  BIOTagger: BERT + 6 Binary Classifiers (B/I-SUBJ/PRED/OBJ)     │
+│       ↓                                                          │
+│  Optuna Tuning (BoxCox resampling, 21 trials)                    │
+│       ↓                                                          │
+│  BIOTripletExtractor Inference → SPO Spans                       │
+│       ↓                                                          │
+│  Post-Inference Stopword Removal (clean_span_tokens)             │
+│       ↓                                                          │
+│  Cartesian Product Expansion → Atomic SPO Triplets               │
+│       ↓                                                          │
+│  AOKG: 4-Layer Knowledge Graph                                   │
+│    L0=Surface → L1=Lemma → L2=Synset → L3=Hypernym              │
+│    LCA convergence level (0-3) = semantic distance metric        │
+│       ↓                                                          │
+│  Streamlit Demo (3 tabs: Interactive, Eval Browser, Metrics)     │
+└──────────────────────────────────────────────────────────────────┘
+```
 
 ---
 
 ## 🚀 Quick Start
 
-### Installation
-
+### Hybrid Retriever (ArXiv Papers)
 ```bash
-# Core dependencies
-pip install psycopg2-binary pgvector numpy tqdm model2vec msgpack scipy
+# Ingest ArXiv papers
+python arxiv_chunking_pipeline.py
 
-# Neural reranking (optional but recommended)
-pip install torch sentence-transformers transformers
-
-# For quotes dataset
-pip install datasets
-
-# Verify PostgreSQL connection
-python test_pg_connection.py
+# Query
+python query_arxiv.py "transformer attention mechanism" --top-k 5
 ```
 
-### ArXiv Papers
-
-#### 1. Build Index (Incremental - Default)
+### Hybrid Retriever (Quotes)
 ```bash
-python pgvector_retriever.py --build
+# Ingest quotes dataset
+python ingest_quotes.py
+
+# Query
+python query_quotes.py "knowledge is power" --top-k 5
 ```
 
-**What happens:**
-- Loads chunks from checkpoint (fast)
-- Queries PostgreSQL for existing papers
-- **Skips papers already in database**
-- Processes ONLY new papers
-
-#### 2. Search ArXiv
+### BIO Tagger
 ```bash
-python pgvector_retriever.py --search "transformer attention mechanism" --top_k 13
-```
+# Option 1: Interactive menu
+run_bio_tagger.bat
 
-**Output:**
-```
-GIST Pipeline: retrieve 169 chunks → GIST 144 → sections 89 → papers 13 → ColBERT 13 → Final 8 papers
+# Option 2: Direct Streamlit launch
+streamlit run streamlit_bio_demo.py
+# → http://localhost:8501
 
-1. 2410_13276
-   Score: 7.2883
-   Sections: 1
-   Preview: Transformer has garnered significant research...
-
-2. 2306_07303
-   Score: 6.5812
-   Sections: 3
-   Preview: The transformer architecture revolutionized...
-```
-
-**Returns**: 8 papers (fib_lower(13) = 8) with complete section details
-
-#### 2a. Search ArXiv with Export to Markdown
-```bash
-python pgvector_retriever.py --search "agentic memory methods" --top_k 21 --export "search_results.md"
-```
-
-**Export Format** (hierarchical):
-```markdown
-## 1. 2502_12110
-
-**Final Score:** 5.1730
-**RRF Score:** 0.1772
-**ColBERT Score:** 6.3101
-**Cross-Encoder Score:** 5.1730
-**Sections:** 8
-
-### Section 1: 2502_12110:s0
-
-**Section RRF:** 0.0735
-**Section ColBERT:** 5.8342
-
-[Full section text...]
-
-### Section 2: 2502_12110:s1
-
-**Section RRF:** 0.0404
-**Section ColBERT:** 5.8909
-
-[Full section text...]
-```
-
-**Returns**: 13 papers (fib_lower(21) = 13), each with complete sections and multi-level scores
-
-**What happens:**
-- Runs full GIST 7-stage pipeline
-- Returns top 21 groups (after ColBERT reranking)
-- Exports complete section text to `search_results.md`
-- File contains: query, scores, metadata, and full section content
-
-#### 3. Clear ArXiv Database
-```bash
-python pgvector_retriever.py --clear
-```
-
-### Quotes Dataset
-
-#### 1. Build Quotes Index
-```bash
-python quotes_retriever.py --build --quotes_file quotes_dataset.json --reset
-```
-
-**What happens:**
-- Downloads `abirate/english_quotes` from HuggingFace (if not exists)
-- Applies equidistant chunking (log median + 2*MAD)
-- Creates PostgreSQL table with BERT WordPiece BM25
-
-#### 2. Search Quotes
-```bash
-python quotes_retriever.py --search "wisdom and knowledge" --top_k 5
-```
-
-**Output:**
-```
-1. quote_001475
-   Score: 5.9874
-   Chunks: 1
-   Preview: "Knowledge speaks, but wisdom listens"
-
-2. quote_001561
-   Score: 1.0183
-   Chunks: 1
-   Preview: "Wisdom comes from experience..."
-```
-
-#### 2a. Search Quotes with Export to Markdown
-```bash
-python quotes_retriever.py --search "courage and fear" --top_k 10 --export "quotes_results.md"
-```
-
-**What happens:**
-- Runs full GIST 7-stage pipeline on quotes
-- Returns top 10 quotes (after ColBERT reranking)
-- Exports complete quote text with authors to `quotes_results.md`
-- File contains: query, scores, authors, tags, and full quote content
-
----
-
-## 📁 File Structure
-
-### Core Modules
-
-```
-gist_retriever.py                 # Abstract GIST pipeline base class
-├── GISTRetriever                 # 7-stage pipeline implementation
-├── GIST Selection Algorithm      # Greedy diversity with λ tradeoff
-├── ColBERTScorer                 # Token-level late interaction
-├── CrossEncoderScorer            # Full attention reranking
-└── RetrievedGroup                # Grouped result container
-
-pgvector_retriever.py             # ArXiv papers implementation
-├── TextPreprocessor              # BERT WordPiece tokenizer
-├── SparseBM25Index               # BM25 with msgpack cache
-├── Model2VecEmbedder             # PCA compression (256→64)
-├── PGVectorRetriever             # PostgreSQL GIST backend
-└── Group by: (paper_id, section_idx)
-
-quotes_retriever.py               # Quotes dataset implementation
-├── TextPreprocessor              # BERT WordPiece tokenizer
-├── SparseBM25Index               # BM25 with msgpack cache
-├── Model2VecEmbedder             # PCA compression (256→64)
-├── QuotesRetriever               # PostgreSQL GIST backend
-└── Group by: (quote_id,)
-
-equidistant_chunking.py           # Robust threshold-based chunking
-├── SlidingAggregator             # Character-based overlap control
-├── create_paragraph_blocks       # Extract paragraphs from markdown
-└── Log median + MAD * 2          # Threshold calculation
-```
-
-### Legacy/Archive Scripts
-
-```
-archive/
-├── hybrid_pgvector.py            # Original ArXiv implementation
-├── arxiv_chunking_pipeline.py   # Section-based chunking
-├── build_arxiv_rrf_index.py     # Legacy build script
-└── rrf_retriever.py              # Pre-GIST RRF implementation
-```
-
-### Supporting Scripts
-
-```
-test_pg_connection.py             # Verify database connection
-check_pg_extensions.py            # Verify pgvector support
-```
-
-### Data Files
-
-```
-papers/post_processed/            # ArXiv: 1,607 markdown files
-quotes_dataset.json               # Quotes: 2,508 entries
-checkpoints/                      # msgpack cache
-  ├── chunks.msgpack
-  ├── bm25_index.msgpack
-  ├── embeddings.npy
-  └── sparse_vectors.msgpack
-bm25_vocab.msgpack                # ArXiv BM25 vocab (for search)
-quotes_bm25_vocab.msgpack         # Quotes BM25 vocab (for search)
+# Training pipeline (if retraining)
+python extract_bio_training_data.py --chunks 250 --output training.msgpack
+python tune_bio_tagger.py --data training.msgpack --unfreeze-layers 12 --n-trials 21
 ```
 
 ---
 
-## 🔧 Configuration
+## 🔍 Hybrid Retriever — Feature Catalog
 
-### PostgreSQL Connection
+*Source: `retriever_feature_catalog.sqlite3` — 16 features, 2 architectural decisions, 8 claims*
 
+| Status | Count |
+|--------|-------|
+| ✅ DONE | 10 |
+| 🔄 IN PROGRESS | 3 |
+| 📋 TODO | 1 |
+| ❌ FAILED | 2 |
+
+### Features
+
+#### 1. Frozen BERT Baseline ✅ DONE
+
+Fixed BIO labeling bugs + established baseline with frozen BERT + single linear layer
+
+*Baseline F1: 0.1328 | Current F1: 0.1764 | Notes: Best trial F1=0.1764, but full training collapsed to 0.0805 due to overfitting. Confirms frozen BERT architecture limitation.*
+
+#### 2. Runtime Label Mismatch Bug 🧪 VALIDATING
+
+collate_fn bidirectional substring matching produces 45% different labels than pre-computed
+
+*Baseline F1: 0.1764*
+
+#### 3. Pre-computed Label Sparsity ❌ FAILED
+
+Pre-computed labels in bio_training_250chunks_clean.msgpack only label ~30-40% of tokens
+
+*Baseline F1: 0.1764 | Current F1: 0.0670*
+
+#### 4. Class-Balanced Sampling ❌ FAILED
+
+Iterative token-level class balancing using log/Box-Cox transform
+
+*Baseline F1: 0.1218 | Current F1: 0.1355 | Notes: Class balancing achieved O-token reduction (65.6%→53.6%) but F1 worse (0.1218→0.1355). MORE DATA works better: 160 examples→F1=0.1408. Root cause: Pre-computed labels still incomplete (36.6% coverage). Runtime matcher had 45% wrong labels but higher coverage.*
+
+#### 5. More Training Data ✅ DONE
+
+Increase training set size from 40 to 160 examples
+
+*Baseline F1: 0.1218 | Current F1: 0.1408 | Notes: 160 examples achieved F1=0.1408 (+15.6% vs 40 examples). Still 20% below runtime matcher baseline (0.1764) due to incomplete label coverage (36.6% vs ~70% estimated for runtime matcher).*
+
+#### 6. Stanza Dependency Parsing for BIO Extraction ✅ DONE
+
+Replace OpenIE with Stanza dependency parsing in extract_bio_training_data.py to preserve multi-word phrases
+
+*Notes: Fixed 1355 BIO violations (99.93% success). Proper B-I-I continuous spans validated.*
+
+#### 7. Stanza Dependency Parsing for Graph Extraction ✅ DONE
+
+Replace OpenIE with Stanza dependency parsing in build_arxiv_graph_sparse.py to preserve multi-word entity nodes
+
+*Notes: Code fixed and validated standalone. Multi-word phrase preservation confirmed.*
+
+#### 8. BIO Sequence Validation Unit Test ✅ DONE
+
+Created validate_bio_sequences.py to check for consecutive B-X B-X violations
+
+*Notes: Validates BIO sequences, distinguishes atomic vs compound approaches.*
+
+#### 9. get_subtree_text() Function ✅ DONE
+
+Recursively collects dependency subtree to preserve multi-word phrases during extraction
+
+*Notes: Core function for Stanza phrase preservation. Tested and working.*
+
+#### 10. extract_spo_from_sentence() Function ✅ DONE
+
+Extracts S-P-O triplets using Stanza dependency parse instead of OpenIE atomization
+
+*Notes: Replaces OpenIE extraction. Uses get_subtree_text() for full phrases.*
+
+#### 11. BIO Training Data Regeneration ✅ DONE
+
+Regenerated bio_training_250chunks_complete_FIXED.msgpack with Stanza extraction
+
+*Notes: 1103 examples generated. 1355 violations → 1 violation (99.93% fix rate).*
+
+#### 12. Streamlit BIO Tagger Dashboard ✅ DONE
+
+Interactive web dashboard for testing BIO tagger predictions. Allows users to input text and visualize Subject-Predicate-Object extraction with entity highlighting.
+
+*Notes: Implemented in streamlit_bio_demo.py. Loads trained model (bio_tagger_multiclass.pt) and provides interactive testing interface. Shows holdout predictions for reference. Full functionality: text input, BIO prediction, entity extraction, visualization.*
+
+#### 13. Conditional I-PRED Detection and Removal 🔄 IN_PROGRESS
+
+Automatically detect and remove I-PRED class when it has 0 tokens in training data. Root cause: 100% single-token predicates mean I-PRED never exists. Removes 16.7% penalty from macro F1.
+
+*Baseline F1: 0.6715 | Notes: Training started with Optuna. Detection confirmed: I-PRED has 0 tokens, model created with 5 classifiers. Per-class metrics show only 5 labels as expected.*
+
+#### 14. Stopword Filtering in Training Data 🔄 IN_PROGRESS
+
+
+    ROOT CAUSE FIX: Filter stopwords from BIO training data during data preparation.
+    
+    PROBLEM IDENTIFIED:
+    - Stopwords ("an", "to", etc.) labeled as entities in predictions
+    - Training data includes stopwords in entity spans from Stanza extractions
+    - No filtering applied during BIO labeling
+    
+    SOLUTION:
+    - Regenerate training data with stopword masking
+    - Mask stopwords as 'O' label even if in entity boundaries
+    - Retrain model with clean data
+    
+    COMPLETE PIPELINE (Run in Order):
+    
+    Step 1: Extract BIO Training Data
+    -----------------------------------
+    Script: extract_bio_training_data.py
+    Purpose: Extract SPO triplets from ArXiv chunks using Stanza, convert to BIO labels
+    Input: ArXiv chunks (from pgvector database or msgpack)
+    Output: bio_training_250chunks.msgpack (raw training data with stopwords)
+    Runtime: ~30-60 minutes (depends on chunk count)
+    
+    Command:
+      python extract_bio_training_data.py --chunks 250
+    
+    Step 2: Filter Stopwords from Training Data
+    --------------------------------------------
+    Script: filter_training_stopwords.py
+    Purpose: Mask stopwords as 'O' label in BIO sequences
+    Input: bio_training_250chunks_complete_FIXED.msgpack (or raw training data)
+    Output: bio_training_250chunks_complete_FILTERED.msgpack (clean data)
+    Runtime: ~10 seconds
+    
+    Command:
+      python filter_training_stopwords.py
+    
+    Step 3: Train/Tune BIO Tagger Model
+    ------------------------------------
+    Script: tune_bio_tagger.py
+    Purpose: Train BERT-based BIO tagger with Optuna hyperparameter tuning
+    Input: bio_training_250chunks_complete_FILTERED.msgpack (clean training data)
+    Output: bio_tagger_atomic.pt (trained model)
+    Runtime: ~30-60 minutes (depends on n_trials)
+    
+    Command:
+      python tune_bio_tagger.py \
+        --data bio_training_250chunks_complete_FILTERED.msgpack \
+        --unfreeze-layers 12 \
+        --n-trials 21
+    
+    Step 4: Test Predictions (Verification)
+    ----------------------------------------
+    Script: test_predictions.py
+    Purpose: Verify stopwords now labeled as 'O' (not entity labels)
+    Input: bio_tagger_atomic.pt (trained model)
+    Output: Console output with predictions
+    Runtime: <5 seconds
+    
+    Command:
+      python test_predictions.py
+    
+    Expected Result:
+      - "an" → O ✅ (not B-OBJ)
+      - "to" → O ✅ (not I-OBJ)
+    
+    Step 5: Launch Streamlit App (Production)
+    ------------------------------------------
+    Script: streamlit_bio_demo.py
+    Launcher: run_bio_tagger.bat app
+    Purpose: Interactive BIO tagging interface
+    Input: bio_tagger_atomic.pt (trained model)
+    Runtime: Continuous (web server)
+    
+    Command:
+      run_bio_tagger.bat app
+    
+    EXPECTED IMPACT:
+    - Improved precision (fewer false positive entity boundaries)
+    - Better B-OBJ F1 (currently 0.6197, lowest score)
+    - Better I-OBJ F1 (currently 0.5295, second lowest)
+    - Cleaner entity boundary predictions
+    
+    KEY FILES:
+    - filter_training_stopwords.py (new script, Phase 48)
+    - extract_bio_training_data.py (existing, Phase 44)
+    - tune_bio_tagger.py (existing, Phase 45)
+    - test_predictions.py (existing, Phase 46)
+    - run_bio_tagger.bat (existing, Phase 47)
+    
+    DATA FILES:
+    - Input: bio_training_250chunks_complete_FIXED.msgpack
+    - Output: bio_training_250chunks_complete_FILTERED.msgpack
+    - Model: bio_tagger_atomic.pt (will be replaced)
+    
+    NOTES:
+    - Data structure uses 'training_data' key (not 'training' or 'eval')
+    - No separate eval split in msgpack (splitting done at training time)
+    - NLTK stopwords corpus used for filtering
+    
+
+*Baseline F1: 0.7467*
+
+#### 15. Graph Transformer Reranking Stage 📋 TODO
+
+Graph Transformer Reranking Stage with Node2Vec distillation.
+
+**Architecture:** 3-phase pipeline
+1. Hybrid Retrieval (BM25 + dense) → ~50-100 candidate chunks
+2. BIO Tagger → SPO triplets → AOKG (only on candidates, ~25 seconds)
+3. Graph-based reranking using Node2Vec embeddings
+
+**Key Innovation: Fast Graph Embedding via Distillation**
+Problem: BIO tagger takes 11 hours for full corpus (4.08 chunks/sec × 161k chunks)
+Solution: Train lightweight model on 250 chunks, apply to remaining corpus
+
+**Two-Phase Implementation:**
+
+Phase 1 — Train on 250 chunks (one-time, expensive):
+  1. BIO Tagger (BERT) → extract triplets (~60 seconds for 250 chunks)
+  2. Build AOKG (4-layer: surface → lemma → synset → hypernym)
+  3. Run karateclub.Node2Vec on AOKG → derive node embeddings (128-dim)
+  4. Aggregate node embeddings per chunk (mean pooling)
+  5. Train distilled model: DistilBERT(text) → graph_embedding
+     - Input: Raw chunk text
+     - Output: 128-dim graph embedding (without running BERT BIO or building graph)
+     - Training: MSE loss between distilled output vs actual node2vec embeddings
+     - Data: 250 chunks with known graph embeddings
+
+Phase 2 — Apply to remaining corpus (fast):
+  1. Distilled model: text → graph embedding (~150 chunks/sec)
+  2. Store embeddings in pgvector alongside model2vec embeddings
+  3. Build HNSW index on graph embeddings
+  4. Full corpus time: ~18 minutes (vs 11 hours with BERT)
+  5. Speedup: 37x faster, 97% time reduction
+
+**Reranking Strategy:**
+- Hybrid retrieval provides recall (BM25 + model2vec dense)
+- Graph embeddings provide precision (semantic distance via AOKG structure)
+- Fusion: RRF across 3 signals (BM25 + dense + graph) OR learned weights
+- LCA convergence level (0-3) as discrete semantic distance metric
+
+**Performance Estimates:**
+- BIO Tagger: 4.08 chunks/sec → 11 hours for 161k chunks
+- Distilled model: ~150 chunks/sec → 18 minutes for 161k chunks
+- Embedding quality: Expected correlation r > 0.7 between BERT→node2vec vs distilled→node2vec
+- Retrieval: Precision@5 expected improvement via graph reranking
+
+**Implementation Steps:**
+1. ✅ DONE: Train BIO tagger on 250 chunks
+2. ✅ DONE: Extract triplets, build AOKG, visualize in Streamlit
+3. TODO: Run Node2Vec on AOKG → derive node embeddings (estimate: 2 hours)
+4. TODO: Aggregate embeddings per chunk, visualize t-SNE (estimate: 1 hour)
+5. TODO: Train DistilBERT + projection layer for distillation (estimate: 4 hours)
+6. TODO: Validate on holdout, measure embedding similarity (estimate: 1 hour)
+7. TODO: Apply to 1000 chunks, benchmark throughput (target: >100 chunks/sec, estimate: 1 hour)
+8. TODO: Derive embeddings for full corpus (estimate: 30 minutes)
+9. TODO: Build HNSW index, integrate with hybrid retriever (estimate: 3 hours)
+10. TODO: Implement reranking, tune fusion weights (estimate: 3 hours)
+11. TODO: Benchmark retrieval quality (precision@5, recall@10, estimate: 2 hours)
+
+**Dependencies:**
+- karateclub (Node2Vec, Graph2Vec)
+- torch (DistilBERT)
+- transformers (DistilBertModel)
+- bio_tagger_best.pt (trained BIO model)
+- bio_training_250chunks_complete_FIXED.msgpack (250 training chunks)
+
+**Design Decisions:**
+1. Reranker vs full corpus expansion → Reranker (11 hours infeasible)
+2. Node2Vec vs Graph Transformer → Node2Vec + distillation (simpler, proven)
+3. 250 chunks for training → Use existing BIO training set (validated)
+4. Embedding dimension → 128-dim (Node2Vec default, can tune)
+5. Aggregation strategy → Mean pooling (simple baseline, can upgrade to attention)
+
+**Key Files:**
+- GRAPH_TRANSFORMER_STRATEGY.md — Full implementation strategy document
+- (to create) train_graph_distillation.py — Phase 1: Train distilled model
+- (to create) apply_graph_embeddings.py — Phase 2: Apply to full corpus
+- (to create) graph_reranker.py — Reranking logic with graph embeddings
+
+**Status:** TODO
+**Blocking:** None (all dependencies complete)
+**Estimate:** 1-2 weeks for full implementation
+**Priority:** High (enables fast graph-based retrieval without 11-hour BERT inference)
+
+*Notes: Depends on bio_tagger_features.sqlite3 pipeline being complete.*
+
+#### 16. Workflow: Hybrid Retriever Execution Order ✅ DONE
+
+Workflow Execution Order for Hybrid Retrieval System:
+
+1. **Chunk Documents**
+   - Script: arxiv_chunking_pipeline.py
+   - Purpose: Ingest PDFs/text, apply equidistant chunking (log median + 2*MAD), embed with model2vec
+   - Command: python arxiv_chunking_pipeline.py --input-dir ./papers/ --collection arxiv
+   - Output: checkpoints/chunks.msgpack + PostgreSQL pgvector tables
+
+2. **Build BM25 Vocabulary**
+   - Script: build_adaptive_vocab.py
+   - Purpose: Extract vocabulary for BM25 lexical matching
+   - Command: python build_adaptive_vocab.py --chunks checkpoints/chunks.msgpack --output bm25_vocab.msgpack
+   - Output: bm25_vocab.msgpack (or quotes_bm25_vocab.msgpack)
+
+3. **Query Documents**
+   - Scripts: query_arxiv.py, query_quotes.py
+   - Purpose: 8-stage GIST hybrid retrieval (BM25+dense → diversity → RRF → filters)
+   - Command: python query_arxiv.py "query text here"
+   - Output: Retrieved sections with relevance scores
+
+4. **Extract Knowledge Graph (Planned - TODO)**
+   - Script: (to be created)
+   - Purpose: Run BIO tagger on retrieved chunks → build AOKG → graph transformer reranking
+   - Command: TBD
+   - Output: Reranked results with graph-based semantic distance signal
+
+**Data Sources:**
+- ArXiv corpus: checkpoints/chunks.msgpack (161,389 chunks)
+- Quotes corpus: quotes_dataset.json (3,500 quotes)
+- PostgreSQL: arxiv_retrieval, quotes_retrieval databases
+
+**Quick Start:**
+python query_arxiv.py "machine learning transformers"    # Query ArXiv
+python query_quotes.py "life wisdom"                     # Query quotes
+
+### Architectural Decisions
+
+**1. Replace OpenIE with Stanza Dependency Parsing**
+
+- **Rationale:** OpenIE atomizes multi-word phrases ("deep learning models" → 3 separate entities), causing 1355 BIO violations. Stanza preserves full phrases via dependency subtree collection.
+- **Before:** OpenIE: extract(sentence) → atomized triplets → BIO violations (B-SUBJ B-SUBJ B-SUBJ)
+- **After:** Stanza: get_subtree_text(head_word) → complete phrases → proper BIO spans (B-SUBJ I-SUBJ I-SUBJ)
+
+**2. Graph transformer reranking as post-hybrid precision stage**
+
+- **Rationale:** Hybrid retrieval (BM25+dense) provides recall. AOKG graph provides precision signal. Graph embeddings could be accelerated via WordPiece tokenization of graph nodes, producing a fixed-vocabulary sparse vector analogous to BM25 but over ontological structure. This avoids the 11-hour full corpus inference cost by only processing retrieved chunks.
+- **Before:** 8-stage GIST pipeline: Retrieve→GIST→RRF→Group→ColBERT→CrossEncoder
+- **After:** Proposed 10-stage: ...→CrossEncoder→BIO Extract→AOKG Rerank
+
+### Prediction Accuracy
+
+| Feature | Claim | Predicted F1 | Actual F1 | Error | Result |
+|---------|-------|-------------|-----------|-------|--------|
+| Runtime Label Mismatch Bug | Runtime matcher produces 45% label mismatches vs p... | — | — | — | CONFIRMED |
+| Runtime Label Mismatch Bug | Empirical mismatch rates: Ex1=50%, Ex2=70.4%, Ex3=... | — | 0.4500 | — | CONFIRMED |
+| Pre-computed Label Sparsity | Pre-computed labels would improve training (expect... | 0.4000 | 0.0670 | 0.3330 | FAILED |
+| Pre-computed Label Sparsity | Label sparsity analysis: Ex1=32% coverage (11/34),... | — | 0.3000 | — | CONFIRMED |
+| Class-Balanced Sampling | Class balancing will reduce O-token dominance and ... | 0.1800 | 0.1355 | 0.0445 | FAILED |
+| More Training Data | 160 training examples will improve F1 vs 40 exampl... | 0.1500 | 0.1408 | 0.0092 | CONFIRMED |
+
+---
+
+## 🏷️ BIO Tagger — Feature Catalog
+
+*Source: `bio_tagger_features.sqlite3` — 13 features, 4 architectural decisions, 1 claims*
+
+| Status | Count |
+|--------|-------|
+| ✅ DONE | 12 |
+| 🔄 IN PROGRESS | 1 |
+
+### Features
+
+#### 1. Class Balancing via Log-Transform Resampling 🔄 IN_PROGRESS
+
+Implement log-transform resampling strategy to address catastrophic class imbalance (I-OBJ F1=0.88 vs B-tags F1=0.00-0.21). Log-transforms class counts, scales to max, and resamples per-epoch: I-SUBJ 2.19x, B-SUBJ 1.73x, B-OBJ 1.55x, B-PRED 1.44x, I-OBJ 1.0x. Epoch size increases from 1,103 to 1,665 samples (1.51x larger).
+
+*Baseline F1: 0.6715*
+
+#### 2. KeyError(9) Bug Fix - Label Iteration Scope ✅ DONE
+
+Fixed critical bug in resampling implementation where code iterated through ALL 40+ label positions in multi-hot vectors instead of only first 6 BIO entity labels (B-SUBJ, I-SUBJ, B-PRED, I-PRED, B-OBJ, I-OBJ). Changed from enumerate(token_labels) to explicit range(6) iteration with bounds checking in both objective() and create_balanced_epoch_sampler() functions. Immediate crash prevented.
+
+*Notes: Bug fixed in two locations: objective() line ~645 and create_balanced_epoch_sampler() line ~558. No KeyError on startup. Ready for testing.*
+
+#### 3. Stanza Knowledge Distillation ✅ DONE
+
+Extract BIO training labels from Stanza dependency parser (teacher model). Script: extract_bio_training_data.py. CLI: python extract_bio_training_data.py --chunks 250 --output <file>.msgpack. Parses sentences with Stanza dep parser, extracts nsubj/dobj/root triples, converts to multi-hot BIO labels per BERT token. Output msgpack keys: training_data, stats, tokenizer_name, label_names, architecture.
+
+*Notes: Primary training data source. 250 chunks → ~1375 sentences.*
+
+#### 4. BIOTagger Model Architecture ✅ DONE
+
+BERT-base-uncased + 6 independent binary classifiers (nn.Linear(768,1) + sigmoid). Script: train_bio_tagger.py, class BIOTagger (line 93). Labels: B-SUBJ, I-SUBJ, B-PRED, I-PRED, B-OBJ, I-OBJ. forward() returns (probs, logits) tuple — probs shape [batch, seq_len, 6]. Model artifact: bio_tagger_best.pt (direct state_dict, 200+ keys).
+
+*Notes: 6 independent heads allow multi-label tagging per token.*
+
+#### 5. Optuna Hyperparameter Tuning ✅ DONE
+
+Box-Cox resampled training with Optuna. Script: tune_bio_tagger.py, class BoxCoxBIODataset (line 44). CLI: python tune_bio_tagger.py --data <file>.msgpack --unfreeze-layers 12 --n-trials 21. Hyperparameter space: LR (1e-6 to 1e-3), dropout (0-0.5), O-weight (0.001-0.1), batch (4/8/16), optimizer (AdamW/Adam/SGD). Entity-density-based sample weighting. Best model saved to bio_tagger_best.pt.
+
+*Notes: 21 trials on bio_training_250chunks_complete_FIXED.msgpack. All 12 BERT layers unfrozen.*
+
+#### 6. BIOTripletExtractor Inference ✅ DONE
+
+Production inference class for SPO triplet extraction. Script: inference_bio_tagger.py, class BIOTripletExtractor (line 123). Methods: extract_triplets(text, threshold) → list of (subj, pred, obj). Internal: extract_spans() parses BIO probabilities into Span objects, reconstruct_triplets() groups spans into S-P-O triples. Model loads bio_tagger_best.pt as direct state_dict.
+
+*Notes: 4.08 chunks/sec on CUDA. 94.5% triplet extraction rate.*
+
+#### 7. Post-Inference Stopword Removal ✅ DONE
+
+Strip stopwords from extracted spans AFTER model inference (model learns full boundaries). Script: inference_bio_tagger.py. SPAN_STOPWORDS set (line 71): articles (a/an/the), prepositions (to/of/in/on/at/by/for/with/from/into/through), conjunctions (and/or/but/nor), copulas (is/are/was/were/be/been/being), relative pronouns (that/which/who), pronouns (this/these/those/it/its). _COPULAS set (line 86): is/are/was/were/be/been/being. clean_span_tokens(tokens, label_type) (line 88): strips all stopwords from SUBJ/OBJ but KEEPS copulas in PRED spans. Never returns empty list (falls back to original tokens).
+
+*Notes: Post-inference design: model trains on full spans, cleanup happens at output.*
+
+#### 8. Cartesian Product Triplet Expansion ✅ DONE
+
+Expand multi-word spans into atomic word-level triplets via cartesian product. Script: streamlit_bio_demo.py, function expand_cartesian_triplets() (line 177). Process: flatten all words per role → deduplicate → sorted set → itertools.product(S, P, O). Example: SUBJ=['humans'], PRED=['possess'], OBJ=['ability','tools'] → [('humans','possess','ability'), ('humans','possess','tools')]. Each atomic triplet becomes an edge in the knowledge graph.
+
+*Notes: Produces atomic SPO triples suitable for graph construction.*
+
+#### 9. Atomic Relation Graph ✅ DONE
+
+NetworkX DiGraph visualization of SPO triplets. Script: streamlit_bio_demo.py, function render_triplet_graph() (line 195). SUBJ nodes (red, left column) → OBJ nodes (blue, right column), edges labeled by PRED. Multiple predicates between same S-O pair concatenated as comma-separated edge label. Shell layout: subjects on left column, objects on right column, centered vertically.
+
+*Notes: Tab 1 visualization in Streamlit demo.*
+
+#### 10. Augmented Ontological Knowledge Graph (AOKG) ✅ DONE
+
+4-layer ANN-style knowledge graph with WordNet resolution. Script: streamlit_bio_demo.py. Layer 0 (bottom): Surface words — raw SPO edges from cartesian expansion. Layer 1: Lemmas — morphy-reduced via wn.morphy(), deduplicated. Layer 2: Synsets — first WordNet synset name, deduplicated. Layer 3 (top): Hypernyms — one level up via synset.hypernyms(), deduplicated. Functions: _resolve_word(word, role) (line 320) resolves L0→L3, render_layered_graph(S, P, O) (line 341) builds 4-layer visualization. Vertical dashed edges connect each node upward to its parent. Multiple words sharing the same lemma/synset/hypernym CONVERGE at that layer. LCA convergence level (0-3) serves as semantic distance metric for reranking.
+
+*Notes: Named AOKG. LCA distance: 0=same word, 1=same lemma, 2=same synset, 3=same hypernym.*
+
+#### 11. Streamlit BIO Tagger Demo ✅ DONE
+
+3-tab interactive demo application. Script: streamlit_bio_demo.py (1064 lines). Tab 1 — Interactive Testing: paste text → extract triplets → view atomic graph + AOKG. Tab 2 — Eval Set Browser: browse evaluation samples from bio_training_250chunks_complete_FIXED.msgpack. Tab 3 — Eval Metrics: aggregate precision/recall/F1 across eval set. Launch: run_bio_tagger.bat app  OR  streamlit run streamlit_bio_demo.py. URL: http://localhost:8501.
+
+*Notes: Menu-driven via run_bio_tagger.bat (4 options: app, test, integration, check).*
+
+#### 12. Full Corpus Inference Benchmark ✅ DONE
+
+Benchmark BIO inference throughput on full chunk corpus. Script: benchmark_full_corpus_inference.py. Data source: checkpoints/chunks.msgpack (161,389 chunks as list of dicts). Schema: [doc_id, paper_id, section_idx, chunk_idx, text]. Results (100 chunks): 4.08 chunks/sec, 22.26 sentences/sec, 21.04 triplets/sec, 94.5% extraction rate, 5.5 avg sentences/chunk, 5.2 avg triplets/chunk. Full corpus estimate: ~11 hours.
+
+*Notes: Strategic pivot: too expensive for full corpus → use as reranker on hybrid-retrieved results only.*
+
+#### 13. Workflow: BIO Tagger Execution Order ✅ DONE
+
+Workflow Execution Order for BIO Tagger System:
+
+1. **Extract Training Data**
+   - Script: extract_bio_training_data.py
+   - Purpose: Use Stanza to extract BIO labels from chunks via knowledge distillation
+   - Command: python extract_bio_training_data.py --chunks 250 --output bio_training_250chunks.msgpack
+   - Output: bio_training_250chunks_complete_FIXED.msgpack
+
+2. **Tune Hyperparameters (Optional)**
+   - Script: tune_bio_tagger.py
+   - Purpose: Optuna-based hyperparameter optimization with BoxCox resampling
+   - Command: python tune_bio_tagger.py --data bio_training_250chunks_complete_FIXED.msgpack --unfreeze-layers 12 --n-trials 21
+   - Output: best_hyperparams.json, bio_tagger_best.pt
+
+3. **Train Model**
+   - Script: train_bio_tagger.py (or via tune_bio_tagger.py)
+   - Purpose: Train 6 binary classifiers on BIO labels
+   - Output: bio_tagger_best.pt (direct state_dict)
+
+4. **Run Inference**
+   - Script: inference_bio_tagger.py
+   - Purpose: Extract SPO triplets from text using trained model
+   - Import: from inference_bio_tagger import BIOTripletExtractor
+
+5. **Launch Demo Application**
+   - Script: streamlit_bio_demo.py
+   - Purpose: 3-tab interactive demo (Testing, Eval Browser, Metrics)
+   - Command: run_bio_tagger.bat app  OR  streamlit run streamlit_bio_demo.py
+   - URL: http://localhost:8501
+
+6. **Benchmark Performance (Optional)**
+   - Script: benchmark_full_corpus_inference.py
+   - Purpose: Measure throughput on full corpus
+   - Command: python benchmark_full_corpus_inference.py --max-chunks 100
+   - Data source: checkpoints/chunks.msgpack (161,389 chunks)
+
+**Quick Start:**
+run_bio_tagger.bat          # Interactive menu
+run_bio_tagger.bat app      # Launch Streamlit
+run_bio_tagger.bat test     # Run unit tests
+run_bio_tagger.bat check    # System health check
+
+### Architectural Decisions
+
+**1. Post-inference stopword removal instead of training-time filtering**
+
+- **Rationale:** Model should learn full BIO span boundaries including stopwords, then strip at output. Training on cleaned data caused boundary confusion. SPAN_STOPWORDS applied in clean_span_tokens() after span extraction.
+- **Before:** Attempted stopword filtering in training data (extract_bio_training_data.py)
+- **After:** Stopwords stripped post-inference in inference_bio_tagger.py:88
+
+**2. Cartesian product expansion for atomic triplets**
+
+- **Rationale:** Multi-word BIO spans like OBJ=['extraordinary','ability','create','utilize','tools'] need decomposition into atomic word-level triplets for graph construction. itertools.product(S,P,O) produces all combinations.
+- **Before:** Multi-word spans as single graph nodes
+- **After:** Atomic word-level nodes via expand_cartesian_triplets() in streamlit_bio_demo.py:177
+
+**3. 4-layer AOKG with WordNet resolution for semantic distance**
+
+- **Rationale:** LCA convergence level (0-3) provides a discrete semantic distance metric. Two words converging at L1 (same lemma) are closer than at L3 (same hypernym). Enables graph-based reranking signal complementary to embedding similarity.
+- **Before:** Flat collapsed synset/hypernym graph
+- **After:** 4-layer ANN-style graph: L0=surface, L1=lemma, L2=synset, L3=hypernym
+
+**4. Use AOKG as precision reranker, not full corpus expansion**
+
+- **Rationale:** Full corpus inference at 4.08 chunks/sec × 161k chunks = ~11 hours. Too expensive for recall expansion. Instead, use hybrid retrieval (BM25+dense) for recall, then apply AOKG graph on retrieved results only for precision reranking.
+- **Before:** Plan to build AOKG over entire corpus for graph-based recall
+- **After:** Strategic pivot: AOKG as reranker over hybrid-retrieved results only
+
+---
+
+## 🔀 Graph Transformer — Feature Catalog
+
+*Source: `graph_transformer_feature_catalog.sqlite3` — 6 features, 3 architectural decisions, 0 claims*
+
+| Status | Count |
+|--------|-------|
+| ✅ DONE | 1 |
+| 📋 TODO | 5 |
+
+### Features
+
+#### 1. Workflow: Graph Transformer Execution Order ✅ DONE
+
+Workflow Execution Order for Graph Transformer Reranking:
+
+**Context:** Graph transformer reranking is applied AFTER hybrid retrieval to improve precision on candidate chunks. It does NOT operate on the full corpus (too expensive).
+
+1. **Run Hybrid Retrieval**
+   - Scripts: query_arxiv.py, query_quotes.py
+   - Purpose: 8-stage GIST retrieval (BM25 + dense → diversity → RRF → filters)
+   - Command: python query_arxiv.py "your query here"
+   - Output: ~50-100 candidate chunks with relevance scores
+
+2. **Extract Triplets from Candidates (Optional for baseline)**
+   - Script: inference_bio_tagger.py
+   - Purpose: Run BIO tagger on candidate chunks only (~25 seconds for 50 chunks vs 11 hours for full corpus)
+   - Import: from inference_bio_tagger import BIOTripletExtractor
+   - Output: SPO triplets for graph construction
+
+3. **Phase 1: Train Graph Distillation Model (One-time, ~2-3 days)**
+   - Script: train_graph_distillation.py (to be created)
+   - Purpose: Train lightweight model to predict graph embeddings from text
+   - Steps:
+     a. Load 250 training chunks from bio_training_250chunks_complete_FIXED.msgpack
+     b. Run BIO tagger → extract triplets → build AOKG
+     c. Run karateclub.Node2Vec on AOKG → derive node embeddings (128-dim)
+     d. Aggregate node embeddings per chunk (mean pooling)
+     e. Train DistilBERT + projection layer: text → graph_embedding
+     f. MSE loss: predicted vs actual node embeddings
+   - Output: graph_distillation_model.pt (fast embedding model)
+   - Estimate: ~4-6 hours training time
+
+4. **Phase 2: Derive Graph Embeddings for Full Corpus (Fast, ~18 minutes)**
+   - Script: apply_graph_embeddings.py (to be created)
+   - Purpose: Apply distilled model to derive graph embeddings for all 161k chunks
+   - Command: python apply_graph_embeddings.py --model graph_distillation_model.pt --chunks checkpoints/chunks.msgpack
+   - Throughput: ~150 chunks/sec (vs 4.08 chunks/sec with BERT)
+   - Output: graph_embeddings.msgpack OR pgvector table with graph embeddings
+
+5. **Phase 3: Build HNSW Index on Graph Embeddings**
+   - Script: build_graph_hnsw.py (to be created)
+   - Purpose: Create HNSW index for fast graph-based retrieval
+   - Command: python build_graph_hnsw.py --embeddings graph_embeddings.msgpack
+   - Output: HNSW index in pgvector OR standalone index
+
+6. **Phase 4: Rerank with Graph Embeddings**
+   - Script: graph_reranker.py (to be created)
+   - Purpose: Combine BM25 + dense + graph signals for final ranking
+   - Import: from graph_reranker import GraphReranker
+   - Fusion strategies:
+     a. Linear combination with learned weights
+     b. RRF (Reciprocal Rank Fusion) across 3 signals
+     c. Cascade: BM25 → dense → graph
+   - Output: Reranked results with improved precision
+
+**Quick Start (after implementation):**
+# One-time training (Phase 1)
+python train_graph_distillation.py --chunks bio_training_250chunks_complete_FIXED.msgpack --output graph_distillation_model.pt
+
+# One-time full corpus embedding (Phase 2)
+python apply_graph_embeddings.py --model graph_distillation_model.pt --chunks checkpoints/chunks.msgpack
+
+# Query with graph reranking (Phase 4)
+python query_arxiv.py "machine learning transformers" --rerank graph
+
+**Performance:**
+- BIO Tagger (BERT): 4.08 chunks/sec → 11 hours for 161k chunks
+- Distilled Model: ~150 chunks/sec → 18 minutes for 161k chunks
+- Speedup: 37x faster, 97% time reduction
+- Expected improvement: Precision@5 boost via graph semantic distance
+
+#### 2. Node2Vec Graph Embeddings from AOKG 📋 TODO
+
+Extract graph embeddings from AOKG using karateclub.Node2Vec.
+
+**Purpose:** Derive 128-dim embeddings that capture AOKG topology for the 250 training chunks.
+
+**Implementation:**
+- Library: karateclub (Node2Vec class)
+- Input: AOKG networkx graph from 250 training chunks
+- Parameters: dimensions=128, walk_length=80, walk_number=10
+- Output: Dict mapping node_id → 128-dim embedding
+
+**Aggregation:** Mean pooling of node embeddings per chunk
+- For each chunk, get all nodes (words) from its triplets
+- Average their Node2Vec embeddings
+- Result: One 128-dim vector per chunk representing its graph structure
+
+**Validation:**
+- Visualize embeddings with t-SNE
+- Check that semantically similar chunks cluster together
+- Expected: Chunks about similar topics have closer graph embeddings
+
+**Estimate:** 2 hours implementation + validation
+**Dependencies:** karateclub, numpy, networkx
+**Files:** train_graph_distillation.py (node2vec section)
+
+#### 3. DistilBERT Graph Embedding Distillation 📋 TODO
+
+Train lightweight model to predict graph embeddings directly from text.
+
+**Architecture:**
+- Base: DistilBERT (distilbert-base-uncased)
+- Projection: Linear layer mapping 768-dim → 128-dim
+- Input: Raw chunk text (tokenized)
+- Output: 128-dim graph embedding (without graph construction)
+
+**Training:**
+- Data: 250 chunks with known graph embeddings (from Node2Vec)
+- Loss: MSE between predicted and actual graph embeddings
+- Split: 200 train, 50 validation
+- Epochs: 10-20 (early stopping on validation loss)
+- Optimizer: AdamW (lr=3e-5)
+
+**Goal:** Learn to map text → graph structure implicitly
+- Model learns patterns: "words A, B, C together → this graph topology"
+- No explicit graph construction at inference time
+- 37x faster than BIO tagger + Node2Vec pipeline
+
+**Validation:**
+- Correlation between predicted vs actual embeddings (target: r > 0.7)
+- Cosine similarity distribution
+- t-SNE plot: predicted vs actual embeddings should overlap
+
+**Estimate:** 4-6 hours training + validation
+**Dependencies:** torch, transformers, numpy
+**Files:** train_graph_distillation.py (distillation section)
+
+#### 4. Full Corpus Graph Embedding Derivation 📋 TODO
+
+Apply distilled model to derive graph embeddings for all 161,389 chunks.
+
+**Performance:**
+- Throughput: ~150 chunks/sec (vs 4.08 chunks/sec with BERT BIO)
+- Full corpus time: ~18 minutes (vs 11 hours with BERT)
+- Speedup: 37x faster, 97% time reduction
+
+**Process:**
+1. Load distilled model (graph_distillation_model.pt)
+2. Load chunks from checkpoints/chunks.msgpack
+3. Batch inference (batch_size=64)
+4. Store embeddings: either msgpack OR pgvector table
+
+**Storage Options:**
+- Option A: msgpack file (graph_embeddings.msgpack)
+  - Pros: Simple, portable
+  - Cons: Need to load all into memory for HNSW
+- Option B: pgvector table (chunks table, add graph_embedding column)
+  - Pros: Unified storage with model2vec embeddings
+  - Cons: Requires PostgreSQL
+
+**Validation:**
+- Benchmark throughput on 1000 chunks first
+- Verify embeddings are reasonable (check norms, distributions)
+- Spot-check: manually inspect embeddings for known chunks
+
+**Estimate:** 1 hour implementation + 18 minutes inference + 30 min validation
+**Dependencies:** torch, transformers, msgpack OR psycopg2
+**Files:** apply_graph_embeddings.py
+
+#### 5. HNSW Index on Graph Embeddings 📋 TODO
+
+Build HNSW index for fast approximate nearest neighbor search on graph embeddings.
+
+**Purpose:** Enable fast graph-based retrieval as alternative/complement to dense retrieval.
+
+**Implementation:**
+- Library: pgvector (PostgreSQL extension) OR hnswlib (standalone)
+- Index type: HNSW (Hierarchical Navigable Small World)
+- Distance metric: Cosine similarity (L2 normalized embeddings)
+- Parameters: ef_construction=200, M=16 (same as model2vec)
+
+**pgvector approach:**
+```sql
+ALTER TABLE chunks ADD COLUMN graph_embedding vector(128);
+-- Populate from apply_graph_embeddings.py
+CREATE INDEX ON chunks USING hnsw (graph_embedding vector_cosine_ops);
+```
+
+**hnswlib approach:**
 ```python
-# ArXiv
-@dataclass
-class PGVectorConfig(GISTConfig):
-    db_host: str = "localhost"
-    db_port: int = 5432
-    db_name: str = "langchain"
-    db_user: str = "langchain"
-    db_password: str = "langchain"
-    table_name: str = "arxiv_chunks"
-    
-    # GIST pipeline
-    fibonacci_sequence: List[int] = [3, 5, 8, 13, 21, 34, 55, 89]
-    gist_lambda: float = 0.7        # Utility vs diversity tradeoff
-    rrf_k: int = 60                 # RRF constant
-    use_colbert: bool = True
-    use_cross_encoder: bool = True
-    
-    # Embeddings
-    embedding_dim: int = 64
-    embedding_model: str = "minishlab/M2V_base_output"
-    
-    # BM25
-    bm25_k1: float = 1.5
-    bm25_b: float = 0.75
+import hnswlib
+index = hnswlib.Index(space='cosine', dim=128)
+index.init_index(max_elements=161389, ef_construction=200, M=16)
+index.add_items(graph_embeddings, ids)
+index.save_index('graph_embeddings.hnsw')
+```
 
-# Quotes
-@dataclass
-class QuotesConfig(GISTConfig):
-    db_host: str = "192.168.3.18"
-    db_port: int = 6024
-    table_name: str = "quotes_chunks"
-    # ... (same GIST/embedding/BM25 settings)
+**Validation:**
+- Query with known chunks, verify similar chunks retrieved
+- Compare graph retrieval vs dense retrieval (different signals)
+- Measure query latency (target: < 100ms for top-100)
+
+**Estimate:** 2 hours implementation + tuning
+**Dependencies:** pgvector OR hnswlib
+**Files:** build_graph_hnsw.py
+
+#### 6. Graph-Based Reranking of Hybrid Results 📋 TODO
+
+Rerank hybrid-retrieved candidates using graph embeddings as third signal.
+
+**Pipeline:**
+1. Hybrid retrieval: BM25 + model2vec dense → ~100 candidates
+2. RRF fusion of BM25 + dense → ~50 top candidates
+3. Graph retrieval: Query graph embedding → top-50 by graph similarity
+4. Final fusion: Combine BM25 + dense + graph scores
+
+**Fusion Strategies:**
+
+Option A — RRF (Reciprocal Rank Fusion):
+```python
+score_rrf = 1/(k + rank_bm25) + 1/(k + rank_dense) + 1/(k + rank_graph)
+# k=60 (standard RRF constant)
+```
+
+Option B — Learned Linear Combination:
+```python
+score = w1*score_bm25 + w2*score_dense + w3*score_graph
+# Learn weights w1, w2, w3 on validation set
+```
+
+Option C — Cascade:
+- Stage 1: BM25 → top-200
+- Stage 2: Dense rerank → top-50
+- Stage 3: Graph rerank → final top-5
+
+**Expected Improvement:**
+- Graph signal captures semantic distance via AOKG structure
+- LCA convergence level (0-3) as discrete metric
+- Precision@5 improvement (exact gain TBD, benchmark needed)
+
+**Validation:**
+- Benchmark on known query set
+- Measure precision@5, recall@10, nDCG@10
+- Compare: hybrid-only vs hybrid+graph
+- Ablation: BM25 vs dense vs graph contributions
+
+**Estimate:** 3 hours implementation + 2 hours benchmarking
+**Dependencies:** Depends on retriever code + HNSW index
+**Files:** graph_reranker.py, integrate with query_arxiv.py
+
+### Architectural Decisions
+
+**1. Use Node2Vec + Distillation instead of full BERT inference**
+
+- **Rationale:** The BIO tagger (BERT-based) takes 11 hours to process the full corpus (161,389 chunks at 4.08 chunks/sec). This makes full-corpus graph construction infeasible for retrieval.
+
+Alternative approaches considered:
+1. Run BERT BIO on full corpus → 11 hours (rejected: too slow)
+2. Graph Transformer trained end-to-end → Requires labeled data + complex implementation (deferred)
+3. Graph2Vec instead of Node2Vec → Similar approach, whole-graph embeddings (comparable)
+4. Node2Vec + distillation → Train fast model on 250 chunks, apply to full corpus
+
+**Why Node2Vec + Distillation:**
+- Proven technique: Node2Vec widely used for graph embeddings
+- Simple implementation: karateclub library has clean API
+- Fast application: DistilBERT ~150 chunks/sec (37x speedup)
+- No labeled data needed: Distillation uses BERT outputs as supervision
+- Modular: Can upgrade to Graph Transformer later if needed
+
+**Trade-offs:**
+- Pros: 37x speedup, simple implementation, proven technique
+- Cons: Requires two-phase training, distillation quality depends on 250-chunk coverage
+- **Before:** BIO tagger on full corpus: 11 hours (4.08 chunks/sec)
+- **After:** Distilled model: 18 minutes (~150 chunks/sec), 37x speedup
+
+**2. Use graph embeddings as reranker over hybrid results (not full corpus expansion)**
+
+- **Rationale:** Graph-based retrieval can be used in two ways:
+1. Recall expansion: Build graph over full corpus, use for initial retrieval
+2. Precision reranking: Apply graph only to hybrid-retrieved candidates
+
+**Why Reranker:**
+- Hybrid retrieval (BM25 + dense) already provides good recall
+- BIO extraction on 161k chunks still takes 18 minutes (with distilled model)
+- Graph structure provides semantic distance signal (LCA convergence level)
+- Reranking 50-100 candidates takes ~5-10 seconds (acceptable latency)
+- Full corpus graph construction + HNSW index is expensive to maintain
+
+**Trade-offs:**
+- Pros: Fast query time, leverages hybrid recall, graph adds precision
+- Cons: Cannot discover documents missed by BM25+dense (no recall improvement)
+
+**Future:** If distilled model proves highly accurate, can explore full-corpus graph retrieval as alternative ranking signal.
+- **Before:** Graph-based retrieval infeasible due to 11-hour BERT inference
+- **After:** Graph reranking on 50-100 candidates: ~5-10 seconds, precision improvement
+
+**3. Use existing 250-chunk BIO training set for distillation**
+
+- **Rationale:** Distillation training requires examples with known graph embeddings. Options:
+1. Use existing 250-chunk BIO training set (already extracted, validated)
+2. Extract new larger set (500-1000 chunks) for better coverage
+3. Active learning: Iteratively select diverse chunks
+
+**Why 250 Chunks:**
+- Already available: bio_training_250chunks_complete_FIXED.msgpack
+- Already validated: BIO tagger trained on this, quality confirmed
+- Sufficient diversity: Academic text from arXiv across multiple domains
+- Fast to process: ~60 seconds BERT inference + graph construction
+- Avoids additional cost: No need to run BIO tagger on more chunks
+
+**Validation Strategy:**
+- If distillation quality is poor (correlation r < 0.7), can expand to 500-1000 chunks
+- Monitor embedding distribution: Check if 250 chunks cover the full corpus distribution
+- Active learning future work: Select chunks that maximize coverage
+
+**Trade-offs:**
+- Pros: No additional cost, already validated, sufficient starting point
+- Cons: May not cover all graph patterns in full corpus (mitigated by validation)
+- **Before:** Need examples with graph embeddings for distillation training
+- **After:** Use bio_training_250chunks_complete_FIXED.msgpack (validated, diverse, sufficient)
+
+---
+
+## 📁 Key Files
+
+### Hybrid Retriever
+| File | Purpose |
+|------|---------|
+| `gist_retriever.py` | Core GIST pipeline with 8-stage retrieval |
+| `base_gist_retriever.py` | Abstract base class for retrievers |
+| `arxiv_retriever.py` | ArXiv-specific retriever implementation |
+| `quotes_retriever.py` | Quotes-specific retriever implementation |
+| `pgvector_retriever.py` | PostgreSQL/pgvector backend |
+| `arxiv_chunking_pipeline.py` | Document ingestion and chunking |
+| `equidistant_chunking.py` | Log median + 2*MAD chunking algorithm |
+| `build_adaptive_vocab.py` | BM25 vocabulary builder |
+| `query_arxiv.py` | ArXiv query CLI |
+| `query_quotes.py` | Quotes query CLI |
+| `feature_catalog.py` | Feature catalog management functions |
+| `retriever_feature_catalog.sqlite3` | Retriever feature tracking database |
+
+### BIO Tagger
+| File | Purpose |
+|------|---------|
+| `train_bio_tagger.py` | BIOTagger model definition (6 binary classifiers) |
+| `tune_bio_tagger.py` | Optuna hyperparameter tuning with BoxCox resampling |
+| `extract_bio_training_data.py` | Stanza knowledge distillation → BIO labels |
+| `inference_bio_tagger.py` | BIOTripletExtractor: production inference + stopword removal |
+| `streamlit_bio_demo.py` | 3-tab Streamlit demo (Interactive, Eval, Metrics) |
+| `benchmark_full_corpus_inference.py` | Throughput benchmark on full chunk corpus |
+| `run_bio_tagger.bat` | Windows launcher (app / test / integration / check) |
+| `bio_tagger_best.pt` | Trained model weights (direct state_dict) |
+| `bio_tagger_features.sqlite3` | BIO tagger feature tracking database |
+| `checkpoints/chunks.msgpack` | Source corpus: 161,389 chunks |
+| `bio_training_250chunks_complete_FIXED.msgpack` | Training/eval data (250 chunks) |
+
+### Graph Transformer
+| File | Purpose |
+|------|---------|
+| `GRAPH_TRANSFORMER_STRATEGY.md` | Comprehensive technical strategy (350 lines) |
+| `graph_transformer_feature_catalog.sqlite3` | Graph transformer feature tracking database |
+| `train_graph_distillation.py` | **(TODO)** Node2Vec + DistilBERT distillation training |
+| `apply_graph_embeddings.py` | **(TODO)** Fast embedding derivation for full corpus |
+| `build_graph_hnsw.py` | **(TODO)** HNSW index on graph embeddings |
+| `graph_reranker.py` | **(TODO)** Graph-based reranking integration |
+
+---
+
+## 📊 Performance
+
+### Hybrid Retriever
+| Metric | ArXiv (172k chunks) | Quotes (3.5k chunks) |
+|--------|--------------------|--------------------|
+| Ingest time | ~15 min | ~30 sec |
+| Query latency | < 2 sec | < 1 sec |
+| Storage | ~2 GB pgvector | ~50 MB pgvector |
+
+### BIO Tagger Inference (CUDA)
+| Metric | Value |
+|--------|-------|
+| Throughput | 4.08 chunks/sec |
+| Sentences/sec | 22.26 |
+| Triplets/sec | 21.04 |
+| Extraction rate | 94.5% |
+| Avg sentences/chunk | 5.5 |
+| Avg triplets/chunk | 5.2 |
+| Full corpus (161k) estimate | ~11 hours |
+
+---
+
+## 🧠 AOKG — Augmented Ontological Knowledge Graph
+
+4-layer ANN-style knowledge graph built from extracted SPO triplets using WordNet resolution.
+
+```
+Layer 3 (top):  Hypernyms     ─── entity.n.01 ── physical_entity.n.01
+                                      │                  │
+Layer 2:        Synsets        ─── dog.n.01 ──────── cat.n.01
+                                      │                  │
+Layer 1:        Lemmas         ─── dog ──────────── cat
+                                      │                  │
+Layer 0 (base): Surface Words  ─── dogs ─────────── cats
+```
+
+### Semantic Distance via LCA
+| Convergence Level | Meaning | Example |
+|-------------------|---------|---------|
+| 0 | Same surface word | "dogs" vs "dogs" |
+| 1 | Same lemma | "dogs" vs "dog" |
+| 2 | Same synset | "dog" vs "hound" |
+| 3 | Same hypernym | "dog" vs "cat" (both → animal) |
+
+### Resolution Pipeline
+1. **L0 → L1:** `nltk.corpus.wordnet.morphy(word)` for lemma reduction
+2. **L1 → L2:** First WordNet synset via `wn.synsets(lemma)`
+3. **L2 → L3:** One-level hypernym via `synset.hypernyms()`
+4. **Convergence:** Multiple words sharing a parent node MERGE at that layer
+
+### Use Case
+Precision reranker on hybrid-retrieved results. AOKG is NOT applied to the full corpus (~11 hours too expensive). Instead:
+1. Hybrid retriever fetches candidate chunks (BM25 + dense)
+2. BIO tagger extracts SPO triplets from retrieved chunks only
+3. AOKG graph built on-the-fly for retrieved results
+4. LCA convergence level provides reranking signal
+
+---
+
+## ⚙️ Configuration
+
+### PostgreSQL (for Hybrid Retriever)
+```python
+# pgvector_retriever.py — PGVectorConfig dataclass
+host = "localhost"
+port = 5432
+dbname = "arxiv_retrieval"  # or "quotes_retrieval"
+user = "postgres"
+embedding_dim = 64          # model2vec PCA-reduced
+```
+
+### BIO Tagger
+```python
+# Key files and paths
+model_path = "bio_tagger_best.pt"           # Trained model
+training_data = "bio_training_250chunks_complete_FIXED.msgpack"
+source_chunks = "checkpoints/chunks.msgpack"  # 161,389 chunks
+
+# Model architecture (train_bio_tagger.py)
+bert_model = "bert-base-uncased"
+num_labels = 6  # B-SUBJ, I-SUBJ, B-PRED, I-PRED, B-OBJ, I-OBJ
 ```
 
 ### GIST Pipeline Parameters
-
 ```python
-# λ (lambda): Utility vs Diversity Tradeoff
-gist_lambda = 0.7
-# - 1.0: Pure utility (no diversity)
-# - 0.7: Slight preference for relevance (default)
-# - 0.5: Equal utility and diversity
-# - 0.0: Pure diversity (ignore relevance)
-
-# Fibonacci Cascade
-fibonacci_sequence = [3, 5, 8, 13, 21, 34, 55, 89]
-# Used to progressively reduce candidates through pipeline stages
-# Example: top_k=21 → retrieve 625, GIST 21, group 13, ColBERT 5, CE 3
-
-# RRF Constant
-rrf_k = 60  # Standard RRF constant for rank fusion
-```
-
-### BM25 Parameters
-
-```python
-# BERT WordPiece Tokenization
-tokenizer: "bert-base-uncased"
-min_df: 2                        # Min document frequency
-
-# Scoring
-k1: 1.5                          # Term saturation
-b: 0.75                          # Length normalization
-```
-
-### Embedding Parameters
-
-```python
-model: "minishlab/M2V_base_output"
-native_dim: 256
-target_dim: 64                   # PCA reduction
-batch_size: 256
-explained_variance: ~74%         # After PCA
-```
-
-### Chunking Parameters
-
-```python
-# Equidistant Chunking (Log Threshold)
-# Computed per corpus:
-threshold = exp(log_median + mad_multiplier * log_mad)
-
-# ArXiv example:
-#   log_median = 6.8, log_mad = 0.5, mad_multiplier = 2
-#   threshold = exp(6.8 + 2*0.5) = exp(7.8) ≈ 2440 chars
-
-# Quotes example:
-#   Computed threshold: 229 chars
-#   Target chunk size: 98 chars
-#   Tolerance: 76 chars
-
-# SlidingAggregator settings:
-target_chars: 98
-tolerance: 76
-overlap_chars: 0              # For below-target paragraphs
+bm25_candidates = 100       # Initial BM25 pool size
+dense_candidates = 100      # Initial dense pool size
+gist_k = 30                 # GIST diversity selection per pool
+rrf_k = 60                  # RRF fusion constant
+final_top_k = 5             # Final sections returned
 ```
 
 ---
 
-## 🎓 Technical Details
+## 📝 Feature Catalog Management
 
-### Incremental Loading Pattern
-
-**Core Logic:**
-```python
-# 1. Query existing papers
-with HybridPGVector(config) as db:
-    existing_papers = db.get_existing_paper_ids()  # Set[str]
-
-# 2. Filter chunks
-if not reset:
-    chunks = [c for c in chunks if c.doc_id not in existing_papers]
-
-# 3. Early exit if nothing to do
-if len(chunks) == 0:
-    print("Database is up to date.")
-    return
-```
-
-**Database Query:**
-```sql
-SELECT DISTINCT paper_id FROM arxiv_hybrid_index;
-```
-
-**Benefits:**
-- Avoid redundant computation
-- Fast continuation (<5s for no-op)
-- Safe: Uses `ON CONFLICT` for upserts
-
-### Chunking Strategy Comparison
-
-| Feature | Equidistant | Section-Level |
-|---------|-------------|---------------|
-| **Atomic unit** | Paragraphs | Sections |
-| **Overlap control** | 0% below-target | N/A |
-| **Semantic** | Partial | Full |
-| **Use case** | General RAG | ArXiv papers |
-| **Config** | Sample-based | Corpus stats |
-
-### msgpack Checkpointing
-
-**Why msgpack?**
-- Faster than pickle for structured data
-- Smaller file size (4.3 MB vs ~8 MB)
-- Cross-platform compatibility
-
-**Pattern:**
-```python
-# Save
-with open('checkpoint.msgpack', 'wb') as f:
-    # Convert int keys to strings (msgpack limitation)
-    data = {str(k): v for k, v in data.items()}
-    msgpack.pack(data, f)
-
-# Load
-with open('checkpoint.msgpack', 'rb') as f:
-    data = msgpack.unpack(f)
-    # Convert back to ints
-    data = {int(k): v for k, v in data.items()}
-```
-
-### PostgreSQL Schema
-
-```sql
-CREATE TABLE arxiv_hybrid_index (
-    id SERIAL PRIMARY KEY,
-    chunk_id TEXT UNIQUE,           -- For ON CONFLICT upserts
-    paper_id TEXT,                   -- For incremental filtering
-    section_idx INTEGER,
-    chunk_idx INTEGER,
-    content TEXT,
-    embedding vector(64),            -- Dense vector
-    bm25_sparse sparsevec(114523)   -- Sparse vector (1-based indexing)
-);
-
--- Indexes
-CREATE INDEX idx_embedding ON arxiv_hybrid_index 
-    USING ivfflat (embedding vector_cosine_ops) WITH (lists = 415);
-
-CREATE INDEX idx_paper_id ON arxiv_hybrid_index (paper_id);
--- Note: Sparse uses brute force (sparsevec_ip_ops not supported by IVFFlat)
-```
-
-### RRF Fusion Algorithm
-
-```python
-def rrf_score(dense_rank, sparse_rank, k=60):
-    """Reciprocal Rank Fusion."""
-    return 1/(k + dense_rank) + 1/(k + sparse_rank)
-
-# Example:
-# Dense rank 5, Sparse rank 10:
-#   1/(60+5) + 1/(60+10) = 0.0154 + 0.0143 = 0.0297
-```
-
----
-
-## 🔍 Usage Patterns
-
-### Daily Workflow
+Both subsystems track features, claims, and architectural decisions in SQLite databases using `feature_catalog.py`.
 
 ```bash
-# Check for new papers
-python hybrid_pgvector.py --build
+# List features
+python -c "from feature_catalog import list_features; list_features('feature_catalog.sqlite3')"
+python -c "from feature_catalog import list_features; list_features('bio_tagger_features.sqlite3')"
 
-# If no new papers: exits in <5s
-# If new papers: processes only new ones (~30s per 10 papers)
+# Regenerate this README
+python generate_readme.py
+
+# Populate missing features (INSERT OR IGNORE)
+python populate_feature_dbs.py
 ```
 
-### Adding New Papers
-
-```bash
-# 1. Add markdown files to papers/post_processed/
-cp new_paper.md papers/post_processed/
-
-# 2. Delete chunks checkpoint to force re-chunking
-rm checkpoints\chunks.pkl
-
-# 3. Run incremental build
-python hybrid_pgvector.py --build
-
-# Result: Only new papers processed
-```
-
-### Parameter Changes
-
-```bash
-# If you modified BM25 (k1, b) or embedding_dim:
-python hybrid_pgvector.py --build --reset
-
-# Full rebuild (~36 minutes)
-```
-
-### Research Query
-
-```bash
-# Search with default settings (top 13 sections)
-python hybrid_pgvector.py --search "attention mechanism"
-
-# Returns:
-# - Section-level results (not individual chunks)
-# - RRF scores (fusion of dense + sparse)
-# - Preview of first chunk per section
-```
+### Database Schema (shared by both DBs)
+| Table | Columns | Purpose |
+|-------|---------|---------|
+| `features` | name, description, status, f1_baseline, f1_current | Track implementation status |
+| `claims` | claim_text, predicted_f1, actual_f1, prediction_error | Prediction accountability |
+| `architectural_decisions` | decision, rationale, before/after state | Design rationale history |
 
 ---
 
-## 🐛 Troubleshooting
+## 📄 License
 
-### Issue: "Database is up to date" but want to rebuild
-**Solution:**
-```bash
-python hybrid_pgvector.py --build --reset
-```
-
-### Issue: Import takes too long
-**Cause:** Removed transformers dependency  
-**Status:** ✅ Fixed (regex tokenizer, instant startup)
-
-### Issue: sparsevec index error
-**Cause:** sparsevec_ip_ops not supported by IVFFlat  
-**Status:** ✅ Fixed (removed sparse index, using brute force)
-
-### Issue: Token ID out of bounds
-**Cause:** PostgreSQL sparsevec uses 1-based indexing  
-**Status:** ✅ Fixed (vocab uses idx+1)
-
-### Issue: Msgpack int key error
-**Cause:** msgpack strict_map_key=True doesn't allow int keys  
-**Status:** ✅ Fixed (convert to string in save, back to int in load)
-
-### Issue: Search returns no results
-**Cause:** BM25 vocab file missing  
-**Solution:** Run `--build` (will copy bm25_vocab.pkl)
-
-### Issue: PostgreSQL connection error
-**Cause:** Server not accessible  
-**Solution:** Check host, port, firewall, verify with `test_pg_connection.py`
+MIT
 
 ---
 
-## 📊 Database Stats
-
-### Current Data
-```
-Papers: 1,607
-Chunks: 172,272
-Avg chunks/paper: 107
-Embedding dimension: 64
-Sparse vocabulary: 114,523 tokens
-Database size: ~500 MB (including indexes)
-```
-
-### Index Stats
-```
-Dense (IVFFlat):
-  - Lists: 415
-  - Distance: Cosine
-  - Build time: ~2 minutes
-
-Sparse (Brute Force):
-  - No index (sparsevec_ip_ops not supported)
-  - Query time: <300ms (acceptable)
-
-Paper ID (btree):
-  - For filtering by paper_id
-  - Used in incremental loading
-```
-
----
-
-## 🔬 Advanced Topics
-
-### Custom Chunking Strategy
-
-```python
-from arxiv_chunking_pipeline import ArxivChunkingPipeline
-
-# Initialize with custom config
-pipeline = ArxivChunkingPipeline(
-    papers_dir="path/to/papers",
-    target_paragraphs=3,          # Chunk size control
-    min_section_chars=500,        # Section merging threshold
-)
-
-chunks = pipeline.process()
-
-# Access chunk metadata
-for chunk in chunks:
-    print(f"Paper: {chunk.doc_id}")
-    print(f"Section: {chunk.section_title}")
-    print(f"Position: {chunk.section_idx}/{chunk.chunk_idx}")
-```
-
-### Direct PostgreSQL Access
-
-```python
-from hybrid_pgvector import HybridPGVector, HybridConfig
-
-config = HybridConfig()
-
-with HybridPGVector(config) as db:
-    # Get existing papers
-    papers = db.get_existing_paper_ids()
-    
-    # Custom query
-    with db.conn.cursor() as cur:
-        cur.execute("""
-            SELECT paper_id, COUNT(*) as chunks
-            FROM arxiv_hybrid_index
-            GROUP BY paper_id
-            ORDER BY chunks DESC
-            LIMIT 10
-        """)
-        for row in cur.fetchall():
-            print(f"{row[0]}: {row[1]} chunks")
-```
-
-### Modify RRF Parameters
-
-```python
-# In search() function
-sections = db.search_sections_rrf(
-    query_embedding,
-    query_sparse,
-    top_sections=20,      # Return top 20 instead of 13
-    rrf_k=100            # Change RRF constant
-)
-```
-
----
-
-## � Requirements
-
-### Functional Requirements
-
-| ID | Requirement | Implementation | Status |
-|----|-------------|----------------|--------|
-| **FR-01** | Multiple document types support | ArXiv + Quotes retrievers via abstract GISTRetriever | ✅ |
-| **FR-02** | BERT WordPiece tokenization for BM25 | TextPreprocessor with bert-base-uncased | ✅ |
-| **FR-03** | Equidistant chunking with log statistics | Log median + MAD * 2 threshold | ✅ |
-| **FR-04** | Chunk reconstruction for neural reranking | _group_and_reconstruct() fetches all chunks | ✅ |
-| **FR-05** | GIST diversity selection | gist_select() with λ=0.7 tradeoff | ✅ |
-| **FR-06** | ColBERT late interaction scoring | Token-level MaxSim on full text | ✅ |
-| **FR-07** | Cross-encoder final reranking | ms-marco-MiniLM-L-6-v2 on full text | ✅ |
-| **FR-08** | Incremental index building | Skip existing paper_id/quote_id | ✅ |
-| **FR-09** | msgpack checkpointing | Cache chunks, embeddings, BM25 | ✅ |
-| **FR-10** | HuggingFace dataset integration | Auto-download abirate/english_quotes | ✅ |
-
-### Non-Functional Requirements
-
-| ID | Requirement | Target | Actual | Status |
-|----|-------------|--------|--------|--------|
-| **NFR-01** | Search latency (full GIST pipeline) | <1s | <500ms | ✅ |
-| **NFR-02** | Incremental build latency (no-op) | <10s | <5s | ✅ |
-| **NFR-03** | PCA explained variance | >70% | 74.1% | ✅ |
-| **NFR-04** | Chunking threshold robustness | MAD-based | log median + 2*MAD | ✅ |
-| **NFR-05** | Token alignment (BM25 vs embedding) | Shared vocab | BERT tokenizer both | ✅ |
-| **NFR-06** | Database index efficiency | <500ms query | IVFFlat cosine | ✅ |
-| **NFR-07** | Checkpoint load time | <10s | <2s (msgpack) | ✅ |
-| **NFR-08** | GPU memory usage (ColBERT+CE) | <4GB | <2GB typical | ✅ |
-
-### Technical Requirements
-
-| ID | Requirement | Implementation | Status |
-|----|-------------|----------------|--------|
-| **TR-01** | PostgreSQL 16+ with pgvector 0.8.0+ | IVFFlat + sparsevec support | ✅ |
-| **TR-02** | Python 3.10+ | Type hints, dataclasses | ✅ |
-| **TR-03** | model2vec for dense embeddings | M2V_base_output 256→64 PCA | ✅ |
-| **TR-04** | transformers for tokenization | AutoTokenizer bert-base-uncased | ✅ |
-| **TR-05** | sentence-transformers for reranking | CrossEncoder + BERT base | ✅ |
-| **TR-06** | Abstract base class for extensibility | GISTRetriever ABC | ✅ |
-| **TR-07** | Fibonacci cascade for stage sizing | get_fibonacci_lower() | ✅ |
-| **TR-08** | Reciprocal rank fusion | compute_rrf_score(k=60) | ✅ |
-
-### Data Requirements
-
-| ID | Requirement | ArXiv | Quotes | Status |
-|----|-------------|-------|--------|--------|
-| **DR-01** | Document count | 1,607 papers | 2,508 quotes | ✅ |
-| **DR-02** | Chunk count after equidistant split | 172,272 | 3,516 | ✅ |
-| **DR-03** | BM25 vocabulary size | 114,523 tokens | 5,445 tokens | ✅ |
-| **DR-04** | Embedding dimension | 64 (PCA) | 64 (PCA) | ✅ |
-| **DR-05** | Grouping key | (paper_id, section_idx) | (quote_id,) | ✅ |
-| **DR-06** | Database table schema | chunk_id, paper_id, section_idx, chunk_idx, content, embedding, bm25_sparse | chunk_id, quote_id, chunk_idx, content, embedding, bm25_sparse | ✅ |
-
-### Algorithm Requirements
-
-| ID | Algorithm | Formula | Implementation | Status |
-|----|-----------|---------|----------------|--------|
-| **AR-01** | GIST Selection | score(d) = λ*utility(d) - (1-λ)*max_sim(d,S) | gist_select() | ✅ |
-| **AR-02** | RRF Fusion | 1/(k+rank₁) + 1/(k+rank₂) | compute_rrf_score() | ✅ |
-| **AR-03** | BM25 Scoring | IDF(q) * (f(q,D) * (k₁+1)) / (f(q,D) + k₁*(1-b+b*|D|/avgdl)) | SparseBM25Index | ✅ |
-| **AR-04** | ColBERT Scoring | Σᵢ maxⱼ cosine(qᵢ, dⱼ) | ColBERTScorer.score() | ✅ |
-| **AR-05** | Log Threshold | exp(log_median + mad_multiplier * log_mad) | equidistant_chunking.py | ✅ |
-| **AR-06** | PCA Reduction | fit(256) → transform(64) | Model2VecEmbedder | ✅ |
-
----
-
-## 📚 References
-
-### Papers & Algorithms
-
-- **GIST/MMR**: Carbonell & Goldstein (1998) - Maximal Marginal Relevance
-- **BM25**: Robertson & Zaragoza (2009) - Okapi BM25
-- **RRF**: Cormack et al. (2009) - Reciprocal Rank Fusion
-- **ColBERT**: Khattab & Zaharia (2020) - Late Interaction Retrieval
-- **model2vec**: Minish Lab (2024) - Static Embedding Distillation
-- **Cross-Encoder**: Reimers & Gurevych (2019) - Sentence-BERT
-
-### Components Used
-
-- **model2vec**: https://github.com/MinishLab/model2vec
-- **pgvector**: https://github.com/pgvector/pgvector
-- **sentence-transformers**: https://www.sbert.net/
-- **transformers**: https://huggingface.co/transformers/
-
-### Datasets
-
-- **ArXiv papers**: https://arxiv.org (1,607 markdown files)
-- **Quotes**: HuggingFace abirate/english_quotes (2,508 entries)
-
----
-
-## 📝 License & Credits
-
-**Author**: Created for multi-domain GIST retrieval research  
-**Status**: Production-ready (January 2026)  
-**Database**: PostgreSQL 16 + pgvector 0.8.0  
-**Python**: 3.10+
-
----
-
-## 🎉 Quick Reference
-
-### Most Common Commands
-
-```bash
-# ArXiv: Daily check for new papers
-python pgvector_retriever.py --build
-
-# ArXiv: Search
-python pgvector_retriever.py --search "your query" --top_k 5
-
-# ArXiv: Full rebuild
-python pgvector_retriever.py --build --reset
-
-# Quotes: Build index
-python quotes_retriever.py --build --quotes_file quotes_dataset.json --reset
-
-# Quotes: Search
-python quotes_retriever.py --search "wisdom" --top_k 5
-```
-
-### Key Numbers
-
-**ArXiv:**
-- **172,272 chunks** from 1,607 papers
-- **<5s** incremental check (vs 36min full rebuild)
-- **<500ms** GIST pipeline query
-- **114,523** BERT WordPiece vocab
-
-**Quotes:**
-- **3,516 chunks** from 2,508 quotes
-- **405 quotes** exceeded 229 char threshold
-- **5,445** BERT WordPiece vocab
-- **~30s** full index build
-
-**GIST Pipeline:**
-- **7 stages**: Retrieve → GIST(BM25) → GIST(Dense) → RRF → Group → ColBERT → Cross-Encoder
-- **λ=0.7**: Slight preference for relevance over diversity
-- **k=60**: RRF constant for rank fusion
-
----
-
-**System Status**: ✅ PRODUCTION READY  
-**Last Updated**: January 27, 2026  
-**Primary Database**: 192.168.3.18:6024 (langchain/langchain)  
-**Features**: GIST retrieval, BERT tokenization, equidistant chunking, neural reranking
-
-1. **Chunk-level incremental loading**
-   - Current: Paper-level tracking
-   - Proposed: Track individual chunk_id
-   - Benefit: Finer-grained updates
-
-2. **Timestamp-based updates**
-   - Track file modification times
-   - Auto-detect changed papers
-   - Requires: Add mtime column to schema
-
-3. **Dry-run mode**
-   ```bash
-   python hybrid_pgvector.py --build --dry-run
-   ```
-   - Show what would be processed
-   - Estimated time/cost
-
-4. **Sparse vector indexing**
-   - Current: Brute force
-   - Waiting: pgvector support for sparsevec IVFFlat
-   - Tracking: https://github.com/pgvector/pgvector/issues
-
-5. **API wrapper**
-   ```python
-   from fastapi import FastAPI
-   app = FastAPI()
-   
-   @app.get("/search")
-   def search_endpoint(query: str, top_k: int = 13):
-       results = search(query, config, top_sections=top_k)
-       return results
-   ```
-
----
-
-## 🧪 Testing
-
-### Unit Tests
-
-```bash
-# Test PostgreSQL connection
-python test_pg_connection.py
-
-# Test extensions
-python check_pg_extensions.py
-
-# Verify incremental loading
-python hybrid_pgvector.py --build  # Should exit quickly if up-to-date
-```
-
-### Integration Tests
-
-```bash
-# Full pipeline test (use small sample)
-python -c "
-from arxiv_chunking_pipeline import chunk_arxiv_papers
-chunks = chunk_arxiv_papers('papers/post_processed', max_papers=10)
-print(f'Generated {len(chunks)} chunks from 10 papers')
-"
-```
-
-### Performance Benchmarks
-
-```python
-import time
-from hybrid_pgvector import search, HybridConfig
-
-config = HybridConfig()
-
-queries = [
-    "transformer attention mechanism",
-    "diffusion models",
-    "reinforcement learning"
-]
-
-for query in queries:
-    start = time.time()
-    results = search(query, config)
-    elapsed = time.time() - start
-    print(f"{query}: {elapsed*1000:.1f}ms")
-```
-
----
-
-## 📚 References
-
-### Components Used
-
-- **model2vec**: https://github.com/MinishLab/model2vec
-- **pgvector**: https://github.com/pgvector/pgvector
-- **BM25**: Okapi BM25 algorithm (Robertson & Zaragoza, 2009)
-- **RRF**: Reciprocal Rank Fusion (Cormack et al., 2009)
-
-### Related Papers
-
-- ArXiv papers sourced from: https://arxiv.org
-- Chunking strategy inspired by: LangChain RecursiveCharacterTextSplitter
-- Equidistant chunking: Based on sliding window aggregation
-
----
-
-## 📝 License & Credits
-
-**Author**: Created for ArXiv paper retrieval research  
-**Status**: Production-ready (January 2026)  
-**Database**: PostgreSQL 16 + pgvector 0.8.0  
-**Python**: 3.10+
-
----
-
-## 🎉 Quick Reference
-
-### Most Common Commands
-
-```bash
-# Daily check for new papers (fast)
-python hybrid_pgvector.py --build
-
-# Search
-python hybrid_pgvector.py --search "your query"
-
-# Full rebuild (rare)
-python hybrid_pgvector.py --build --reset
-
-# Clear everything (testing)
-python hybrid_pgvector.py --clear
-```
-
-### Key Numbers
-
-- **172,272 chunks** from 1,607 papers
-- **<5s** incremental check (vs 36min full rebuild)
-- **<500ms** hybrid search query
-- **64-dim** dense vectors (PCA from 256)
-- **114,523** sparse vocabulary size
-- **288x speedup** for no-op incremental runs
-
----
-
-**System Status**: ✅ PRODUCTION READY  
-**Last Updated**: January 25, 2026  
-**Database**: 192.168.3.18:6024 (langchain/langchain)
+*Generated 2026-02-07 23:21 by `generate_readme.py`*

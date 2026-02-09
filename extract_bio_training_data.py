@@ -106,6 +106,7 @@ import argparse
 from collections import defaultdict
 from transformers import AutoTokenizer
 import re
+import stanza  # Add at top for better performance
 
 # Database configuration (matches all working scripts)
 DB_CONFIG = {
@@ -117,57 +118,111 @@ DB_CONFIG = {
 }
 
 
+def get_subtree_text(head_word, sent) -> str:
+    """Get all text tokens in the subtree rooted at head_word (keeps multi-word phrases intact)."""
+    subtree_words = [head_word]
+    
+    # Recursively collect all descendants
+    def collect_descendants(word_id):
+        for w in sent.words:
+            if w.head == word_id:
+                subtree_words.append(w)
+                collect_descendants(w.id)
+    
+    collect_descendants(head_word.id)
+    
+    # Sort by position and join
+    sorted_words = sorted(subtree_words, key=lambda x: x.id)
+    return ' '.join([w.text for w in sorted_words])
+
+
+def extract_spo_from_sentence(sent) -> list:
+    """Extract Subject-Predicate-Object triplets from Stanza sentence using dependency parse.
+    
+    CRITICAL: Keeps multi-word phrases intact (e.g., "deep learning models" as one subject).
+    This ensures BIO labels will have proper B-I continuous spans.
+    
+    Args:
+        sent: Stanza Sentence object with dependency parse
+    
+    Returns:
+        List of triplets as dicts: {'subject': str, 'predicate': str, 'object': str}
+    """
+    triplets = []
+    
+    # Find main verb(s) - look for VERB/AUX with head=0 or key dependency roles
+    verbs = []
+    for word in sent.words:
+        if word.upos in ['VERB', 'AUX'] and (word.head == 0 or word.deprel in ['ROOT', 'conj']):
+            verbs.append(word)
+    
+    if not verbs:
+        return []
+    
+    # For each verb, extract subject and object
+    for verb in verbs:
+        subject_head = None
+        object_head = None
+        
+        # Find subject and object heads
+        for word in sent.words:
+            if word.head == verb.id:
+                if word.deprel in ['nsubj', 'nsubj:pass', 'csubj']:
+                    subject_head = word
+                elif word.deprel in ['obj', 'dobj', 'iobj', 'obl']:
+                    object_head = word
+        
+        # Build triplet if we have at least verb
+        if verb:
+            # Get full subtrees for each component (multi-word phrases preserved!)
+            subject_text = get_subtree_text(subject_head, sent) if subject_head else '?'
+            predicate_text = verb.text  # Just verb for now
+            object_text = get_subtree_text(object_head, sent) if object_head else '?'
+            
+            # Only add if we have predicate and at least one argument
+            if predicate_text and (subject_text != '?' or object_text != '?'):
+                triplets.append({
+                    'subject': subject_text if subject_text != '?' else '',
+                    'predicate': predicate_text,
+                    'object': object_text if object_text != '?' else ''
+                })
+    
+    return triplets
+
+
 def extract_triplets_openie(chunk_id, content):
     """
-    Extract triplets using OpenIE.
+    Extract triplets using Stanza dependency parsing.
     
-    This is the SLOW but ACCURATE teacher model.
-    Processes content sentence-by-sentence to stay within BERT's 512 token limit.
+    KEY FIX: Uses get_subtree_text to preserve multi-word phrases.
+    Example: "deep learning models" stays intact, not split into 3 separate entities.
+    
+    This ensures BIO labels will have:
+      [B-SUBJ, I-SUBJ, I-SUBJ] for "deep learning models"
+    NOT:
+      [B-SUBJ, B-SUBJ, B-SUBJ] (which violates proper BIO tagging)
     
     Returns:
         List of triplets: [{'subject': str, 'predicate': str, 'object': str}, ...]
     """
-    from extract_graph_to_msgpack import get_thread_extractor
-    import spacy
+    # Initialize Stanza (first time only - it's cached)
+    try:
+        nlp = stanza.Pipeline('en', processors='tokenize,pos,lemma,depparse', use_gpu=False, download_method=None)
+    except:
+        print("  WARNING: Stanza not initialized, downloading models...")
+        stanza.download('en')
+        nlp = stanza.Pipeline('en', processors='tokenize,pos,lemma,depparse', use_gpu=False)
     
-    extractor, nlp = get_thread_extractor()
-    
-    # Split into sentences (avoids 512 token limit issues)
+    # Parse content
     doc = nlp(content)
-    sentences = [sent.text.strip() for sent in doc.sents if len(sent.text.strip()) > 20]
     
     # Extract triplets from each sentence
     all_triplets = []
-    for sentence in sentences:
-        try:
-            from triplet_extract import extract
-            triplet_objects = extract(sentence)
-            
-            if triplet_objects:
-                for tobj in triplet_objects:
-                    try:
-                        subj = str(tobj.subject).strip() if tobj.subject else None
-                        pred = str(tobj.relation).strip() if tobj.relation else None
-                        obj = str(tobj.object).strip() if tobj.object else None
-                        
-                        if subj and pred and obj:
-                            all_triplets.append((subj, pred, obj))
-                    except Exception:
-                        continue
-        except Exception:
-            continue
+    for sent in doc.sentences:
+        sentence_triplets = extract_spo_from_sentence(sent)
+        all_triplets.extend(sentence_triplets)
     
-    # Convert tuples to dict format
-    result = []
-    for triplet in all_triplets:
-        if len(triplet) == 3:
-            result.append({
-                'subject': triplet[0],
-                'predicate': triplet[1],
-                'object': triplet[2]
-            })
-    
-    return result
+    return all_triplets
 
 
 def find_span_in_tokens(tokens, text):
@@ -306,10 +361,20 @@ def main():
     chunk_ids = [row[0] for row in cur.fetchall()]
     print(f"  Fetched {len(chunk_ids):,} chunk IDs")
     
-    # Extract triplets with OpenIE + convert to BIO tags
-    print("\n[4/5] Extracting triplets with OpenIE (slow teacher model)...")
-    print("  Note: This is the slow part (~6s per chunk = 5 hours for 3000 chunks)")
-    print("  But we only do this ONCE to create training data.")
+    # Extract triplets with Stanza + convert to BIO tags
+    print("\n[4/5] Extracting triplets with Stanza (multi-word phrase preservation)...")
+    print("  Note: Using Stanza dependency parsing instead of OpenIE")
+    print("  This preserves multi-word phrases → proper B-I continuous spans")
+    
+    # Initialize Stanza once
+    try:
+        nlp_stanza = stanza.Pipeline('en', processors='tokenize,pos,lemma,depparse', use_gpu=False, download_method=None)
+        print("  [OK] Stanza loaded\n")
+    except:
+        print("  Downloading Stanza models (one-time only)...")
+        stanza.download('en')
+        nlp_stanza = stanza.Pipeline('en', processors='tokenize,pos,lemma,depparse', use_gpu=False)
+        print("  [OK] Stanza loaded\n")
     
     training_data = []
     stats = {
@@ -330,73 +395,51 @@ def main():
         
         content = row[0]
         
-        # Split into sentences (to avoid 512 token limit)
-        import spacy
-        nlp = spacy.load('en_core_web_sm')
-        doc = nlp(content)
-        sentences = [sent.text.strip() for sent in doc.sents if len(sent.text.strip()) > 20]
-        
-        # Process each sentence separately
-        for sentence in sentences:
-            # Extract triplets with OpenIE (SLOW)
-            try:
-                # Re-extract for this specific sentence
-                from triplet_extract import extract
-                triplet_objects = extract(sentence)
+        # Parse with Stanza and extract triplets (per sentence)
+        try:
+            doc_stanza = nlp_stanza(content)
+            
+            # Process each sentence separately
+            for sent in doc_stanza.sentences:
+                # Extract triplets using dependency parse
+                triplets = extract_spo_from_sentence(sent)
                 
-                if not triplet_objects:
+                if not triplets:
                     continue
                 
-                # Convert to dict format
-                triplets = []
-                for tobj in triplet_objects:
-                    try:
-                        subj = str(tobj.subject).strip() if tobj.subject else None
-                        pred = str(tobj.relation).strip() if tobj.relation else None
-                        obj = str(tobj.object).strip() if tobj.object else None
-                        
-                        if subj and pred and obj:
-                            triplets.append({
-                                'subject': subj,
-                                'predicate': pred,
-                                'object': obj
-                            })
-                    except Exception:
-                        continue
+                # Get sentence text
+                sentence = sent.text
                 
-            except Exception as e:
-                continue
-            
-            if not triplets:
-                continue
-            
-            # Tokenize sentence (not entire chunk!)
-            tokens = tokenizer.tokenize(sentence)
-            
-            # Skip if still too long
-            if len(tokens) > 510:
-                tokens = tokens[:510]
-            
-            # Convert triplets to BIO labels
-            bio_labels = create_bio_labels(tokens, triplets)
-            
-            # Track statistics
-            stats['total_chunks'] += 1
-            stats['chunks_with_triplets'] += 1
-            stats['total_triplets'] += len(triplets)
-            stats['total_tokens'] += len(tokens)
-            
-            for label_name, label_values in bio_labels.items():
-                stats['label_distribution'][label_name] += sum(label_values)
-            
-            # Store training example (sentence-level, not chunk-level)
-            training_data.append({
-                'chunk_id': chunk_id,
-                'sentence': sentence,
-                'tokens': tokens,
-                'labels': bio_labels,
-                'triplets': triplets  # Keep for validation
-            })
+                # Tokenize sentence with BERT tokenizer
+                tokens = tokenizer.tokenize(sentence)
+                
+                # Skip if too long
+                if len(tokens) > 510:
+                    tokens = tokens[:510]
+                
+                # Convert triplets to BIO labels
+                bio_labels = create_bio_labels(tokens, triplets)
+                
+                # Track statistics
+                stats['total_chunks'] += 1
+                stats['chunks_with_triplets'] += 1
+                stats['total_triplets'] += len(triplets)
+                stats['total_tokens'] += len(tokens)
+                
+                for label_name, label_values in bio_labels.items():
+                    stats['label_distribution'][label_name] += sum(label_values)
+                
+                # Store training example (sentence-level)
+                training_data.append({
+                    'chunk_id': chunk_id,
+                    'sentence': sentence,
+                    'tokens': tokens,
+                    'labels': bio_labels,
+                    'triplets': triplets  # Keep for validation
+                })
+                
+        except Exception as e:
+            continue
     
     # Calculate statistics
     if stats['chunks_with_triplets'] > 0:
