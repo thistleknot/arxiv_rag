@@ -43,7 +43,7 @@ import msgpack
 from pathlib import Path
 from rank_bm25 import BM25Okapi
 from sklearn.metrics.pairwise import cosine_similarity
-from collections import Counter
+from collections import Counter, defaultdict
 from gist_retriever import gist_select
 
 
@@ -567,36 +567,59 @@ class ThreeLayerPhiRetriever:
         print(f"  ✓ Merged to {len(expansion_chunks)} unique expansions")
         
         # Expand to full sections from papers containing the expansion chunks
+        # "Section" = group of chunks sharing (paper_id, section_idx)
         print(f"\nSection Expansion: Expanding {len(expansion_chunks)} chunks to full sections...")
         expansion_papers = set(self.chunks[cid].get('paper_id', 'unknown') for cid in expansion_chunks)
-        raw_section_ids = [
-            cid for cid in range(len(self.chunks))
-            if self.chunks[cid].get('paper_id', 'unknown') in expansion_papers
-        ]
-        print(f"  Raw: {len(raw_section_ids)} sections from {len(expansion_papers)} papers")
         
-        # Deduplicate by section text (overlapping chunks produce duplicates)
+        # Group ALL chunks from expansion papers by (paper_id, section_idx)
+        section_groups = defaultdict(list)
+        for cid in range(len(self.chunks)):
+            chunk = self.chunks[cid]
+            if chunk.get('paper_id', 'unknown') in expansion_papers:
+                key = (chunk['paper_id'], chunk['section_idx'])
+                section_groups[key].append(cid)
+        
+        # Sort chunks within each section by chunk_idx
+        for key in section_groups:
+            section_groups[key].sort(key=lambda c: self.chunks[c]['chunk_idx'])
+        
+        # Build section-level texts (concatenate chunks in order)
+        section_keys = list(section_groups.keys())
+        section_texts = [
+            ' '.join(self.chunks[cid]['text'] for cid in section_groups[key])
+            for key in section_keys
+        ]
+        n_papers_raw = len(set(k[0] for k in section_keys))
+        print(f"  Raw: {len(section_keys)} sections from {n_papers_raw} papers")
+        
+        # Deduplicate by section text
         seen_texts = set()
-        all_chunks = []
-        for cid in raw_section_ids:
-            text = self.chunks[cid]['text']
+        deduped_keys = []
+        deduped_texts = []
+        for key, text in zip(section_keys, section_texts):
             if text not in seen_texts:
                 seen_texts.add(text)
-                all_chunks.append(cid)
-        print(f"  Deduped: {len(all_chunks)} unique sections")
+                deduped_keys.append(key)
+                deduped_texts.append(text)
+        if len(deduped_keys) < len(section_keys):
+            print(f"  Deduped: {len(deduped_keys)} unique sections")
         
-        # Cap at prev_fib(top_k^2) using Qwen3 embedding pre-scoring
+        # Cap at prev_fib(top_k^2) sections using Qwen3 embedding pre-scoring
         rerank_cap = self.config.layer2_expand  # prev_fib(top_k^2) = 144 for top_k=13
-        if len(all_chunks) > rerank_cap:
-            # Use ECDF-weighted centroid from seeds to pre-rank sections
+        if len(deduped_keys) > rerank_cap:
             seed_ecdf = midpoint_ecdf_weights(np.array(seed_scores, dtype=np.float64))
             seed_embs = self.qwen3_embeddings[seed_chunks]
             centroid = np.average(seed_embs, axis=0, weights=seed_ecdf).reshape(1, -1)
-            section_embs = self.qwen3_embeddings[all_chunks]
+            # Average chunk embeddings per section
+            section_embs = np.array([
+                np.mean(self.qwen3_embeddings[section_groups[key]], axis=0)
+                for key in deduped_keys
+            ])
             pre_scores = cosine_similarity(centroid, section_embs)[0]
             top_idx = np.argsort(pre_scores)[-rerank_cap:][::-1]
-            all_chunks = [all_chunks[i] for i in top_idx]
-            n_papers = len(set(self.chunks[cid].get('paper_id', 'unknown') for cid in all_chunks))
+            deduped_keys = [deduped_keys[i] for i in top_idx]
+            deduped_texts = [deduped_texts[i] for i in top_idx]
+            n_papers = len(set(k[0] for k in deduped_keys))
             print(f"  Capped to {rerank_cap} sections ({n_papers} papers) via Qwen3 pre-scoring")
         
         # ===================================================================
@@ -606,13 +629,10 @@ class ThreeLayerPhiRetriever:
         print(f"LAYER 3: DUAL RERANKING → {self.config.layer3_output} FINAL")
         print(f"{'='*60}")
         
-        # Get chunk texts for reranking
-        chunk_texts = [self.chunks[cid]['text'] for cid in all_chunks]
-        
-        # 1. ColBERTv2 Late Interaction Reranking
-        print(f"ColBERTv2: Reranking {len(chunk_texts)} candidates...")
+        # 1. ColBERTv2 Late Interaction Reranking (section-level texts)
+        print(f"ColBERTv2: Reranking {len(deduped_texts)} sections...")
         query_emb = self.colbert_model.encode([query], convert_to_tensor=False)[0]
-        doc_embs = self.colbert_model.encode(chunk_texts, convert_to_tensor=False)
+        doc_embs = self.colbert_model.encode(deduped_texts, convert_to_tensor=False)
         q_norm = np.linalg.norm(query_emb)
         colbert_scores = np.array([
             float(np.dot(query_emb, d) / (q_norm * np.linalg.norm(d)))
@@ -620,54 +640,51 @@ class ThreeLayerPhiRetriever:
         ])
         print(f"  ✓ ColBERTv2 scores range: [{np.min(colbert_scores):.4f}, {np.max(colbert_scores):.4f}]")
         
-        # Rank ALL candidates by ColBERTv2 score
-        colbert_ranking = sorted(range(len(all_chunks)), key=lambda i: colbert_scores[i], reverse=True)
+        colbert_ranking = sorted(range(len(deduped_keys)), key=lambda i: colbert_scores[i], reverse=True)
         
-        # 2. Cross-Encoder Reranking (ALL candidates)
-        print(f"Cross-Encoder: Reranking {len(chunk_texts)} candidates...")
-        pairs = [[query, text] for text in chunk_texts]
+        # 2. Cross-Encoder Reranking (section-level texts)
+        print(f"Cross-Encoder: Reranking {len(deduped_texts)} sections...")
+        pairs = [[query, text] for text in deduped_texts]
         cross_encoder_scores = self.cross_encoder.predict(pairs, show_progress_bar=False)
         cross_encoder_scores = np.array(cross_encoder_scores)
         print(f"  ✓ Cross-Encoder scores range: [{np.min(cross_encoder_scores):.4f}, {np.max(cross_encoder_scores):.4f}]")
         
-        # Rank ALL candidates by Cross-Encoder score
-        ce_ranking = sorted(range(len(all_chunks)), key=lambda i: cross_encoder_scores[i], reverse=True)
+        ce_ranking = sorted(range(len(deduped_keys)), key=lambda i: cross_encoder_scores[i], reverse=True)
         
-        # 3. RRF Fusion of FULL rankings (all 157, not GIST subsets)
-        print(f"RRF: Merging full ColBERTv2 + Cross-Encoder rankings ({len(all_chunks)} each)...")
+        # 3. RRF Fusion of FULL section rankings
+        print(f"RRF: Merging full ColBERTv2 + Cross-Encoder rankings ({len(deduped_keys)} each)...")
         rrf_scores = {}
         k_param = 60
         
         for rank, idx in enumerate(colbert_ranking, start=1):
-            chunk_id = all_chunks[idx]
-            rrf_scores[chunk_id] = rrf_scores.get(chunk_id, 0.0) + 1.0 / (k_param + rank)
+            key = deduped_keys[idx]
+            rrf_scores[key] = rrf_scores.get(key, 0.0) + 1.0 / (k_param + rank)
         
         for rank, idx in enumerate(ce_ranking, start=1):
-            chunk_id = all_chunks[idx]
-            rrf_scores[chunk_id] = rrf_scores.get(chunk_id, 0.0) + 1.0 / (k_param + rank)
+            key = deduped_keys[idx]
+            rrf_scores[key] = rrf_scores.get(key, 0.0) + 1.0 / (k_param + rank)
         
-        # Sort all chunks by RRF score
         rrf_ranking = sorted(rrf_scores.items(), key=lambda x: x[1], reverse=True)
-        print(f"  ✓ RRF scored {len(rrf_ranking)} chunks")
+        print(f"  ✓ RRF scored {len(rrf_ranking)} sections")
         
-        # 4. Walk down RRF-sorted list, identify top_k unique PAPERS
+        # 4. Walk down RRF-sorted sections, identify top_k unique PAPERS
         print(f"Paper Selection: Walking RRF ranking for top {self.config.layer3_output} papers...")
         selected_papers = set()
-        for chunk_id, rrf_score in rrf_ranking:
-            paper_id = self.chunks[chunk_id].get('paper_id', 'unknown')
+        for section_key, rrf_score in rrf_ranking:
+            paper_id = section_key[0]
             if paper_id not in selected_papers:
                 selected_papers.add(paper_id)
                 if len(selected_papers) >= self.config.layer3_output:
                     break
         
-        # 5. Return ALL chunks/sections from those top_k papers (preserving RRF order)
-        final_results = [
-            (chunk_id, rrf_score)
-            for chunk_id, rrf_score in rrf_ranking
-            if self.chunks[chunk_id].get('paper_id', 'unknown') in selected_papers
-        ]
+        # 5. Return ALL chunks from selected papers' ranked sections
+        final_results = []
+        for section_key, rrf_score in rrf_ranking:
+            if section_key[0] in selected_papers:
+                for cid in section_groups[section_key]:
+                    final_results.append((cid, rrf_score))
         unique_papers = len(selected_papers)
-        print(f"  ✓ Selected {len(final_results)} sections from {unique_papers} unique papers")
+        print(f"  ✓ Selected {len(final_results)} chunks from {unique_papers} papers")
         
         print(f"\n{'#'*60}")
         print(f"FINAL OUTPUT: {len(final_results)} chunks")
