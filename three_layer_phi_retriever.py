@@ -4,11 +4,11 @@ Three-Layer φ-Scaled Retrieval with Dual Reranking (ColBERTv2 + Cross-Encoder +
 Architecture:
   Query
     ↓
-  Layer 1: Hybrid GIST-RRF (BM25 pool→GIST + Dense pool→GIST → RRF) → top_k SEEDS (13)
-    ↓ (seeds as INPUT, excluded from OUTPUT)
-  Layer 2: Expansion via Graph + Qwen3
-    ├─ Graph BM25 (triplet corpus) → GIST(Qwen3 coverage, BM25 utility)
-    └─ Qwen3 (co-occurrence similarity) → GIST(Qwen3 coverage, cosine utility)
+  Layer 1: BM25 → top_k SEEDS (13) with scores
+    ↓ (seeds + midpoint ECDF weights as INPUT, excluded from OUTPUT)
+  Layer 2: ECDF-weighted Expansion via Graph + Qwen3
+    ├─ Graph BM25: ECDF-weighted term repetition → BM25 → GIST(Qwen3 coverage, BM25 utility)
+    └─ Qwen3: ECDF-weighted mean pool → cosine → GIST(Qwen3 coverage, cosine utility)
     → Standard RRF merge → 144 NEW chunks (top_k² - 25)
     ↓
   Concatenate: 13 (L1 seeds) + 144 (L2 expansions) = 157 total
@@ -45,6 +45,32 @@ from gist_retriever import gist_select
 
 # Golden ratio
 PHI = 1.618033988749895
+
+
+def midpoint_ecdf_weights(scores: np.ndarray) -> np.ndarray:
+    """
+    Midpoint empirical CDF weights (Hazen plotting position).
+    
+    For each score: weight = (count_≤ + count_<) / (2n)
+    Guarantees no weight is exactly 0.0 or 1.0.
+    
+    Args:
+        scores: 1D array of raw scores (e.g. BM25 scores from Layer 1)
+    
+    Returns:
+        1D array of weights in (0, 1), same length as scores
+    """
+    n = len(scores)
+    if n <= 1:
+        return np.ones(n, dtype=np.float64)
+    
+    weights = np.empty(n, dtype=np.float64)
+    for i, val in enumerate(scores):
+        count_leq = np.sum(scores <= val)
+        count_lt = np.sum(scores < val)
+        weights[i] = (count_leq + count_lt) / (2.0 * n)
+    
+    return weights
 
 
 @dataclass
@@ -197,51 +223,67 @@ class ThreeLayerPhiRetriever:
     def _expand_via_graph_bm25(
         self, 
         seed_chunks: List[int], 
+        seed_scores: List[float],
         top_k: int
     ) -> List[Tuple[int, float]]:
         """
         Graph expansion via BM25 over triplet corpus with GIST diversity selection.
         
         Seeds as INPUT (extract their triplets) → BM25 search → GIST select (Qwen3 coverage + BM25 utility)
+        Each seed's triplet terms are repeated proportional to its midpoint ECDF weight,
+        so higher-scoring seeds contribute more to the mega-query via BM25 TF.
         
         Args:
             seed_chunks: Chunk IDs from Layer 1 (seeds)
+            seed_scores: Raw BM25 scores from Layer 1 (parallel to seed_chunks)
             top_k: Number of NEW chunks to retrieve
         
         Returns:
             List of (chunk_id, gist_score) tuples — diverse, non-redundant
         """
-        # 1. Extract triplets from seed chunks
+        # 0. Compute ECDF weights for seeds
+        ecdf_w = midpoint_ecdf_weights(np.array(seed_scores, dtype=np.float64))
+        
+        # 1. Extract triplets from seed chunks, grouped by seed
         # Convert chunk indices to doc_ids with duplicated format: 1301_3781_s0_c0 -> 1301_3781_s0_c0_s0_c0
-        seed_triplet_ids = []
-        for cid in seed_chunks:
+        seed_triplet_groups = []  # List of (triplet_ids, ecdf_weight) per seed
+        for idx, cid in enumerate(seed_chunks):
             doc_id = self.chunks[cid]['doc_id']
             parts = doc_id.split('_')
             if len(parts) >= 4:
-                # Duplicate the section/chunk part: arxiv_id_sX_cY -> arxiv_id_sX_cY_sX_cY
                 mapping_key = doc_id + '_' + '_'.join(parts[-2:])
             else:
                 mapping_key = doc_id
-            seed_triplet_ids.extend(self.chunk_to_triplets.get(mapping_key, []))
+            tids = self.chunk_to_triplets.get(mapping_key, [])
+            if tids:
+                seed_triplet_groups.append((tids, ecdf_w[idx]))
         
-        if not seed_triplet_ids:
+        if not seed_triplet_groups:
             return []
         
-        # 2. Extract lemma text from triplets
-        # Triplet structure: {chunk_id, text, triplets: [{subject_lemmas, predicate_lemmas, object_lemmas}]}
+        # 2. Extract lemma text from triplets, repeating proportional to ECDF weight
+        # Scale: max-weight seed gets 3 repetitions, min-weight gets 1
+        max_w = max(w for _, w in seed_triplet_groups)
+        min_w = min(w for _, w in seed_triplet_groups)
+        w_range = max_w - min_w if max_w > min_w else 1.0
+        
         seed_triplet_texts = []
-        for tid in seed_triplet_ids:
-            triplet_obj = self.triplets[tid]
-            if 'triplets' in triplet_obj:
-                # Extract all lemmas from all SPO triplets in this chunk
-                for spo in triplet_obj['triplets']:
-                    lemmas = (spo.get('subject_lemmas', []) + 
-                             spo.get('predicate_lemmas', []) + 
-                             spo.get('object_lemmas', []))
-                    # Filter out padding tokens
-                    lemmas = [l for l in lemmas if l != 'pad']
-                    if lemmas:
-                        seed_triplet_texts.append(' '.join(lemmas))
+        for tids, weight in seed_triplet_groups:
+            # Map weight to repetitions: 1 to 3
+            reps = max(1, round(1 + 2 * (weight - min_w) / w_range))
+            chunk_lemmas = []
+            for tid in tids:
+                triplet_obj = self.triplets[tid]
+                if 'triplets' in triplet_obj:
+                    for spo in triplet_obj['triplets']:
+                        lemmas = (spo.get('subject_lemmas', []) + 
+                                 spo.get('predicate_lemmas', []) + 
+                                 spo.get('object_lemmas', []))
+                        lemmas = [l for l in lemmas if l != 'pad']
+                        if lemmas:
+                            chunk_lemmas.append(' '.join(lemmas))
+            # Repeat this seed's terms proportional to its ECDF weight
+            seed_triplet_texts.extend(chunk_lemmas * reps)
         
         # 3. Concatenate as query
         query_text = ' '.join(seed_triplet_texts)
@@ -311,15 +353,18 @@ class ThreeLayerPhiRetriever:
     def _expand_via_qwen3(
         self, 
         seed_chunks: List[int], 
+        seed_scores: List[float],
         top_k: int
     ) -> List[Tuple[int, float]]:
         """
         Qwen3 expansion via co-occurrence similarity with GIST diversity selection.
         
-        Seeds as INPUT (mean pool their embeddings) → similarity search → GIST select (Qwen3 coverage + cosine utility)
+        Seeds as INPUT (ECDF-weighted mean pool) → similarity search → GIST select (Qwen3 coverage + cosine utility)
+        Higher-scoring seeds from Layer 1 contribute more to the centroid.
         
         Args:
             seed_chunks: Chunk IDs from Layer 1 (seeds)
+            seed_scores: Raw BM25 scores from Layer 1 (parallel to seed_chunks)
             top_k: Number of NEW chunks to retrieve
         
         Returns:
@@ -331,8 +376,9 @@ class ThreeLayerPhiRetriever:
         # 1. Get seed embeddings
         seed_embeddings = self.qwen3_embeddings[seed_chunks]
         
-        # 2. Mean pool (or could use max pool)
-        query_embedding = np.mean(seed_embeddings, axis=0, keepdims=True)
+        # 2. ECDF-weighted mean pool (higher L1 scores → more centroid influence)
+        ecdf_w = midpoint_ecdf_weights(np.array(seed_scores, dtype=np.float64))
+        query_embedding = np.average(seed_embeddings, axis=0, weights=ecdf_w).reshape(1, -1)
         
         # 3. Cosine similarity with ALL chunks
         similarities = cosine_similarity(query_embedding, self.qwen3_embeddings)[0]
@@ -445,9 +491,13 @@ class ThreeLayerPhiRetriever:
         # Take top layer1_seeds BM25 results directly as seeds
         layer1_results = bm25_pool[:self.config.layer1_seeds]
         
-        # Extract chunk IDs (strings) and convert to integer indices
-        seed_doc_ids = [doc.doc_id for doc in layer1_results]
-        seed_chunks = [self.doc_id_to_idx[doc_id] for doc_id in seed_doc_ids if doc_id in self.doc_id_to_idx]
+        # Extract chunk IDs (strings) and scores, convert to integer indices
+        seed_chunks = []
+        seed_scores = []
+        for doc in layer1_results:
+            if doc.doc_id in self.doc_id_to_idx:
+                seed_chunks.append(self.doc_id_to_idx[doc.doc_id])
+                seed_scores.append(doc.bm25_score if doc.bm25_score is not None else 0.0)
         
         if self.verbose:
             print(f"  BM25 pool top-5:")
@@ -467,7 +517,8 @@ class ThreeLayerPhiRetriever:
         # Graph expansion (BM25 over triplets)
         print(f"Graph BM25: Expanding from {len(seed_chunks)} seeds...")
         graph_results = self._expand_via_graph_bm25(
-            seed_chunks, 
+            seed_chunks,
+            seed_scores,
             top_k=self.config.layer2_expand
         )
         print(f"  ✓ Found {len(graph_results)} graph-expanded chunks (gist-scored)")
@@ -475,7 +526,8 @@ class ThreeLayerPhiRetriever:
         # Qwen3 expansion (co-occurrence similarity)
         print(f"Qwen3: Expanding from {len(seed_chunks)} seeds...")
         qwen3_results = self._expand_via_qwen3(
-            seed_chunks, 
+            seed_chunks,
+            seed_scores,
             top_k=self.config.layer2_expand
         )
         print(f"  ✓ Found {len(qwen3_results)} Qwen3-expanded chunks (gist-scored)")
