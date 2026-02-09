@@ -7,7 +7,7 @@ Architecture:
   Layer 1: BM25 → prev_fib(top_k²) SEEDS (144 for top_k=13) with scores
     ↓ (seeds + midpoint ECDF weights as INPUT to Layer 2, seeds excluded from OUTPUT)
   Layer 2: ECDF-weighted Expansion via Graph + Qwen3
-    ├─ Graph BM25: ECDF-weighted term repetition → oversample 288 → GIST select 144
+    ├─ Graph BM25: ECDF-weighted mean TF profile → oversample 288 → GIST select 144
     └─ Qwen3: ECDF-weighted mean pool → oversample 288 → GIST select 144
     → Standard RRF merge → prev_fib(top_k²) NEW chunks (144)
     ↓
@@ -43,6 +43,7 @@ import msgpack
 from pathlib import Path
 from rank_bm25 import BM25Okapi
 from sklearn.metrics.pairwise import cosine_similarity
+from collections import Counter
 from gist_retriever import gist_select
 
 
@@ -171,7 +172,7 @@ class ThreeLayerPhiRetriever:
         self.verbose = False  # Set to True for debug output
         
         print(f"\n{'='*60}")
-        print(f"LOADING THREE-LAYER φ-RETRIEVER")
+        print(f"LOADING THREE-LAYER phi-RETRIEVER")
         print(f"{'='*60}")
         
         # Load chunks
@@ -258,9 +259,9 @@ class ThreeLayerPhiRetriever:
         """
         Graph expansion via BM25 over triplet corpus with GIST diversity selection.
         
-        Seeds as INPUT (extract their triplets) → BM25 search → GIST select (Qwen3 coverage + BM25 utility)
-        Each seed's triplet terms are repeated proportional to its midpoint ECDF weight,
-        so higher-scoring seeds contribute more to the mega-query via BM25 TF.
+        Seeds as INPUT → ECDF-weighted mean TF profile → BM25 search → GIST select
+        Symmetric with Path B: just as Qwen3 builds a weighted centroid embedding,
+        this builds a weighted centroid TF vector from pre-tokenized triplet corpus.
         
         Args:
             seed_chunks: Chunk IDs from Layer 1 (seeds)
@@ -273,53 +274,47 @@ class ThreeLayerPhiRetriever:
         # 0. Compute ECDF weights for seeds
         ecdf_w = midpoint_ecdf_weights(np.array(seed_scores, dtype=np.float64))
         
-        # 1. Extract triplets from seed chunks, grouped by seed
-        # Convert chunk indices to doc_ids with duplicated format: 1301_3781_s0_c0 -> 1301_3781_s0_c0_s0_c0
-        seed_triplet_groups = []  # List of (triplet_ids, ecdf_weight) per seed
+        # 1. Build TF vector per seed from pre-tokenized triplet index
+        #    (symmetric with Path B: weighted mean embedding → weighted mean TF)
+        seed_tfs = []
+        valid_weights = []
         for idx, cid in enumerate(seed_chunks):
-            doc_id = self.chunks[cid]['doc_id']
-            parts = doc_id.split('_')
-            if len(parts) >= 4:
-                mapping_key = doc_id + '_' + '_'.join(parts[-2:])
-            else:
-                mapping_key = doc_id
-            tids = self.chunk_to_triplets.get(mapping_key, [])
-            if tids:
-                seed_triplet_groups.append((tids, ecdf_w[idx]))
+            if cid < len(self.triplet_tokens):
+                tf = Counter(self.triplet_tokens[cid])
+                if tf:  # Skip empty chunks
+                    seed_tfs.append(tf)
+                    valid_weights.append(ecdf_w[idx])
         
-        if not seed_triplet_groups:
+        if not seed_tfs:
             return []
         
-        # 2. Extract lemma text from triplets, repeating proportional to ECDF weight
-        # Scale: max-weight seed gets 3 repetitions, min-weight gets 1
-        max_w = max(w for _, w in seed_triplet_groups)
-        min_w = min(w for _, w in seed_triplet_groups)
-        w_range = max_w - min_w if max_w > min_w else 1.0
+        # 2. ECDF-weighted mean TF profile
+        #    Union vocabulary across all seed TF vectors
+        vocab = sorted(set().union(*seed_tfs))
+        vocab_idx = {term: i for i, term in enumerate(vocab)}
         
-        seed_triplet_texts = []
-        for tids, weight in seed_triplet_groups:
-            # Map weight to repetitions: 1 to 3
-            reps = max(1, round(1 + 2 * (weight - min_w) / w_range))
-            chunk_lemmas = []
-            for tid in tids:
-                triplet_obj = self.triplets[tid]
-                if 'triplets' in triplet_obj:
-                    for spo in triplet_obj['triplets']:
-                        lemmas = (spo.get('subject_lemmas', []) + 
-                                 spo.get('predicate_lemmas', []) + 
-                                 spo.get('object_lemmas', []))
-                        lemmas = [l for l in lemmas if l != 'pad']
-                        if lemmas:
-                            chunk_lemmas.append(' '.join(lemmas))
-            # Repeat this seed's terms proportional to its ECDF weight
-            seed_triplet_texts.extend(chunk_lemmas * reps)
+        #    Build TF matrix: [n_seeds × |vocab|]
+        tf_matrix = np.zeros((len(seed_tfs), len(vocab)), dtype=np.float64)
+        for i, tf in enumerate(seed_tfs):
+            for term, count in tf.items():
+                tf_matrix[i, vocab_idx[term]] = count
         
-        # 3. Concatenate as query
-        query_text = ' '.join(seed_triplet_texts)
+        #    Weighted mean (high-ECDF seeds contribute more to profile)
+        w = np.array(valid_weights, dtype=np.float64)
+        weighted_tf = np.average(tf_matrix, axis=0, weights=w)
+        
+        # 3. Convert weighted TF profile to query tokens
+        #    Terms with weighted_tf < 0.5 are dropped (not salient enough)
+        #    Remaining terms repeated by rounded weighted frequency
+        query_tokens = []
+        for j, term in enumerate(vocab):
+            count = int(round(weighted_tf[j]))
+            if count >= 1:
+                query_tokens.extend([term] * count)
+        
+        print(f"  Path A query: {len(vocab)} vocab → {len(query_tokens)} tokens (from {len(seed_tfs)} seeds)")
         
         # 4. BM25 search over triplet corpus
-        # Tokenize query (assuming WordPiece tokenization already applied in index)
-        query_tokens = query_text.split()  # Simplified - matches how index was built
         scores = self.graph_bm25.get_scores(query_tokens)
         
         # Top candidates (oversample 2×)
@@ -500,7 +495,7 @@ class ThreeLayerPhiRetriever:
             List of (chunk_id, score) tuples (length = top_k)
         """
         print(f"\n{'#'*60}")
-        print(f"THREE-LAYER φ-RETRIEVAL: {query[:50]}")
+        print(f"THREE-LAYER phi-RETRIEVAL: {query[:50]}")
         print(f"{'#'*60}")
         
         # ===================================================================
