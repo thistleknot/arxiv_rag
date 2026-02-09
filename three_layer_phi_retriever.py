@@ -4,14 +4,14 @@ Three-Layer φ-Scaled Retrieval with Dual Reranking (ColBERTv2 + Cross-Encoder +
 Architecture:
   Query
     ↓
-  Layer 1: BM25 → top_k SEEDS (13) with scores
-    ↓ (seeds + midpoint ECDF weights as INPUT, excluded from OUTPUT)
+  Layer 1: BM25 → prev_fib(top_k²) SEEDS (144 for top_k=13) with scores
+    ↓ (seeds + midpoint ECDF weights as INPUT to Layer 2, seeds excluded from OUTPUT)
   Layer 2: ECDF-weighted Expansion via Graph + Qwen3
-    ├─ Graph BM25: ECDF-weighted term repetition → BM25 → GIST(Qwen3 coverage, BM25 utility)
-    └─ Qwen3: ECDF-weighted mean pool → cosine → GIST(Qwen3 coverage, cosine utility)
-    → Standard RRF merge → 144 NEW chunks (top_k² - 25)
+    ├─ Graph BM25: ECDF-weighted term repetition → oversample 288 → GIST select 144
+    └─ Qwen3: ECDF-weighted mean pool → oversample 288 → GIST select 144
+    → Standard RRF merge → prev_fib(top_k²) NEW chunks (144)
     ↓
-  Concatenate: 13 (L1 seeds) + 144 (L2 expansions) = 157 total
+  Section Expansion: 144 chunks → ALL sections from their papers
     ↓
   Layer 3: Dual Reranking with RRF Fusion → Final top_k (13)
     ├─ ColBERTv2 late interaction → GIST(Qwen3 coverage, ColBERTv2 utility)
@@ -28,8 +28,11 @@ GIST at every layer:
 φ-Scaling:
   top_k = 13
   top_k² = 169
-  Layer 2 expansion = 169 - 25 = 144 (one phi lower)
-  Final output = 13 chunks from 13 different papers
+  prev_fib(169) = 144 (largest Fibonacci strictly < top_k²)
+  Layer 1 seeds = 144 (INPUT to Layer 2 only, excluded from OUTPUT)
+  Layer 2 paths: each oversamples 288, GIST selects 144, RRF merges to 144
+  Section expansion: 144 chunks → all sections from their papers
+  Layer 3 reranks all sections → top 13 papers → all sections from those papers
 """
 
 import numpy as np
@@ -45,6 +48,27 @@ from gist_retriever import gist_select
 
 # Golden ratio
 PHI = 1.618033988749895
+
+
+def prev_fib(n: int) -> int:
+    """
+    Return the largest Fibonacci number strictly less than n.
+    
+    Generates Fibonacci sequence until exceeding n, returns the
+    last value before crossing the threshold.
+    
+    Examples:
+        prev_fib(169) → 144
+        prev_fib(144) → 89
+        prev_fib(13)  → 8
+        prev_fib(2)   → 1
+    """
+    if n <= 1:
+        return 1
+    a, b = 1, 1
+    while b < n:
+        a, b = b, a + b
+    return a
 
 
 def midpoint_ecdf_weights(scores: np.ndarray) -> np.ndarray:
@@ -77,14 +101,19 @@ def midpoint_ecdf_weights(scores: np.ndarray) -> np.ndarray:
 class PhiLayerConfig:
     """φ-scaled layer configuration"""
     top_k: int  # Final output (13)
-    layer1_seeds: int  # top_k (13)
-    layer2_expand: int  # top_k² - 25 (144 for top_k=13)
+    layer1_seeds: int  # prev_fib(top_k²) = 144 for top_k=13
+    layer2_expand: int  # prev_fib(top_k²) = 144 for top_k=13
     layer3_output: int  # top_k (13)
     
     @classmethod
     def from_top_k(cls, top_k: int = 13):
         """
-        Calculate layer sizes with φ-scaling
+        Calculate layer sizes with φ-scaling.
+        
+        Layer 1 seeds and Layer 2 expansion both use prev_fib(top_k²),
+        the largest Fibonacci number strictly less than top_k².
+        
+        For top_k=13: top_k²=169, prev_fib(169)=144
         
         Args:
             top_k: Final output size (default 13)
@@ -92,12 +121,12 @@ class PhiLayerConfig:
         Returns:
             PhiLayerConfig with calculated sizes
         """
-        layer2_expand = (top_k ** 2) - 25  # 169 - 25 = 144
+        phi_level = prev_fib(top_k ** 2)
         
         return cls(
             top_k=top_k,
-            layer1_seeds=top_k,
-            layer2_expand=layer2_expand,
+            layer1_seeds=phi_level,
+            layer2_expand=phi_level,
             layer3_output=top_k
         )
 
@@ -293,8 +322,8 @@ class ThreeLayerPhiRetriever:
         query_tokens = query_text.split()  # Simplified - matches how index was built
         scores = self.graph_bm25.get_scores(query_tokens)
         
-        # Top candidates (oversample)
-        top_indices = np.argsort(scores)[::-1][:top_k*3]
+        # Top candidates (oversample 2×)
+        top_indices = np.argsort(scores)[::-1][:top_k*2]
         
         # 5. Map triplets → chunks
         chunk_scores = {}
@@ -390,9 +419,9 @@ class ThreeLayerPhiRetriever:
             if cid not in seed_set
         ]
         
-        # 5. Top candidates (oversample 3× for GIST to select from)
+        # 5. Top candidates (oversample 2× for GIST to select from)
         candidates.sort(key=lambda x: x[1], reverse=True)
-        top_candidates = candidates[:top_k*3]
+        top_candidates = candidates[:top_k*2]
         
         if not top_candidates:
             return []
@@ -542,10 +571,14 @@ class ThreeLayerPhiRetriever:
         expansion_chunks = [chunk_id for chunk_id, _ in expansion_results]
         print(f"  ✓ Merged to {len(expansion_chunks)} unique expansions")
         
-        # Concatenate seeds + expansions
-        all_chunks = seed_chunks + expansion_chunks
-        total_chunks = len(all_chunks)
-        print(f"\n✓ TOTAL: {len(seed_chunks)} seeds + {len(expansion_chunks)} expansions = {total_chunks} chunks")
+        # Expand to full sections from papers containing the 144 expansion chunks
+        print(f"\nSection Expansion: Expanding {len(expansion_chunks)} chunks to full sections...")
+        expansion_papers = set(self.chunks[cid].get('paper_id', 'unknown') for cid in expansion_chunks)
+        all_chunks = [
+            cid for cid in range(len(self.chunks))
+            if self.chunks[cid].get('paper_id', 'unknown') in expansion_papers
+        ]
+        print(f"  ✓ Expanded to {len(all_chunks)} sections from {len(expansion_papers)} papers")
         
         # ===================================================================
         # LAYER 3: DUAL RERANKING (ColBERTv2 + Cross-Encoder) with RRF → FINAL TOP_K
