@@ -2309,6 +2309,8 @@ def format_papers_markdown(papers: List[RetrievedPaper], include_sections: bool 
                     section_scores.append(f"RRF: {section.rrf_score:.4f}")
                 if section.colbert_score is not None:
                     section_scores.append(f"ColBERT: {section.colbert_score:.4f}")
+                if section.cross_encoder_score is not None:
+                    section_scores.append(f"CE: {section.cross_encoder_score:.4f}")
                 
                 score_str = f" | {' | '.join(section_scores)}" if section_scores else ""
                 lines.append(f"\n### Section {section_idx}{score_str}\n")

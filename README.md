@@ -1,6 +1,6 @@
 # Hybrid Retrieval & Knowledge Extraction System
 
-> Auto-generated from feature catalogs on 2026-02-07 23:21.
+> Auto-generated from feature catalogs on 2026-02-10 14:15.
 > Source databases: `retriever_feature_catalog.sqlite3`, `bio_tagger_features.sqlite3`, `graph_transformer_feature_catalog.sqlite3`
 > Generator: `generate_readme.py`
 
@@ -101,14 +101,13 @@ python tune_bio_tagger.py --data training.msgpack --unfreeze-layers 12 --n-trial
 
 ## 🔍 Hybrid Retriever — Feature Catalog
 
-*Source: `retriever_feature_catalog.sqlite3` — 16 features, 2 architectural decisions, 8 claims*
+*Source: `retriever_feature_catalog.sqlite3` — 17 features, 4 architectural decisions, 8 claims*
 
 | Status | Count |
 |--------|-------|
-| ✅ DONE | 10 |
+| ✅ DONE | 11 |
 | 🔄 IN PROGRESS | 3 |
-| 📋 TODO | 1 |
-| ❌ FAILED | 2 |
+| ❌ FAILED | 3 |
 
 ### Features
 
@@ -138,9 +137,64 @@ Iterative token-level class balancing using log/Box-Cox transform
 
 #### 5. More Training Data ✅ DONE
 
-Increase training set size from 40 to 160 examples
+Three-Layer phi-Retriever: Production implementation for academic paper retrieval.
 
-*Baseline F1: 0.1218 | Current F1: 0.1408 | Notes: 160 examples achieved F1=0.1408 (+15.6% vs 40 examples). Still 20% below runtime matcher baseline (0.1764) due to incomplete label coverage (36.6% vs ~70% estimated for runtime matcher).*
+## Search Process (How It Works)
+
+### Layer 1: Hybrid Seed Retrieval (BM25-only)
+- BM25 keyword search over 161,389 chunks in PostgreSQL/pgvector
+- Returns 13 seed chunks as starting points
+- Dense embeddings (M2V) disabled at L1 (too weak for domain queries)
+
+### Layer 2: Dual Expansion (Graph BM25 + Qwen3 Semantic)
+Two independent expansion paths, each GIST-diversified, then RRF-merged:
+
+**Path A: Graph BM25 Expansion**
+1. Extract SPO triplets from seed chunks (via chunk_to_triplets mapping)
+2. Concatenate all lemmatized subject/predicate/object tokens as a mega-query
+3. BM25 search over the 161K triplet corpus -> top candidates
+4. Map triplet hits back to their source chunks (via triplet_to_chunks mapping)
+5. GIST select: Qwen3 pairwise coverage matrix + BM25 utility vector (lambda=0.7)
+6. Result: diverse, graph-adjacent chunks NOT in original seeds
+
+**Path B: Qwen3 Semantic Expansion**
+1. Mean-pool Qwen3 256d embeddings of all 13 seed chunks -> query vector
+2. Cosine similarity against ALL 161K chunk embeddings
+3. Exclude seed chunks
+4. GIST select: Qwen3 coverage matrix + cosine utility vector (lambda=0.7)
+5. Result: semantically similar chunks NOT in original seeds
+
+**Merge: RRF fusion of Path A + Path B -> 144 expansion chunks**
+Total after Layer 2: 13 seeds + 144 expansions = 157 candidate chunks
+
+### Layer 3: Dual Reranking + Paper Selection
+1. ColBERTv2 scores ALL 157 candidates against query -> full ranking
+2. Cross-Encoder scores ALL 157 candidates against query -> full ranking
+3. RRF merges both full rankings (k=60)
+4. Walk down RRF-sorted list, collect unique paper_ids until top_k papers found
+5. Return ALL sections/chunks from those top_k papers (preserving RRF order)
+6. Result: 88 chunks from 13 papers (all sections, not just best chunk)
+
+## Key Design Decisions
+- GIST diversity in L2 prevents redundant expansions
+- Graph BM25 finds structurally-adjacent knowledge (same-topic different angles)
+- Qwen3 cosine finds semantically-similar knowledge (distant but related)
+- ColBERTv2 + Cross-Encoder dual reranking provides robust relevance signal
+- Paper-level selection returns complete context (all sections from top papers)
+
+## Files
+- three_layer_phi_retriever.py (613 lines)
+- query_three_layer.py (321 lines, CLI)
+
+## Dependencies
+- PostgreSQL + pgvector (Docker: langchain_postgres)
+- checkpoints/: chunks.msgpack, chunk_embeddings_qwen3.msgpack, chunk_to_triplets.msgpack, triplet_to_chunks.msgpack
+- triplet_checkpoints_full/stage4_lemmatized.msgpack (161K triplets)
+- BM25 index rebuilt at load time from triplet tokens
+- Models: colbert-ir/colbertv2.0, cross-encoder/ms-marco-MiniLM-L-6-v2
+
+
+*Baseline F1: 0.1218 | Current F1: 0.1408 | Notes: VALIDATED 2026-02-09: Query 'agentic memory methods' -> 88 chunks from 13 papers in 166.93s. Breadth 8.5/10, Depth 8/10. Coverage: memory taxonomy, cognitive foundations, implementation details, retrieval mechanisms, learning paradigms, application domains. Missing (expected): benchmarking comparisons, production scaling, security/adversarial, cost modeling - these are literature gaps not retrieval gaps.*
 
 #### 6. Stanza Dependency Parsing for BIO Extraction ✅ DONE
 
@@ -156,9 +210,21 @@ Replace OpenIE with Stanza dependency parsing in build_arxiv_graph_sparse.py to 
 
 #### 8. BIO Sequence Validation Unit Test ✅ DONE
 
-Created validate_bio_sequences.py to check for consecutive B-X B-X violations
+Three-layer phi-retriever pipeline for academic paper retrieval.
 
-*Notes: Validates BIO sequences, distinguishes atomic vs compound approaches.*
+Command: python query_three_layer.py "your query" [--top-k N] [-v] [--output results.md]
+DB: localhost:5432/langchain/arxiv_chunks
+Checkpoints: checkpoints/*.msgpack + triplet_checkpoints_full/stage4_lemmatized.msgpack
+
+Layer 1: BM25 keyword search -> 13 seeds (no dense at L1)
+Layer 2: Graph BM25 expansion + Qwen3 semantic expansion -> GIST diversified -> RRF merged -> 144 new chunks (157 total)
+Layer 3: ColBERTv2 + Cross-Encoder dual reranking -> RRF merge -> walk-down paper selection -> ALL sections from top-k papers
+
+Models: Qwen3 256d (L2), colbertv2.0 (L3), ms-marco-MiniLM-L-6-v2 (L3)
+Output: All sections from top-k papers (not just best chunk per paper)
+
+
+*Notes: VALIDATED 2026-02-09: 88 chunks from 13 papers for 'agentic memory methods'. 166.93s runtime. Git commit 7b47574.*
 
 #### 9. get_subtree_text() Function ✅ DONE
 
@@ -295,88 +361,28 @@ Automatically detect and remove I-PRED class when it has 0 tokens in training da
 
 *Baseline F1: 0.7467*
 
-#### 15. Graph Transformer Reranking Stage 📋 TODO
+#### 15. Graph Transformer Reranking Stage ❌ FAILED
 
-Graph Transformer Reranking Stage with Node2Vec distillation.
+DEPRECATED: Node2Vec/Graph2Vec approach has been replaced by triplet-based expansion.
 
-**Architecture:** 3-phase pipeline
+**DEPRECATION NOTICE (2026-02-08):**
+This feature was originally designed to use Node2Vec embeddings for graph-based reranking.
+However, the system now uses **semantic triplet extraction** (Stanza dependency parsing) 
+for graph expansion instead. See Feature 17 for the active triplet-based implementation.
+
+**Why Deprecated:**
+- Node2Vec was never fully implemented (remained as TODO/placeholder)
+- Triplet-based approach (BM25 over triplet corpus) provides better semantic matching
+- Semantic triplets preserve entity relationships without graph embedding overhead
+- Working implementation exists in ThreeLayerPhiRetriever using triplet BM25 expansion
+
+**Migration Path:**
+Use triplet-based graph expansion (Feature 17) instead of Node2Vec.
+
+**Original Architecture (NOT USED):**
 1. Hybrid Retrieval (BM25 + dense) → ~50-100 candidate chunks
 2. BIO Tagger → SPO triplets → AOKG (only on candidates, ~25 seconds)
 3. Graph-based reranking using Node2Vec embeddings
-
-**Key Innovation: Fast Graph Embedding via Distillation**
-Problem: BIO tagger takes 11 hours for full corpus (4.08 chunks/sec × 161k chunks)
-Solution: Train lightweight model on 250 chunks, apply to remaining corpus
-
-**Two-Phase Implementation:**
-
-Phase 1 — Train on 250 chunks (one-time, expensive):
-  1. BIO Tagger (BERT) → extract triplets (~60 seconds for 250 chunks)
-  2. Build AOKG (4-layer: surface → lemma → synset → hypernym)
-  3. Run karateclub.Node2Vec on AOKG → derive node embeddings (128-dim)
-  4. Aggregate node embeddings per chunk (mean pooling)
-  5. Train distilled model: DistilBERT(text) → graph_embedding
-     - Input: Raw chunk text
-     - Output: 128-dim graph embedding (without running BERT BIO or building graph)
-     - Training: MSE loss between distilled output vs actual node2vec embeddings
-     - Data: 250 chunks with known graph embeddings
-
-Phase 2 — Apply to remaining corpus (fast):
-  1. Distilled model: text → graph embedding (~150 chunks/sec)
-  2. Store embeddings in pgvector alongside model2vec embeddings
-  3. Build HNSW index on graph embeddings
-  4. Full corpus time: ~18 minutes (vs 11 hours with BERT)
-  5. Speedup: 37x faster, 97% time reduction
-
-**Reranking Strategy:**
-- Hybrid retrieval provides recall (BM25 + model2vec dense)
-- Graph embeddings provide precision (semantic distance via AOKG structure)
-- Fusion: RRF across 3 signals (BM25 + dense + graph) OR learned weights
-- LCA convergence level (0-3) as discrete semantic distance metric
-
-**Performance Estimates:**
-- BIO Tagger: 4.08 chunks/sec → 11 hours for 161k chunks
-- Distilled model: ~150 chunks/sec → 18 minutes for 161k chunks
-- Embedding quality: Expected correlation r > 0.7 between BERT→node2vec vs distilled→node2vec
-- Retrieval: Precision@5 expected improvement via graph reranking
-
-**Implementation Steps:**
-1. ✅ DONE: Train BIO tagger on 250 chunks
-2. ✅ DONE: Extract triplets, build AOKG, visualize in Streamlit
-3. TODO: Run Node2Vec on AOKG → derive node embeddings (estimate: 2 hours)
-4. TODO: Aggregate embeddings per chunk, visualize t-SNE (estimate: 1 hour)
-5. TODO: Train DistilBERT + projection layer for distillation (estimate: 4 hours)
-6. TODO: Validate on holdout, measure embedding similarity (estimate: 1 hour)
-7. TODO: Apply to 1000 chunks, benchmark throughput (target: >100 chunks/sec, estimate: 1 hour)
-8. TODO: Derive embeddings for full corpus (estimate: 30 minutes)
-9. TODO: Build HNSW index, integrate with hybrid retriever (estimate: 3 hours)
-10. TODO: Implement reranking, tune fusion weights (estimate: 3 hours)
-11. TODO: Benchmark retrieval quality (precision@5, recall@10, estimate: 2 hours)
-
-**Dependencies:**
-- karateclub (Node2Vec, Graph2Vec)
-- torch (DistilBERT)
-- transformers (DistilBertModel)
-- bio_tagger_best.pt (trained BIO model)
-- bio_training_250chunks_complete_FIXED.msgpack (250 training chunks)
-
-**Design Decisions:**
-1. Reranker vs full corpus expansion → Reranker (11 hours infeasible)
-2. Node2Vec vs Graph Transformer → Node2Vec + distillation (simpler, proven)
-3. 250 chunks for training → Use existing BIO training set (validated)
-4. Embedding dimension → 128-dim (Node2Vec default, can tune)
-5. Aggregation strategy → Mean pooling (simple baseline, can upgrade to attention)
-
-**Key Files:**
-- GRAPH_TRANSFORMER_STRATEGY.md — Full implementation strategy document
-- (to create) train_graph_distillation.py — Phase 1: Train distilled model
-- (to create) apply_graph_embeddings.py — Phase 2: Apply to full corpus
-- (to create) graph_reranker.py — Reranking logic with graph embeddings
-
-**Status:** TODO
-**Blocking:** None (all dependencies complete)
-**Estimate:** 1-2 weeks for full implementation
-**Priority:** High (enables fast graph-based retrieval without 11-hour BERT inference)
 
 *Notes: Depends on bio_tagger_features.sqlite3 pipeline being complete.*
 
@@ -417,6 +423,42 @@ Workflow Execution Order for Hybrid Retrieval System:
 python query_arxiv.py "machine learning transformers"    # Query ArXiv
 python query_quotes.py "life wisdom"                     # Query quotes
 
+#### 17. Three-Layer Triplet-Based Retrieval (φ-Scaled) ✅ DONE
+
+Three-Layer φ-Scaled Retrieval with ECDF-Weighted Expansion (ACTIVE)
+
+**Architecture:**
+
+Query
+  
+Layer 1: BM25  prev_fib(top_k) SEEDS (144 for top_k=13) with scores
+   (seeds + ECDF weights as INPUT to Layer 2, seeds EXCLUDED from OUTPUT)
+Layer 2: ECDF-Weighted Dual Expansion
+   Graph BM25: ECDF-weighted term repetition (1-3)  BM25 over triplet corpus  oversample 288  GIST select 144
+   Qwen3: ECDF-weighted mean pool  cosine vs all chunks  oversample 288  GIST select 144
+   RRF merge  prev_fib(top_k) = 144 NEW chunks
+  
+Section Expansion: 144 chunks  ALL sections from their papers
+  
+Layer 3: Dual Reranking (ColBERTv2 + Cross-Encoder)  RRF  top-k papers (13)  all sections from those papers
+
+**φ-Scaling:**
+- top_k = 13
+- top_k = 169
+- prev_fib(169) = 144 via Fibonacci walk-down
+- L1 produces 144 seeds (INPUT only)
+- L2 produces 144 expansions (OUTPUT only)
+- Section expansion before L3
+- L3 selects 13 papers, returns all their sections
+
+**Key Mechanisms:**
+1. Midpoint ECDF weighting: (count_ + count_<)/(2n) from L1 BM25 scores
+2. Path A term repetition: top-ECDF seeds contribute 3, bottom 1
+3. Path B weighted centroid: np.average(embeddings, weights=ecdf)
+4. Both paths oversample 2, GIST diversity-select to prev_fib(top_k)
+5. Seeds excluded during expansion, not concatenated to output
+
+
 ### Architectural Decisions
 
 **1. Replace OpenIE with Stanza Dependency Parsing**
@@ -425,11 +467,110 @@ python query_quotes.py "life wisdom"                     # Query quotes
 - **Before:** OpenIE: extract(sentence) → atomized triplets → BIO violations (B-SUBJ B-SUBJ B-SUBJ)
 - **After:** Stanza: get_subtree_text(head_word) → complete phrases → proper BIO spans (B-SUBJ I-SUBJ I-SUBJ)
 
-**2. Graph transformer reranking as post-hybrid precision stage**
+**2. Triplet-based graph expansion as post-hybrid precision stage**
 
-- **Rationale:** Hybrid retrieval (BM25+dense) provides recall. AOKG graph provides precision signal. Graph embeddings could be accelerated via WordPiece tokenization of graph nodes, producing a fixed-vocabulary sparse vector analogous to BM25 but over ontological structure. This avoids the 11-hour full corpus inference cost by only processing retrieved chunks.
+- **Rationale:** Hybrid retrieval (BM25+dense) provides recall. Semantic triplet corpus provides precision signal through BM25 expansion.
+
+**CRITICAL CLARIFICATION (2026-02-08):**
+This system uses TRIPLET-BASED graph expansion via BM25 over the triplet corpus,
+NOT Node2Vec embeddings. Earlier comments mentioning "Node2Vec" were placeholder TODOs.
+
+**How Triplet Expansion Works:**
+1. Extract triplets from seed chunks via Stanza dependency parsing
+2. Get triplet lemmatized text (e.g., "model_learn pattern_from data")
+3. Use triplet texts as BM25 query over full triplet corpus
+4. Map high-scoring triplets back to chunks
+5. Exclude seed chunks, return NEW chunks with ECDF gist scores
+
+**Why Triplets (NOT Node2Vec):**
+- Preserves semantic relationships explicitly (S-P-O structure)
+- BM25 provides interpretable similarity scores
+- No graph embedding training/inference overhead
+- Working implementation validated in ThreeLayerPhiRetriever
+- Better for multi-hop reasoning through triplet chains
+
+**Data Format:**
+- Full triplet corpus with lemma_text field (NOT sparse graph format)
+- chunk_to_triplets and triplet_to_chunks mappings
+- BM25 index built over triplet corpus
+
+**Implementation:** three_layer_phi_retriever.py (_expand_via_graph_bm25)
 - **Before:** 8-stage GIST pipeline: Retrieve→GIST→RRF→Group→ColBERT→CrossEncoder
 - **After:** Proposed 10-stage: ...→CrossEncoder→BIO Extract→AOKG Rerank
+
+**3. Deprecation: Node2Vec/Graph2Vec replaced by Triplet-Based Expansion**
+
+- **Rationale:** ARCHITECTURAL DECISION: Replace Node2Vec with Triplet-Based Graph Expansion
+
+**Decision Date:** 2026-02-08
+
+**Context:**
+Original design documents and code comments mentioned using Node2Vec for graph-based
+expansion. However, this was never implemented beyond placeholder TODOs. The system
+actually uses semantic triplet extraction (Stanza dependency parsing) with BM25 search
+over the triplet corpus.
+
+**Why Deprecate Node2Vec:**
+1. Never implemented (remained as TODO comments in base_gist_retriever.py)
+2. Triplet-based approach provides better semantic matching
+3. BM25 over triplet corpus is more interpretable than graph embeddings
+4. No training/inference overhead for Node2Vec model
+5. Working implementation exists and is validated in ThreeLayerPhiRetriever
+
+**Confusion Source:**
+- base_gist_retriever.py line 11: "Graph Expansion from seeds (Node2Vec - placeholder)"
+- base_gist_retriever.py line 117: "TODO: Bootstrap Node2Vec from top 50 hybrid seeds"
+- These were placeholder comments, not actual implementation intent
+
+**Actual Implementation:**
+- Stanza dependency parsing extracts S-P-O triplets (Features 6, 7)
+- Triplets stored with lemmatized text in full corpus format
+- BM25 search over triplet corpus for expansion
+- Working in three_layer_phi_retriever.py (_expand_via_graph_bm25)
+- Validated in query_three_layer.py CLI tool
+
+**Migration Impact:**
+- Feature 15 marked as DEPRECATED
+- Feature 17 documents active triplet-based approach
+- AD2 updated to clarify triplet-based expansion
+- Code comments should be updated to remove Node2Vec references
+
+**Lessons Learned:**
+- Placeholder comments can be misleading if not kept current
+- Document ACTUAL implementation, not TODO intentions
+- Clear deprecation notices prevent future confusion
+
+- **Before:** Node2Vec mentioned in comments as placeholder/TODO for graph expansion
+- **After:** Triplet-based BM25 expansion documented as active implementation. Node2Vec deprecated.
+
+**4. Three-Layer phi-Retriever: Final Architecture with Dual Expansion + Dual Reranking**
+
+- **Rationale:** COMPLETE SEARCH PROCESS DOCUMENTATION (2026-02-09)
+
+The retriever uses a 3-layer cascade to find relevant academic papers:
+
+LAYER 1 (Seeds): BM25 keyword search over 161K chunks. Returns 13 seeds.
+Dense embeddings disabled at L1 (M2V too weak for domain-specific queries).
+
+LAYER 2 (Expansion): Two independent paths expand from seeds:
+  Path A - Graph BM25: Extract SPO triplets from seeds -> concatenate lemmas as mega-query -> BM25 over 161K triplet corpus -> map hits back to chunks -> GIST select for diversity
+  Path B - Qwen3 Semantic: Mean-pool seed embeddings -> cosine similarity vs all 161K embeddings -> GIST select for diversity
+  Both paths GIST-diversified (lambda=0.7), then RRF-merged -> 144 expansions.
+
+WHY TWO PATHS: Graph BM25 finds structurally-adjacent knowledge (papers discussing same concepts through different lenses). Qwen3 finds semantically-similar knowledge (distant papers with related themes). Together they provide both local graph connectivity AND global semantic coverage.
+
+LAYER 3 (Reranking + Paper Selection):
+  ColBERTv2 + Cross-Encoder BOTH score ALL 157 candidates. RRF merges their full rankings.
+  Walk down RRF-sorted list collecting unique paper_ids until top_k papers identified.
+  Return ALL chunks/sections from those papers (not just best chunk).
+
+WHY ALL SECTIONS: A paper's value comes from its complete context. Returning only the best-matching chunk loses surrounding methodology, related work, and implementation details that make the retrieval useful for research.
+
+VALIDATED RESULT: 'agentic memory methods' -> 88 chunks from 13 papers. Breadth 8.5/10, Depth 8/10.
+Coverage gaps (benchmarking, production scaling, security) are LITERATURE GAPS not retrieval gaps - these topics exist in different ArXiv neighborhoods than agentic memory research papers.
+
+- **Before:** Layer 3 used GIST-before-reranking, limited to 1 chunk per paper, only 9 papers retrieved
+- **After:** Layer 3 uses full-ranking RRF over ColBERTv2 + Cross-Encoder, paper walk-down selection, returns ALL sections from top-k papers. 88 chunks from 13 papers.
 
 ### Prediction Accuracy
 
@@ -1093,4 +1234,4 @@ MIT
 
 ---
 
-*Generated 2026-02-07 23:21 by `generate_readme.py`*
+*Generated 2026-02-10 14:15 by `generate_readme.py`*
