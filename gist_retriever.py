@@ -1359,7 +1359,7 @@ class GISTRetriever(ABC):
         # For paper-level cascade
         paper_pool_size = top_k  # Papers to consider for ColBERT
         colbert_papers = top_k  # ColBERT operates on sections from top_k papers
-        final_papers = get_fibonacci_lower(top_k, fib)  # Final output: fib_lower(top_k) papers
+        final_papers = top_k  # Walk-down produces exactly top_k papers (not φ_lower)
         
         print(f"GIST Pipeline: retrieve {retrieval_limit} chunks -> GIST {gist_limit} -> sections {section_limit} -> papers {paper_pool_size} -> ColBERT {colbert_papers} papers -> Final {final_papers} papers")
         
@@ -1456,30 +1456,9 @@ class GISTRetriever(ABC):
         else:
             print(f"  [8/9] ColBERT skipped")
         
-        # Step 8.5: Diversity Control (choose one approach)
-        if self.config.use_doc_doc_diversity and len(papers) > 1:
-            # NEW: Full n×n doc-doc matrices using ColBERT AND Cross-Encoder + RRF fusion
-            print(f"  [8.5/9] Computing doc-doc diversity matrices (ColBERT + Cross-Encoder + RRF)...")
-            papers = self._apply_doc_doc_diversity_to_papers(query, papers, final_papers)
-            # Cross-encoder is already applied within doc-doc diversity, skip step 8
-            cross_encoder_already_applied = True
-        elif self.config.use_hnsw_diversity and len(papers) > 0:
-            # LEGACY: MMR-based HNSW diversity
-            print(f"  [8.5/9] Applying HNSW diversity (MMR)...")
-            papers = self._apply_hnsw_diversity_to_papers(query, papers)
-            cross_encoder_already_applied = False
-        else:
-            print(f"  [8.5/9] Diversity control skipped")
-            cross_encoder_already_applied = False
-        
-        # Step 9: Cross-encoder rerank papers (skipped if doc-doc diversity was used)
-        if not cross_encoder_already_applied and self.config.use_cross_encoder and len(papers) > 0:
-            print(f"  [9/9] Cross-Encoder reranking papers...")
-            papers = self._cross_encoder_rerank_papers(query, papers, final_papers)
-        elif cross_encoder_already_applied:
-            print(f"  [9/9] Cross-Encoder skipped (already applied in doc-doc diversity)")
-        else:
-            print(f"  [9/9] Cross-Encoder skipped")
+        # Step 8.5: Walk-down section selection (replaces doc-doc diversity)
+        print(f"  [8.5/9] Walk-down: GIST+RRF on sections -> collect {top_k} papers...")
+        papers = self._walkdown_section_selection(query, papers, top_k)
         
         # Ensure we don't exceed requested top_k
         results = papers[:top_k]
@@ -1829,6 +1808,179 @@ class GISTRetriever(ABC):
         
         return diverse_papers
     
+    def _walkdown_section_selection(
+        self,
+        query: str,
+        papers: List[RetrievedPaper],
+        top_k: int
+    ) -> List[RetrievedPaper]:
+        """
+        Walk-down algorithm for Layer 3: two parallel GIST selections on sections,
+        RRF fuse, then walk-down to produce exactly top_k papers.
+        
+        Algorithm (matches Layer 1/2 pattern: parallel GIST + RRF):
+            1. ColBERT path: section-section matrix → GIST select
+            2. CE path: section-section matrix → GIST select
+            3. RRF fuse both GIST orderings
+            4. Walk down fused ranking collecting papers until top_k+1
+            5. Set floor = (top_k+1)th paper's section score
+            6. Keep sections >= floor from first top_k papers
+            7. Rebuild papers from surviving sections
+        
+        Args:
+            query: User query
+            papers: Papers with sections (ColBERT scores already on sections from step 8)
+            top_k: Number of papers to return
+        
+        Returns:
+            Exactly top_k papers with their qualifying sections
+        """
+        # Collect all sections across all papers
+        all_sections = []
+        section_to_paper = {}
+        for paper in papers:
+            for section in paper.sections:
+                all_sections.append(section)
+                section_to_paper[id(section)] = paper.paper_id
+        
+        if not all_sections:
+            return papers[:top_k]
+        
+        n = len(all_sections)
+        texts = [s.full_text for s in all_sections]
+        
+        # --- Score sections with Cross-Encoder (ColBERT already done in step 8) ---
+        if self.cross_encoder_scorer.available:
+            print(f"      [L3-1] Scoring {n} sections with Cross-Encoder...")
+            ce_scores = self.cross_encoder_scorer.score(query, texts)
+            for section, score in zip(all_sections, ce_scores):
+                section.cross_encoder_score = float(score)
+        else:
+            print(f"      [L3-1] Cross-Encoder unavailable, using ColBERT only")
+            for section in all_sections:
+                if section.cross_encoder_score is None:
+                    section.cross_encoder_score = 0.0
+        
+        # --- ColBERT GIST path ---
+        print(f"      [L3-2] ColBERT section-section matrix ({n}x{n})...")
+        colbert_coverage = np.zeros((n, n), dtype=np.float32)
+        if self.colbert_scorer.available:
+            for i in range(n):
+                scores = self.colbert_scorer.score(texts[i], texts)
+                colbert_coverage[i, :] = scores
+        
+        colbert_utility = np.array([s.colbert_score or 0.0 for s in all_sections], dtype=np.float32)
+        
+        print(f"      [L3-3] ColBERT GIST selection (λ={self.config.gist_lambda})...")
+        colbert_gist_indices = gist_select(
+            coverage_matrix=colbert_coverage,
+            utility_vector=colbert_utility,
+            k=n,  # GIST reorders all; walk-down does the reduction
+            lambda_param=self.config.gist_lambda
+        )
+        
+        # --- Cross-Encoder GIST path ---
+        print(f"      [L3-4] Cross-Encoder section-section matrix ({n}x{n})...")
+        ce_coverage = np.zeros((n, n), dtype=np.float32)
+        if self.cross_encoder_scorer.available:
+            for i in range(n):
+                scores = self.cross_encoder_scorer.score(texts[i], texts)
+                ce_coverage[i, :] = scores
+        
+        ce_utility = np.array([s.cross_encoder_score or 0.0 for s in all_sections], dtype=np.float32)
+        
+        print(f"      [L3-5] Cross-Encoder GIST selection (λ={self.config.gist_lambda})...")
+        ce_gist_indices = gist_select(
+            coverage_matrix=ce_coverage,
+            utility_vector=ce_utility,
+            k=n,
+            lambda_param=self.config.gist_lambda
+        )
+        
+        # --- RRF fuse both GIST orderings ---
+        print(f"      [L3-6] RRF fusion of ColBERT GIST + CE GIST rankings...")
+        # Convert GIST orderings to ranks
+        cb_gist_rank = [0] * n
+        for rank, idx in enumerate(colbert_gist_indices, 1):
+            cb_gist_rank[idx] = rank
+        
+        ce_gist_rank = [0] * n
+        for rank, idx in enumerate(ce_gist_indices, 1):
+            ce_gist_rank[idx] = rank
+        
+        rrf_k = self.config.rrf_k
+        section_rrf_scores = []
+        for i in range(n):
+            rrf = 1.0 / (rrf_k + cb_gist_rank[i]) + 1.0 / (rrf_k + ce_gist_rank[i])
+            section_rrf_scores.append(rrf)
+            all_sections[i].metadata['layer3_rrf'] = rrf
+            all_sections[i].metadata['cb_gist_rank'] = cb_gist_rank[i]
+            all_sections[i].metadata['ce_gist_rank'] = ce_gist_rank[i]
+        
+        # --- Walk down sorted sections ---
+        sorted_indices = sorted(range(n), key=lambda i: section_rrf_scores[i], reverse=True)
+        
+        seen_papers = []  # ordered list of distinct paper_ids
+        floor_score = None
+        
+        for idx in sorted_indices:
+            paper_id = section_to_paper[id(all_sections[idx])]
+            if paper_id not in seen_papers:
+                seen_papers.append(paper_id)
+                if len(seen_papers) == top_k + 1:
+                    floor_score = section_rrf_scores[idx]
+                    break
+        
+        # If we didn't even reach top_k+1 papers, keep everything
+        if floor_score is None:
+            selected_papers = set(seen_papers[:top_k])
+            floor_score = 0.0
+        else:
+            selected_papers = set(seen_papers[:top_k])
+        
+        print(f"      Walk-down: {n} sections, {len(seen_papers)} distinct papers, floor={floor_score:.6f}")
+        
+        # --- Collect surviving sections ---
+        paper_sections = defaultdict(list)
+        for i, section in enumerate(all_sections):
+            pid = section_to_paper[id(section)]
+            if pid in selected_papers and section_rrf_scores[i] >= floor_score:
+                paper_sections[pid].append(section)
+        
+        # --- Rebuild papers ---
+        result_papers = []
+        # Preserve order from walk-down (first seen = highest scoring)
+        for paper_id in seen_papers:
+            if paper_id not in selected_papers:
+                continue
+            sections = paper_sections.get(paper_id, [])
+            if not sections:
+                continue
+            sections.sort(key=lambda s: s.group_key[1])  # sort by section_idx
+            
+            full_text = "\n\n".join(s.full_text for s in sections)
+            
+            # Paper score = max section RRF
+            max_rrf = max(s.metadata.get('layer3_rrf', 0.0) for s in sections)
+            
+            paper = RetrievedPaper(
+                paper_id=paper_id,
+                sections=sections,
+                full_text=full_text,
+                rrf_score=max_rrf,
+                final_score=max_rrf,
+                metadata={'num_sections': len(sections), 'floor_score': floor_score}
+            )
+            result_papers.append(paper)
+        
+        top5 = result_papers[:5]
+        for i, p in enumerate(top5, 1):
+            print(f"        [{i}] {p.paper_id}: {len(p.sections)} sections, rrf={p.final_score:.4f}")
+        
+        print(f"      -> {len(result_papers)} papers with {sum(len(p.sections) for p in result_papers)} sections (floor={floor_score:.6f})")
+        
+        return result_papers
+    
     def _apply_doc_doc_diversity_to_papers(
         self,
         query: str,
@@ -2108,12 +2260,7 @@ def format_papers_markdown(papers: List[RetrievedPaper], include_sections: bool 
     """
     Format paper-level retrieval results as markdown.
     
-    Args:
-        papers: List of RetrievedPaper from search()
-        include_sections: If True, show individual sections
-    
-    Returns:
-        Markdown-formatted string
+    Title = paper_id. Sections sorted by section_idx. Full text.
     """
     lines = ["# Retrieval Results (Papers)\n"]
     
@@ -2133,25 +2280,40 @@ def format_papers_markdown(papers: List[RetrievedPaper], include_sections: bool 
         
         lines.append(f"**Scores:** {' | '.join(scores)}\n")
         
-        # Metadata
-        if paper.metadata:
-            meta_str = ", ".join([f"{k}={v}" for k, v in paper.metadata.items()])
-            lines.append(f"**Metadata:** {meta_str}\n")
-        
-        # Sections
+        # Sections with FULL TEXT, sorted by section_idx
         if include_sections and paper.sections:
-            lines.append(f"\n**Sections ({len(paper.sections)}):**\n")
-            for j, section in enumerate(paper.sections, 1):
+            def get_section_idx(section):
+                if ':s' in section.group_id:
+                    try:
+                        return int(section.group_id.split(':s')[-1])
+                    except ValueError:
+                        return 999999
+                return 999999
+            
+            sorted_sections = sorted(paper.sections, key=get_section_idx)
+            
+            section_indices = []
+            for section in sorted_sections:
+                if ':s' in section.group_id:
+                    section_indices.append(section.group_id.split(':s')[-1])
+            
+            lines.append(f"\n**Sections ({len(sorted_sections)}):** [{', '.join(section_indices)}]\n")
+            
+            for section in sorted_sections:
+                section_idx = "?"
+                if ':s' in section.group_id:
+                    section_idx = section.group_id.split(':s')[-1]
+                
                 section_scores = []
                 if section.rrf_score is not None:
                     section_scores.append(f"RRF: {section.rrf_score:.4f}")
                 if section.colbert_score is not None:
                     section_scores.append(f"ColBERT: {section.colbert_score:.4f}")
                 
-                lines.append(f"  {j}. {section.group_id} | {' | '.join(section_scores)}")
-                preview = section.full_text[:200] + "..." if len(section.full_text) > 200 else section.full_text
-                lines.append(f"     {preview}\n")
+                score_str = f" | {' | '.join(section_scores)}" if section_scores else ""
+                lines.append(f"\n### Section {section_idx}{score_str}\n")
+                lines.append(f"{section.full_text}\n")
         
-        lines.append("---\n")
+        lines.append("\n---\n")
     
     return "\n".join(lines)

@@ -678,39 +678,47 @@ class PGVectorRetriever(GISTRetriever):
         """
         Compute pairwise BM25 similarity matrix.
         
-        Uses sparsevec inner product in PostgreSQL.
+        Uses JSONB dot product in Python (fetch once, compute locally).
         """
+        import json as _json
         self.connect()
         n = len(doc_ids)
         sim_matrix = np.zeros((n, n))
         
-        # Fetch sparse vectors
+        # Fetch JSONB sparse vectors
         with self.conn.cursor() as cur:
             cur.execute(f"""
-                SELECT chunk_id, bm25_sparse::text
+                SELECT chunk_id, bm25_sparse
                 FROM {self.pg_config.table_name}
                 WHERE chunk_id = ANY(%s)
             """, (doc_ids,))
             
-            sparse_dict = {row[0]: row[1] for row in cur.fetchall()}
+            sparse_dict = {}
+            for row in cur.fetchall():
+                # bm25_sparse is already a dict from JSONB
+                d = row[1] if isinstance(row[1], dict) else _json.loads(row[1]) if row[1] else {}
+                sparse_dict[row[0]] = d
         
-        # Compute pairwise similarities
-        with self.conn.cursor() as cur:
-            for i, doc_id_i in enumerate(doc_ids):
-                vec_i = sparse_dict.get(doc_id_i)
-                if not vec_i:
+        # Compute pairwise dot products locally
+        for i, doc_id_i in enumerate(doc_ids):
+            vec_i = sparse_dict.get(doc_id_i, {})
+            if not vec_i:
+                continue
+            for j, doc_id_j in enumerate(doc_ids):
+                if j < i:
+                    sim_matrix[i, j] = sim_matrix[j, i]  # symmetric
                     continue
-                
-                # Query all similarities for this doc
-                cur.execute(f"""
-                    SELECT chunk_id, (bm25_sparse <#> %s::sparsevec) as neg_score
-                    FROM {self.pg_config.table_name}
-                    WHERE chunk_id = ANY(%s)
-                """, (vec_i, doc_ids))
-                
-                for row in cur.fetchall():
-                    j = doc_ids.index(row[0])
-                    sim_matrix[i, j] = -row[1]  # Negate to positive
+                vec_j = sparse_dict.get(doc_id_j, {})
+                if not vec_j:
+                    continue
+                # Dot product over shared keys
+                dot = sum(float(vec_i[k]) * float(vec_j[k]) for k in vec_i if k in vec_j)
+                sim_matrix[i, j] = dot
+        
+        # Fill lower triangle
+        for i in range(n):
+            for j in range(i):
+                sim_matrix[i, j] = sim_matrix[j, i]
         
         # Normalize to [0, 1]
         max_val = sim_matrix.max()
@@ -748,21 +756,39 @@ class PGVectorRetriever(GISTRetriever):
         return self.embedder.encode([query])[0]
     
     def _get_bm25_query_scores(self, doc_ids: List[str], query: str) -> np.ndarray:
-        """Get BM25 scores for docs against query."""
+        """Get BM25 scores for docs against query using JSONB dot product."""
+        import json as _json
+        from collections import Counter
         self.connect()
         
-        # Convert query to sparse
+        # Build query sparse dict
         token_ids = self.preprocessor.preprocess(query)
-        query_sparse = self.bm25_index.query_to_sparse(token_ids)
+        tf = Counter(token_ids)
+        query_dict = {}
+        for token_id, freq in tf.items():
+            if token_id not in self.bm25_index.idf:
+                continue
+            weight = self.bm25_index.idf[token_id] * freq
+            if weight > 0:
+                query_dict[str(int(token_id))] = float(weight)
+        
+        query_json = _json.dumps(query_dict)
         
         with self.conn.cursor() as cur:
             cur.execute(f"""
-                SELECT chunk_id, (bm25_sparse <#> %s::sparsevec) as neg_score
+                WITH query_sparse AS (
+                    SELECT key::int as idx, value::float as val
+                    FROM jsonb_each_text(%s::jsonb)
+                )
+                SELECT chunk_id,
+                       COALESCE(SUM((bm25_sparse->>q.idx::text)::float * q.val), 0) as score
                 FROM {self.pg_config.table_name}
-                WHERE chunk_id = ANY(%s)
-            """, (query_sparse, doc_ids))
+                CROSS JOIN query_sparse q
+                WHERE chunk_id = ANY(%s) AND bm25_sparse ? q.idx::text
+                GROUP BY chunk_id
+            """, (query_json, doc_ids))
             
-            score_dict = {row[0]: -row[1] for row in cur.fetchall()}
+            score_dict = {row[0]: row[1] for row in cur.fetchall()}
         
         # Preserve order
         scores = np.array([score_dict.get(doc_id, 0.0) for doc_id in doc_ids])
@@ -1049,8 +1075,8 @@ if __name__ == "__main__":
     parser.add_argument("--fullembed", action="store_true", help="Use full sentence embeddings instead of model2vec")
     
     # Database connection args
-    parser.add_argument("--host", type=str, default="192.168.3.18", help="Database host")
-    parser.add_argument("--port", type=int, default=6024, help="Database port")
+    parser.add_argument("--host", type=str, default="localhost", help="Database host")
+    parser.add_argument("--port", type=int, default=5432, help="Database port")
     parser.add_argument("--db", type=str, default="langchain", help="Database name")
     parser.add_argument("--user", type=str, default="langchain", help="Database user")
     parser.add_argument("--password", type=str, default="langchain", help="Database password")

@@ -1,15 +1,19 @@
 """
-Query the Three-Layer φ-Retriever Pipeline.
+Query the Three-Layer GIST Retriever Pipeline.
 
 Pipeline:
-  Layer 1: BM25 + Model2Vec dense + RRF fusion (PostgreSQL/pgvector)
-  Layer 2: Graph expansion via triplet BM25 + Qwen3 embedding re-scoring
-  Layer 3: Final reranking and deduplication
+  Layer 1: BM25 + Qwen3 128d embeddings (PCA) → GIST selection → RRF fusion → top_k² seeds
+  Layer 2: Graph BM25 + Qwen3 256d embeddings (full) → GIST selection → RRF fusion → expand + rerank
+  Layer 3: ColBERT + Cross-Encoder → GIST selection → RRF fusion → walk-down papers
 
 Prerequisites:
-  - Docker Desktop running with PostgreSQL (localhost:5432/langchain)
-  - Table: arxiv_chunks (with pgvector embeddings)
-  - Checkpoints: checkpoints/*.msgpack, triplet_checkpoints_full/stage4_lemmatized.msgpack
+  - Checkpoints in checkpoints/ folder:
+    * chunks.msgpack
+    * chunk_embeddings_qwen3.msgpack (Qwen3 256d, used for both Layer 1 128d and Layer 2 256d)
+    * triplet_bm25_index.msgpack
+    * chunk_to_triplets.msgpack (auto-generated if missing)
+    * triplet_to_chunks.msgpack (auto-generated if missing)
+  - triplet_checkpoints_full/stage4_lemmatized.msgpack
 
 Usage:
   python query_three_layer.py "agentic memory methods"
@@ -25,11 +29,11 @@ from pathlib import Path
 
 import msgpack
 import numpy as np
+from rank_bm25 import BM25Okapi
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from pgvector_retriever import PGVectorConfig, PGVectorRetriever, RetrievedDoc
-from three_layer_phi_retriever import ThreeLayerPhiRetriever, PhiLayerConfig
+from three_layer_gist_retriever import ThreeLayerGISTRetriever, GISTLayerConfig
 
 
 # =============================================================================
@@ -177,7 +181,7 @@ def save_results_to_markdown(results, chunks, query: str, output_path: str, runt
     
     # Write to file
     with open(output_path, 'w', encoding='utf-8') as f:
-        f.write(f"# Three-Layer φ-Retrieval Results\n\n")
+        f.write(f"# Three-Layer GIST Retrieval Results\n\n")
         f.write(f"**Query:** \"{query}\"\\\n")
         f.write(f"**Date:** {datetime.now().strftime('%Y-%m-%d')}\\\n")
         f.write(f"**Runtime:** {runtime:.2f}s\\\n")
@@ -220,60 +224,50 @@ def run_query(query: str, top_k: int = 13, verbose: bool = False, output: str = 
     chunks_path = "checkpoints/chunks.msgpack"
     qwen3_path = "checkpoints/chunk_embeddings_qwen3.msgpack"
     triplets_path = "triplet_checkpoints_full/stage4_lemmatized.msgpack"
-    bm25_index_path = "checkpoints/triplet_bm25_index.msgpack"
+    triplet_bm25_path = "checkpoints/triplet_bm25_index.msgpack"
 
     for p in [chunks_path, qwen3_path, triplets_path]:
         if not Path(p).exists():
             print(f"❌ Missing checkpoint: {p}")
-            print("   Run the ingestion pipeline first.")
+            print("   Run build_arxiv_graph_batched.py first.")
             return 1
 
     # --- Load data ---
     if verbose:
         print("Loading data...")
     chunks = load_msgpack(chunks_path)
-    qwen3_emb = load_qwen3_embeddings(qwen3_path)
     triplets = load_msgpack(triplets_path)
 
     if verbose:
-        print(f"  {len(chunks):,} chunks, {qwen3_emb.shape} embeddings, {len(triplets):,} triplets")
+        print(f"  {len(chunks):,} chunks, {len(triplets):,} triplets")
+
+    # --- Build BM25 index from lemmatized chunks ---
+    if verbose:
+        print("Building BM25 index...")
+    
+    # Simple tokenization (lowercase alphanumeric, min 2 chars)
+    import re
+    def tokenize(text):
+        """Simple lowercase alphanumeric tokenization"""
+        return re.findall(r'\b[a-z0-9]{2,}\b', text.lower())
+    
+    tokenized_corpus = [tokenize(chunk['text']) for chunk in chunks]
+    bm25_index = BM25Okapi(tokenized_corpus)
+    if verbose:
+        print(f"  BM25 index built with {len(tokenized_corpus):,} documents")
 
     # --- Mappings ---
     c2t_path, t2c_path = ensure_mappings(chunks, triplets)
 
-    # --- BM25 index ---
-    bm25_path = bm25_index_path if Path(bm25_index_path).exists() else None
-
-    # --- Layer 1: PGVectorRetriever with existing GIST pipeline ---
-    pg_config = PGVectorConfig(
-        db_host="localhost",
-        db_port=5432,
-        db_name="langchain",
-        db_user="langchain",
-        db_password="langchain",
-        table_name="arxiv_chunks",
-        embedding_dim=256,
-        embedding_model="./qwen3_static_embeddings",  # Model2Vec Qwen3 256d
-        bm25_cache_path=Path("bm25_vocab.msgpack"),
-        use_lemmatized=False
-    )
-
-    try:
-        layer1 = PGVectorRetriever(pg_config)
-    except Exception as e:
-        print(f"❌ Cannot connect to PostgreSQL: {e}")
-        print("   Ensure Docker Desktop is running with PostgreSQL on localhost:5432")
-        return 1
-
-    # --- Three-Layer Retriever ---
-    retriever = ThreeLayerPhiRetriever(
+    # --- Three-Layer GIST Retriever ---
+    retriever = ThreeLayerGISTRetriever(
         chunks_path=chunks_path,
         chunk_embeddings_qwen3_path=qwen3_path,
         triplets_path=triplets_path,
         chunk_to_triplets_path=c2t_path,
         triplet_to_chunks_path=t2c_path,
-        triplet_bm25_path=bm25_path,
-        layer1_retriever=layer1,
+        triplet_bm25_path=triplet_bm25_path,
+        bm25_lemmatized_index=bm25_index,
         top_k=top_k,
         colbert_model_name="colbert-ir/colbertv2.0",
         cross_encoder_model_name="cross-encoder/ms-marco-MiniLM-L-6-v2"
@@ -300,7 +294,7 @@ def run_query(query: str, top_k: int = 13, verbose: bool = False, output: str = 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Query the Three-Layer φ-Retriever pipeline",
+        description="Query the Three-Layer GIST Retriever pipeline",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""Examples:
   python query_three_layer.py "agentic memory methods"
