@@ -167,6 +167,14 @@ class GISTConfig:
     Doc-Doc Matrix Diversity:
         use_doc_doc_diversity: Enable dual-GIST with ColBERT and Cross-Encoder
                                doc-doc matrices, then RRF fuse both selections
+    
+    Layer 2 Query Expansion:
+        use_layer2_expansion: Enable 3-layer architecture (L1→L2→L3)
+        layer2_triplet_path: Path to enriched triplet corpus
+        layer2_chunk_to_triplets_path: Chunk→triplet mapping
+        layer2_triplet_to_chunks_path: Triplet→chunk mapping
+        layer2_qwen3_embeddings_path: Qwen3 256d chunk embeddings
+        layer2_expansion_count: Number of expansion chunks to add (default: top_k²)
     """
     rrf_k: int = 60
     gist_lambda: float = 0.7
@@ -194,6 +202,15 @@ class GISTConfig:
     fibonacci_sequence: List[int] = field(default_factory=lambda: [
         1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987, 1597
     ])
+    
+    # LAYER 2 QUERY EXPANSION (Graph BM25 + Qwen3 weighted centroid)
+    use_layer2_expansion: bool = True
+    layer2_triplet_path: str = "triplet_checkpoints_full/stage4_lemmatized.msgpack"
+    layer2_chunk_to_triplets_path: str = "checkpoints/chunk_to_triplets.msgpack"
+    layer2_triplet_to_chunks_path: str = "checkpoints/triplet_to_chunks.msgpack"
+    layer2_triplet_bm25_path: str = "checkpoints/triplet_bm25_index.msgpack"
+    layer2_qwen3_embeddings_path: str = "checkpoints/chunk_embeddings_qwen3.msgpack"
+    layer2_expansion_count: Optional[int] = None  # Default: top_k² (e.g., 144 for top_k=13)
 
 
 @dataclass
@@ -1160,6 +1177,15 @@ class GISTRetriever(ABC):
         # Lazy-load rerankers
         self._colbert_scorer = None
         self._cross_encoder_scorer = None
+        
+        # Layer 2 expansion data (loaded lazily)
+        self._layer2_data_loaded = False
+        self._triplet_tokens = None
+        self._triplet_to_chunks = None
+        self._chunk_to_triplets = None
+        self._qwen3_embeddings = None
+        self._graph_bm25 = None
+        self._doc_id_to_idx = None  # Mapping from doc_id (str) → chunk index (int)
     
     @property
     def colbert_scorer(self) -> ColBERTScorer:
@@ -1180,6 +1206,393 @@ class GISTRetriever(ABC):
                 batch_size=self.config.cross_encoder_batch_size
             )
         return self._cross_encoder_scorer
+    
+    # =========================================================================
+    # Layer 2 Data Loading (Lazy)
+    # =========================================================================
+    
+    def _load_layer2_data(self):
+        """
+        Lazy-load Layer 2 expansion data from msgpack files:
+          - Triplet BM25 index (tokenized triplets + BM25Okapi)
+          - Triplet↔chunk mappings
+          - Qwen3 256d chunk embeddings
+        """
+        if self._layer2_data_loaded:
+            return
+        
+        import msgpack
+        from pathlib import Path
+        
+        print("  Loading Layer 2 expansion data...")
+        
+        # --- Triplet BM25 index ---
+        bm25_path = Path(self.config.layer2_triplet_bm25_path)
+        if bm25_path.exists():
+            from rank_bm25 import BM25Okapi
+            with open(bm25_path, 'rb') as f:
+                bm25_data = msgpack.load(f, raw=False)
+            self._triplet_tokens = bm25_data.get('triplet_tokens', [])
+            self._graph_bm25 = BM25Okapi(self._triplet_tokens) if self._triplet_tokens else None
+            print(f"    ✓ Triplet BM25: {len(self._triplet_tokens)} triplets")
+        else:
+            print(f"    ⚠ Triplet BM25 not found: {bm25_path}")
+            self._triplet_tokens = []
+            self._graph_bm25 = None
+        
+        # --- Triplet → chunk mapping ---
+        t2c_path = Path(self.config.layer2_triplet_to_chunks_path)
+        if t2c_path.exists():
+            with open(t2c_path, 'rb') as f:
+                self._triplet_to_chunks = msgpack.load(f, raw=False)
+            print(f"    ✓ Triplet→chunk mapping: {len(self._triplet_to_chunks)} entries")
+        else:
+            print(f"    ⚠ Triplet→chunk mapping not found: {t2c_path}")
+            self._triplet_to_chunks = {}
+        
+        # --- Chunk → triplet mapping ---
+        c2t_path = Path(self.config.layer2_chunk_to_triplets_path)
+        if c2t_path.exists():
+            with open(c2t_path, 'rb') as f:
+                self._chunk_to_triplets = msgpack.load(f, raw=False)
+            print(f"    ✓ Chunk→triplet mapping: {len(self._chunk_to_triplets)} entries")
+        else:
+            print(f"    ⚠ Chunk→triplet mapping not found: {c2t_path}")
+            self._chunk_to_triplets = {}
+        
+        # --- Qwen3 256d embeddings ---
+        qwen3_path = Path(self.config.layer2_qwen3_embeddings_path)
+        if qwen3_path.exists():
+            with open(qwen3_path, 'rb') as f:
+                data = msgpack.load(f, raw=False)
+            self._qwen3_embeddings = np.array(data['embeddings'], dtype=np.float32)
+            print(f"    ✓ Qwen3 embeddings: {self._qwen3_embeddings.shape}")
+        else:
+            print(f"    ⚠ Qwen3 embeddings not found: {qwen3_path}")
+            self._qwen3_embeddings = None
+        
+        self._layer2_data_loaded = True
+        print("  Layer 2 data loaded.")
+    
+    # =========================================================================
+    # Layer 2 Query Expansion (ECDF-Weighted Dual Expansion)
+    # =========================================================================
+    
+    @staticmethod
+    def _midpoint_ecdf_weights(scores: np.ndarray) -> np.ndarray:
+        """
+        Midpoint empirical CDF weights (Hazen plotting position).
+        
+        For each score: weight = (count_≤ + count_<) / (2n)
+        Guarantees no weight is exactly 0.0 or 1.0.
+        
+        Args:
+            scores: 1D array of raw scores (e.g., BM25 scores from Layer 1)
+        
+        Returns:
+            1D array of weights in (0, 1), same length as scores
+        """
+        n = len(scores)
+        if n <= 1:
+            return np.ones(n, dtype=np.float64)
+        
+        weights = np.empty(n, dtype=np.float64)
+        for i, val in enumerate(scores):
+            count_leq = np.sum(scores <= val)
+            count_lt = np.sum(scores < val)
+            weights[i] = (count_leq + count_lt) / (2.0 * n)
+        
+        return weights
+    
+    def _expand_via_graph_bm25(
+        self, 
+        seed_chunks: List[str],  # doc_ids from Layer 1
+        seed_scores: List[float],
+        top_k: int
+    ) -> List[RetrievedDoc]:
+        """
+        Graph expansion via BM25 over triplet corpus with GIST diversity selection.
+        
+        Args:
+            seed_chunks: doc_ids from Layer 1 (seeds)
+            seed_scores: Raw scores from Layer 1 (parallel to seed_chunks)
+            top_k: Number of NEW chunks to retrieve
+        
+        Returns:
+            List of RetrievedDoc with diversity-selected expansion chunks
+        """
+        if not self._layer2_data_loaded:
+            self._load_layer2_data()
+        
+        if not self.config.use_layer2_expansion or not self._graph_bm25:
+            return []
+        
+        from collections import Counter
+        from sklearn.metrics.pairwise import cosine_similarity
+        
+        # Build doc_id → index mapping if needed
+        if self._doc_id_to_idx is None:
+            # Try to get all doc_ids from backend
+            all_docs = self._get_all_doc_ids() if hasattr(self, '_get_all_doc_ids') else []
+            if all_docs:
+                self._doc_id_to_idx = {doc_id: i for i, doc_id in enumerate(all_docs)}
+        
+        # 0. Compute ECDF weights for seeds
+        ecdf_w = self._midpoint_ecdf_weights(np.array(seed_scores, dtype=np.float64))
+        
+        # 1. Build TF vector per seed from pre-tokenized triplet index
+        seed_tfs = []
+        valid_weights = []
+        seed_indices = []
+        
+        for idx, doc_id in enumerate(seed_chunks):
+            if self._doc_id_to_idx and doc_id in self._doc_id_to_idx:
+                cid = self._doc_id_to_idx[doc_id]
+                seed_indices.append(cid)
+            else:
+                # Fallback: Try to extract chunk index from doc_id format
+                try:
+                    parts = doc_id.split('_')
+                    if len(parts) >= 4:
+                        # Format: arxiv_id_sX_cY
+                        chunk_idx = int(parts[3][1:])  # Extract Y from cY
+                        seed_indices.append(chunk_idx)
+                except:
+                    continue
+            
+            if seed_indices and seed_indices[-1] < len(self._triplet_tokens):
+                tf = Counter(self._triplet_tokens[seed_indices[-1]])
+                if tf:
+                    seed_tfs.append(tf)
+                    valid_weights.append(ecdf_w[idx])
+        
+        if not seed_tfs:
+            return []
+        
+        # 2. ECDF-weighted mean TF profile
+        vocab = sorted(set().union(*seed_tfs))
+        vocab_idx = {term: i for i, term in enumerate(vocab)}
+        
+        tf_matrix = np.zeros((len(seed_tfs), len(vocab)), dtype=np.float64)
+        for i, tf in enumerate(seed_tfs):
+            for term, count in tf.items():
+                tf_matrix[i, vocab_idx[term]] = count
+        
+        w = np.array(valid_weights, dtype=np.float64)
+        weighted_tf = np.average(tf_matrix, axis=0, weights=w)
+        
+        # 3. Convert weighted TF profile to query tokens
+        query_tokens = []
+        for j, term in enumerate(vocab):
+            count = int(round(weighted_tf[j]))
+            if count >= 1:
+                query_tokens.extend([term] * count)
+        
+        # 4. BM25 search over triplet corpus
+        scores = self._graph_bm25.get_scores(query_tokens)
+        top_indices = np.argsort(scores)[::-1][:top_k*2]  # Oversample 2×
+        
+        # 5. Map triplets → chunks (aggregate max score)
+        chunk_scores = {}
+        for tidx in top_indices:
+            score = scores[tidx]
+            
+            # Get chunks containing this triplet
+            for doc_id_dup in self._triplet_to_chunks.get(str(tidx), []):
+                # Clean duplicated format: 1301_3781_s0_c0_s0_c0 → 1301_3781_s0_c0
+                parts = doc_id_dup.split('_')
+                if len(parts) >= 6:
+                    doc_id = '_'.join(parts[:4])
+                else:
+                    doc_id = doc_id_dup
+                
+                chunk_scores[doc_id] = max(chunk_scores.get(doc_id, 0), score)
+        
+        # 6. Exclude seed chunks
+        seed_set = set(seed_chunks)
+        chunk_scores = {doc_id: s for doc_id, s in chunk_scores.items() if doc_id not in seed_set}
+        
+        if not chunk_scores:
+            return []
+        
+        # 7. GIST select (Qwen3 coverage if available, else BM25 coverage)
+        chunk_ids = list(chunk_scores.keys())
+        raw_scores = np.array([chunk_scores[cid] for cid in chunk_ids])
+        
+        # Build coverage matrix
+        if self._qwen3_embeddings is not None and self._doc_id_to_idx:
+            # Qwen3 coverage
+            indices = [self._doc_id_to_idx.get(cid, -1) for cid in chunk_ids]
+            valid_indices = [i for i in indices if i >= 0 and i < len(self._qwen3_embeddings)]
+            if valid_indices:
+                candidate_embeddings = self._qwen3_embeddings[valid_indices]
+                coverage_matrix = cosine_similarity(candidate_embeddings)
+            else:
+                coverage_matrix = np.eye(len(chunk_ids))
+        else:
+            # Fallback: identity matrix (no coverage filtering)
+            coverage_matrix = np.eye(len(chunk_ids))
+        
+        # GIST selection
+        n_select = min(top_k, len(chunk_ids))
+        selected_indices = gist_select(coverage_matrix, raw_scores, k=n_select, lambda_param=self.config.gist_lambda)
+        
+        # 8. Create RetrievedDoc objects
+        results = []
+        for i in selected_indices:
+            doc_id = chunk_ids[i]
+            content = ""  # Content will be fetched later if needed
+            results.append(RetrievedDoc(
+                doc_id=doc_id,
+                content=content,
+                metadata={'source': 'layer2_graph_bm25'},
+                bm25_score=raw_scores[i],
+                gist_rank=len(results) + 1
+            ))
+        
+        return results
+    
+    def _expand_via_qwen3(
+        self, 
+        seed_chunks: List[str],  # doc_ids from Layer 1
+        seed_scores: List[float],
+        top_k: int
+    ) -> List[RetrievedDoc]:
+        """
+        Qwen3 expansion via co-occurrence similarity with GIST diversity selection.
+        
+        Args:
+            seed_chunks: doc_ids from Layer 1 (seeds)
+            seed_scores: Raw scores from Layer 1 (parallel to seed_chunks)
+            top_k: Number of NEW chunks to retrieve
+        
+        Returns:
+            List of RetrievedDoc with diversity-selected expansion chunks
+        """
+        if not self._layer2_data_loaded:
+            self._load_layer2_data()
+        
+        if not self.config.use_layer2_expansion or self._qwen3_embeddings is None:
+            return []
+        
+        from sklearn.metrics.pairwise import cosine_similarity
+        
+        # Build doc_id → index mapping if needed
+        if self._doc_id_to_idx is None:
+            all_docs = self._get_all_doc_ids() if hasattr(self, '_get_all_doc_ids') else []
+            if all_docs:
+                self._doc_id_to_idx = {doc_id: i for i, doc_id in enumerate(all_docs)}
+        
+        # 1. Get seed embeddings
+        seed_indices = []
+        for doc_id in seed_chunks:
+            if self._doc_id_to_idx and doc_id in self._doc_id_to_idx:
+                idx = self._doc_id_to_idx[doc_id]
+                if idx < len(self._qwen3_embeddings):
+                    seed_indices.append(idx)
+        
+        if not seed_indices:
+            return []
+        
+        seed_embeddings = self._qwen3_embeddings[seed_indices]
+        
+        # 2. ECDF-weighted mean pooling
+        ecdf_w = self._midpoint_ecdf_weights(np.array(seed_scores, dtype=np.float64))[:len(seed_indices)]
+        query_embedding = np.average(seed_embeddings, axis=0, weights=ecdf_w).reshape(1, -1)
+        
+        # 3. Cosine similarity with ALL chunks
+        similarities = cosine_similarity(query_embedding, self._qwen3_embeddings)[0]
+        
+        # 4. Exclude seed chunks
+        seed_set = set(seed_chunks)
+        candidates = []
+        
+        if self._doc_id_to_idx:
+            # Reverse mapping: index → doc_id
+            idx_to_doc = {idx: doc_id for doc_id, idx in self._doc_id_to_idx.items()}
+            for idx, sim in enumerate(similarities):
+                if idx in idx_to_doc and idx_to_doc[idx] not in seed_set:
+                    candidates.append((idx_to_doc[idx], sim))
+        
+        if not candidates:
+            return []
+        
+        # 5. Top candidates (oversample 2×)
+        candidates.sort(key=lambda x: x[1], reverse=True)
+        top_candidates = candidates[:top_k*2]
+        
+        # 6. GIST select
+        chunk_ids = [doc_id for doc_id, _ in top_candidates]
+        raw_scores = np.array([sim for _, sim in top_candidates])
+        
+        # Coverage: Qwen3 pairwise similarity
+        indices = [self._doc_id_to_idx[cid] for cid in chunk_ids]
+        candidate_embeddings = self._qwen3_embeddings[indices]
+        coverage_matrix = cosine_similarity(candidate_embeddings)
+        
+        # GIST selection
+        n_select = min(top_k, len(chunk_ids))
+        selected_indices = gist_select(coverage_matrix, raw_scores, k=n_select, lambda_param=self.config.gist_lambda)
+        
+        # 7. Create RetrievedDoc objects
+        results = []
+        for i in selected_indices:
+            doc_id = chunk_ids[i]
+            results.append(RetrievedDoc(
+                doc_id=doc_id,
+                content="",  # Content fetched later
+                metadata={'source': 'layer2_qwen3'},
+                dense_score=raw_scores[i],
+                gist_rank=len(results) + 1
+            ))
+        
+        return results
+    
+    def _rrf_merge_layer2(
+        self,
+        graph_results: List[RetrievedDoc],
+        qwen3_results: List[RetrievedDoc],
+        top_k: int,
+        k: int = 60
+    ) -> List[RetrievedDoc]:
+        """
+        RRF merge over Layer 2 expansion paths.
+        
+        Args:
+            graph_results: GIST-selected from graph BM25
+            qwen3_results: GIST-selected from Qwen3
+            top_k: Number of results to return
+            k: RRF constant (default 60)
+        
+        Returns:
+            Merged results sorted by RRF score
+        """
+        rrf_scores = {}
+        doc_map = {}  # doc_id → RetrievedDoc
+        
+        # Graph contributions
+        for rank, doc in enumerate(graph_results, start=1):
+            rrf_scores[doc.doc_id] = rrf_scores.get(doc.doc_id, 0.0) + 1.0 / (k + rank)
+            if doc.doc_id not in doc_map:
+                doc_map[doc.doc_id] = doc
+        
+        # Qwen3 contributions
+        for rank, doc in enumerate(qwen3_results, start=1):
+            rrf_scores[doc.doc_id] = rrf_scores.get(doc.doc_id, 0.0) + 1.0 / (k + rank)
+            if doc.doc_id not in doc_map:
+                doc_map[doc.doc_id] = doc
+        
+        # Sort by RRF score
+        sorted_ids = sorted(rrf_scores.keys(), key=lambda x: rrf_scores[x], reverse=True)
+        
+        # Build merged result list
+        merged = []
+        for doc_id in sorted_ids[:top_k]:
+            doc = doc_map[doc_id]
+            doc.rrf_score = rrf_scores[doc_id]
+            merged.append(doc)
+        
+        return merged
     
     # =========================================================================
     # Abstract Methods (Backend-Specific)
@@ -1354,7 +1767,8 @@ class GISTRetriever(ABC):
         # Fibonacci cascade sizing
         retrieval_limit = top_k * top_k  # Broad recall (chunks)
         gist_limit = get_fibonacci_lower(retrieval_limit, fib)  # Post-GIST (chunks)
-        section_limit = get_fibonacci_lower(gist_limit, fib)  # Sections to create
+        # Layer 2 finishes at gist_limit (prev_fib of top_k²) — sections use same count
+        section_limit = gist_limit  # Sections grouped from gist_limit chunks (not another phi step down)
         
         # For paper-level cascade
         paper_pool_size = top_k  # Papers to consider for ColBERT
@@ -1438,6 +1852,40 @@ class GISTRetriever(ABC):
         print(f"  [5/8] RRF fusion...")
         fused_chunks = self._rrf_fusion(bm25_selected, dense_selected)
         print(f"        Fused: {len(fused_chunks)} unique chunks")
+        
+        # Step 5.5: Layer 2 Query Expansion via Graph BM25 + Qwen3
+        if self.config.use_layer2_expansion:
+            print(f"  [5.5/8] Layer 2 query expansion...")
+            
+            # Extract seeds from Layer 1 RRF results
+            seed_ids = [doc.doc_id for doc in fused_chunks]
+            seed_scores = [doc.rrf_score if doc.rrf_score is not None else 0.0 for doc in fused_chunks]
+            
+            # Compute expansion count (default: top_k²)
+            expansion_count = self.config.layer2_expansion_count
+            if expansion_count is None:
+                expansion_count = top_k ** 2
+            
+            # Dual expansion paths using ECDF-weighted strategies
+            print(f"        Path A: Graph BM25 expansion (ECDF-weighted TF, target: {expansion_count})...")
+            graph_expansion = self._expand_via_graph_bm25(seed_ids, seed_scores, expansion_count)
+            
+            print(f"        Path B: Dense embedding expansion (ECDF-weighted centroid, target: {expansion_count})...")
+            qwen3_expansion = self._expand_via_qwen3(seed_ids, seed_scores, expansion_count)
+            
+            # RRF merge both paths
+            print(f"        Merging expansion paths via RRF...")
+            layer2_chunks = self._rrf_merge_layer2(graph_expansion, qwen3_expansion, expansion_count)
+            
+            # Exclude Layer 1 seeds (Layer 2 adds to L1, no duplicates)
+            seed_set = set(seed_ids)
+            layer2_filtered = [doc for doc in layer2_chunks if doc.doc_id not in seed_set]
+            
+            # Concatenate Layer 1 + Layer 2
+            fused_chunks = fused_chunks + layer2_filtered
+            print(f"        Layer 2 expansion: +{len(layer2_filtered)} chunks (total: {len(fused_chunks)})")
+        else:
+            print(f"  [5.5/8] Layer 2 expansion disabled")
         
         # Step 6: Group chunks into sections
         print(f"  [6/8] Grouping chunks into sections...")

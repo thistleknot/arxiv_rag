@@ -1,6 +1,6 @@
 # Hybrid Retrieval & Knowledge Extraction System
 
-> Auto-generated from feature catalogs on 2026-02-10 14:15.
+> Auto-generated from feature catalogs on 2026-02-10 18:06.
 > Source databases: `retriever_feature_catalog.sqlite3`, `bio_tagger_features.sqlite3`, `graph_transformer_feature_catalog.sqlite3`
 > Generator: `generate_readme.py`
 
@@ -15,7 +15,7 @@
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│                    HYBRID RETRIEVER PIPELINE                     │
+│              THREE-LAYER φ-SCALED RETRIEVER PIPELINE             │
 │                                                                  │
 │  Document Sources → Equidistant Chunking → Checkpointing        │
 │       ↓                                                          │
@@ -23,15 +23,22 @@
 │       ↓                                                          │
 │  PostgreSQL + pgvector (IVFFlat + sparsevec)                     │
 │       ↓                                                          │
-│  GIST 8-Stage Pipeline                                           │
-│    1. Parallel Retrieval (BM25 + Dense) at CHUNK level           │
-│    2. GIST Selection on BM25 pool (diversity)                    │
-│    3. GIST Selection on Dense pool (diversity)                   │
-│    4. RRF Fusion of chunks                                       │
-│    5. GROUP chunks into SECTIONS + RECONSTRUCT full text         │
-│    6. ColBERT Late Interaction reranking                         │
-│    7. Cross-Encoder reranking (BAAI/bge-reranker-v2-m3)         │
-│    8. Final section-level output                                 │
+│  Layer 1: BM25 Seeds                                             │
+│    Retrieve prev_fib(top_k²) seeds with scores                   │
+│    (e.g. top_k=13 → top_k²=169 → prev_fib=144 seeds)            │
+│       ↓  seeds + ECDF weights as INPUT to Layer 2                │
+│  Layer 2: ECDF-Weighted Dual Expansion                           │
+│    Path A: Graph BM25 — ECDF-weighted TF → triplet BM25         │
+│            oversample 2× → GIST select prev_fib(top_k²)         │
+│    Path B: Qwen3 Dense — ECDF-weighted centroid → cosine         │
+│            oversample 2× → GIST select prev_fib(top_k²)         │
+│    RRF merge → prev_fib(top_k²) NEW chunks (seeds excluded)     │
+│       ↓                                                          │
+│  Section Expansion: chunks → all sections from their papers      │
+│       ↓                                                          │
+│  Layer 3: Dual Reranking                                         │
+│    ColBERTv2 Late Interaction + Cross-Encoder (bge-reranker)     │
+│    RRF merge → top-k papers → all sections from those papers     │
 │       ↓                                                          │
 │  [PLANNED] Graph Transformer Reranking via AOKG                  │
 └──────────────────────────────────────────────────────────────────┘
@@ -101,11 +108,11 @@ python tune_bio_tagger.py --data training.msgpack --unfreeze-layers 12 --n-trial
 
 ## 🔍 Hybrid Retriever — Feature Catalog
 
-*Source: `retriever_feature_catalog.sqlite3` — 17 features, 4 architectural decisions, 8 claims*
+*Source: `retriever_feature_catalog.sqlite3` — 18 features, 5 architectural decisions, 8 claims*
 
 | Status | Count |
 |--------|-------|
-| ✅ DONE | 11 |
+| ✅ DONE | 12 |
 | 🔄 IN PROGRESS | 3 |
 | ❌ FAILED | 3 |
 
@@ -143,7 +150,7 @@ Three-Layer phi-Retriever: Production implementation for academic paper retrieva
 
 ### Layer 1: Hybrid Seed Retrieval (BM25-only)
 - BM25 keyword search over 161,389 chunks in PostgreSQL/pgvector
-- Returns 13 seed chunks as starting points
+- Returns prev_fib(top_k^2) seed chunks as starting points (e.g. top_k=13 -> 169 -> 144 seeds)
 - Dense embeddings (M2V) disabled at L1 (too weak for domain queries)
 
 ### Layer 2: Dual Expansion (Graph BM25 + Qwen3 Semantic)
@@ -158,14 +165,14 @@ Two independent expansion paths, each GIST-diversified, then RRF-merged:
 6. Result: diverse, graph-adjacent chunks NOT in original seeds
 
 **Path B: Qwen3 Semantic Expansion**
-1. Mean-pool Qwen3 256d embeddings of all 13 seed chunks -> query vector
+1. Mean-pool Qwen3 256d embeddings of all seed chunks -> query vector
 2. Cosine similarity against ALL 161K chunk embeddings
 3. Exclude seed chunks
 4. GIST select: Qwen3 coverage matrix + cosine utility vector (lambda=0.7)
 5. Result: semantically similar chunks NOT in original seeds
 
-**Merge: RRF fusion of Path A + Path B -> 144 expansion chunks**
-Total after Layer 2: 13 seeds + 144 expansions = 157 candidate chunks
+**Merge: RRF fusion of Path A + Path B -> prev_fib(top_k^2) expansion chunks**
+Total after Layer 2: prev_fib(top_k^2) expansion chunks (seeds excluded from output)
 
 ### Layer 3: Dual Reranking + Paper Selection
 1. ColBERTv2 scores ALL 157 candidates against query -> full ranking
@@ -173,7 +180,7 @@ Total after Layer 2: 13 seeds + 144 expansions = 157 candidate chunks
 3. RRF merges both full rankings (k=60)
 4. Walk down RRF-sorted list, collect unique paper_ids until top_k papers found
 5. Return ALL sections/chunks from those top_k papers (preserving RRF order)
-6. Result: 88 chunks from 13 papers (all sections, not just best chunk)
+6. Result: all sections from top_k papers (not just best chunk per paper)
 
 ## Key Design Decisions
 - GIST diversity in L2 prevents redundant expansions
@@ -216,8 +223,8 @@ Command: python query_three_layer.py "your query" [--top-k N] [-v] [--output res
 DB: localhost:5432/langchain/arxiv_chunks
 Checkpoints: checkpoints/*.msgpack + triplet_checkpoints_full/stage4_lemmatized.msgpack
 
-Layer 1: BM25 keyword search -> 13 seeds (no dense at L1)
-Layer 2: Graph BM25 expansion + Qwen3 semantic expansion -> GIST diversified -> RRF merged -> 144 new chunks (157 total)
+Layer 1: BM25 keyword search -> prev_fib(top_k^2) seeds (e.g. 144 for top_k=13; no dense at L1)
+Layer 2: Graph BM25 expansion + Qwen3 semantic expansion -> GIST diversified -> RRF merged -> prev_fib(top_k^2) new chunks (seeds excluded from L2 output)
 Layer 3: ColBERTv2 + Cross-Encoder dual reranking -> RRF merge -> walk-down paper selection -> ALL sections from top-k papers
 
 Models: Qwen3 256d (L2), colbertv2.0 (L3), ms-marco-MiniLM-L-6-v2 (L3)
@@ -459,6 +466,12 @@ Layer 3: Dual Reranking (ColBERTv2 + Cross-Encoder)  RRF  top-k papers (13)  all
 5. Seeds excluded during expansion, not concatenated to output
 
 
+#### 18. Layer 2 Query Expansion (ECDF-Weighted Dual Path) ✅ DONE
+
+Dual expansion via BM25 triplet search + Qwen3 embeddings (256d), ECDF-weighted from Layer 1 scores, PostgreSQL pgvector backend. Path A: Weighted mean TF profile for BM25. Path B: Weighted centroid for dense search.
+
+*Notes: Restored using pgvector tables: layer2_triplet_bm25 (JSONB sparse) and layer2_embeddings_256d (HNSW). Concrete implementations in pgvector_retriever.py, abstract methods in gist_retriever.py. Session 33.*
+
 ### Architectural Decisions
 
 **1. Replace OpenIE with Stanza Dependency Parsing**
@@ -495,7 +508,7 @@ NOT Node2Vec embeddings. Earlier comments mentioning "Node2Vec" were placeholder
 - BM25 index built over triplet corpus
 
 **Implementation:** three_layer_phi_retriever.py (_expand_via_graph_bm25)
-- **Before:** 8-stage GIST pipeline: Retrieve→GIST→RRF→Group→ColBERT→CrossEncoder
+- **Before:** 3-layer φ-scaled pipeline: L1(BM25+Dense) → L2(ECDF expansion) → L3(ColBERT+CrossEncoder)
 - **After:** Proposed 10-stage: ...→CrossEncoder→BIO Extract→AOKG Rerank
 
 **3. Deprecation: Node2Vec/Graph2Vec replaced by Triplet-Based Expansion**
@@ -571,6 +584,12 @@ Coverage gaps (benchmarking, production scaling, security) are LITERATURE GAPS n
 
 - **Before:** Layer 3 used GIST-before-reranking, limited to 1 chunk per paper, only 9 papers retrieved
 - **After:** Layer 3 uses full-ranking RRF over ColBERTv2 + Cross-Encoder, paper walk-down selection, returns ALL sections from top-k papers. 88 chunks from 13 papers.
+
+**5. PostgreSQL pgvector backend for Layer 2 vector search**
+
+- **Rationale:** Hybrid storage architecture: mappings (chunk_to_triplets, triplet_to_chunks) remain in msgpack files for fast loading, while vectors stored in pgvector tables for scalable similarity search. Enables ECDF-weighted dual expansion without loading full corpus into memory.
+- **Before:** File-based msgpack with in-memory BM25Okapi index and in-memory cosine similarity over qwen3_embeddings
+- **After:** Mappings in msgpack files (fast loading), vectors in layer2_triplet_bm25 (JSONB sparse) and layer2_embeddings_256d (256d HNSW) tables. Query methods: query_layer2_triplet_bm25() and query_layer2_embeddings_256d().
 
 ### Prediction Accuracy
 
@@ -1069,7 +1088,7 @@ Alternative approaches considered:
 ### Hybrid Retriever
 | File | Purpose |
 |------|---------|
-| `gist_retriever.py` | Core GIST pipeline with 8-stage retrieval |
+| `gist_retriever.py` | Core GIST pipeline with 3-layer φ-scaled retrieval |
 | `base_gist_retriever.py` | Abstract base class for retrievers |
 | `arxiv_retriever.py` | ArXiv-specific retriever implementation |
 | `quotes_retriever.py` | Quotes-specific retriever implementation |
@@ -1234,4 +1253,4 @@ MIT
 
 ---
 
-*Generated 2026-02-10 14:15 by `generate_readme.py`*
+*Generated 2026-02-10 18:06 by `generate_readme.py`*
