@@ -110,9 +110,9 @@ import stanza  # Add at top for better performance
 
 # Database configuration (matches all working scripts)
 DB_CONFIG = {
-    'dbname': 'postgres',
-    'user': 'postgres',
-    'password': 'postgres',
+    'dbname': 'langchain',
+    'user': 'langchain',
+    'password': 'langchain',
     'host': 'localhost',
     'port': 5432
 }
@@ -142,6 +142,14 @@ def extract_spo_from_sentence(sent) -> list:
     CRITICAL: Keeps multi-word phrases intact (e.g., "deep learning models" as one subject).
     This ensures BIO labels will have proper B-I continuous spans.
     
+    Handles two construction types:
+        Regular verbs:     subject→nsubj of VERB ROOT, object→obj/obl of VERB ROOT
+        Copula (UD style): NOUN/ADJ is ROOT, 'is/are' is cop child, nsubj→subject
+                           predicate = the nominal head itself (not the copula verb)
+                           e.g. "The bible is the word of God"
+                                ROOT=word, cop=is, nsubj=bible, nmod=God
+                                → (bible, word, god)
+    
     Args:
         sent: Stanza Sentence object with dependency parse
     
@@ -149,44 +157,70 @@ def extract_spo_from_sentence(sent) -> list:
         List of triplets as dicts: {'subject': str, 'predicate': str, 'object': str}
     """
     triplets = []
-    
-    # Find main verb(s) - look for VERB/AUX with head=0 or key dependency roles
+
+    # Find main verb(s) — VERB/AUX ROOT/conj, but skip bare copulas (deprel=cop)
+    # Copulas are handled separately below as copula constructions
     verbs = []
     for word in sent.words:
         if word.upos in ['VERB', 'AUX'] and (word.head == 0 or word.deprel in ['ROOT', 'conj']):
-            verbs.append(word)
-    
-    if not verbs:
+            if word.deprel != 'cop':
+                verbs.append(word)
+
+    # Copula constructions (UD style): NOUN/PROPN/ADJ is ROOT, 'is/are/was' is cop child
+    # e.g. "The bible is the word of God"
+    #   → ROOT=word(NOUN), cop=is, nsubj=bible, nmod=God
+    #   → predicate=word, subject=bible, object=god
+    copular_predicates = []
+    for word in sent.words:
+        if word.upos in ['NOUN', 'PROPN', 'ADJ'] and (word.head == 0 or word.deprel in ['ROOT', 'conj']):
+            has_cop = any(w.head == word.id and w.deprel == 'cop' for w in sent.words)
+            if has_cop:
+                copular_predicates.append(word)
+
+    if not verbs and not copular_predicates:
         return []
-    
-    # For each verb, extract subject and object
+
+    # Process regular verbs
     for verb in verbs:
         subject_head = None
         object_head = None
-        
-        # Find subject and object heads
         for word in sent.words:
             if word.head == verb.id:
                 if word.deprel in ['nsubj', 'nsubj:pass', 'csubj']:
                     subject_head = word
                 elif word.deprel in ['obj', 'dobj', 'iobj', 'obl']:
                     object_head = word
-        
-        # Build triplet if we have at least verb
         if verb:
-            # Get full subtrees for each component (multi-word phrases preserved!)
             subject_text = get_subtree_text(subject_head, sent) if subject_head else '?'
-            predicate_text = verb.text  # Just verb for now
+            predicate_text = verb.text
             object_text = get_subtree_text(object_head, sent) if object_head else '?'
-            
-            # Only add if we have predicate and at least one argument
             if predicate_text and (subject_text != '?' or object_text != '?'):
                 triplets.append({
                     'subject': subject_text if subject_text != '?' else '',
                     'predicate': predicate_text,
                     'object': object_text if object_text != '?' else ''
                 })
-    
+
+    # Process copula constructions — nominal/adjectival predicate as PRED
+    for pred_nominal in copular_predicates:
+        subject_head = None
+        object_head = None
+        for word in sent.words:
+            if word.head == pred_nominal.id:
+                if word.deprel in ['nsubj', 'nsubj:pass', 'csubj']:
+                    subject_head = word
+                elif word.deprel in ['nmod', 'obl', 'obj']:
+                    object_head = word
+        subject_text = get_subtree_text(subject_head, sent) if subject_head else '?'
+        predicate_text = pred_nominal.text  # just the head word — not full subtree
+        object_text = get_subtree_text(object_head, sent) if object_head else '?'
+        if subject_text != '?' or object_text != '?':
+            triplets.append({
+                'subject': subject_text if subject_text != '?' else '',
+                'predicate': predicate_text,
+                'object': object_text if object_text != '?' else ''
+            })
+
     return triplets
 
 
@@ -337,7 +371,7 @@ def main():
     print("="*70)
     print("BIO-TAGGED TRAINING DATA EXTRACTION")
     print("="*70)
-    print(f"\nKnowledge Distillation: OpenIE (teacher) → BERT (student)")
+    print(f"\nKnowledge Distillation: OpenIE (teacher) -> BERT (student)")
     print(f"Target chunks: {args.chunks:,}")
     print(f"Output: {args.output}")
     
@@ -353,8 +387,8 @@ def main():
     # Get random chunk IDs
     print("\n[3/5] Fetching chunk IDs...")
     cur.execute("""
-        SELECT id 
-        FROM arxiv_papers_lemma_fullembed 
+        SELECT chunk_id 
+        FROM arxiv_chunks 
         ORDER BY RANDOM() 
         LIMIT %s
     """, (args.chunks,))
@@ -364,7 +398,7 @@ def main():
     # Extract triplets with Stanza + convert to BIO tags
     print("\n[4/5] Extracting triplets with Stanza (multi-word phrase preservation)...")
     print("  Note: Using Stanza dependency parsing instead of OpenIE")
-    print("  This preserves multi-word phrases → proper B-I continuous spans")
+    print("  This preserves multi-word phrases -> proper B-I continuous spans")
     
     # Initialize Stanza once
     try:
@@ -388,7 +422,7 @@ def main():
     
     for chunk_id in tqdm(chunk_ids, desc="  Processing chunks"):
         # Get chunk content
-        cur.execute("SELECT content FROM arxiv_papers_lemma_fullembed WHERE id = %s", (chunk_id,))
+        cur.execute("SELECT content FROM arxiv_chunks WHERE chunk_id = %s", (chunk_id,))
         row = cur.fetchone()
         if not row:
             continue
@@ -481,18 +515,18 @@ def main():
     print(f"Total tokens: {stats['total_tokens']:,}")
     print(f"Total triplets: {stats['total_triplets']:,}")
     
-    print("\n📊 Architecture Summary:")
+    print("\nArchitecture Summary:")
     print("  Model: BERT + 6 independent binary classifiers")
     print("  Labels: Multi-hot BIO (handles overlapping triplets)")
     print("  Loss: Binary cross-entropy per label")
     print("  Output: Token-level probabilities [0-1] for each BIO tag")
     
-    print("\n🎯 Next Steps:")
+    print("\nNext Steps:")
     print("  1. Train model: python train_bio_tagger.py")
-    print("  2. Inference: BERT → BIO tags → Simple rules → Triplets")
+    print("  2. Inference: BERT -> BIO tags -> Simple rules -> Triplets")
     print("  3. Apply synset reduction at inference time")
     
-    print("\n⚡ Expected Performance:")
+    print("\nExpected Performance:")
     print("  Training: ~2-3 hours on GPU")
     print("  Inference: ~10ms per chunk (600x faster than OpenIE)")
     print("  Quality: 80-90% of OpenIE accuracy (typical distillation)")

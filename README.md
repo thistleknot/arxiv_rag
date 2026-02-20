@@ -1,6 +1,6 @@
 # Hybrid Retrieval & Knowledge Extraction System
 
-> Auto-generated from feature catalogs on 2026-02-10 18:06.
+> Auto-generated from feature catalogs on 2026-02-13 06:36.
 > Source databases: `retriever_feature_catalog.sqlite3`, `bio_tagger_features.sqlite3`, `graph_transformer_feature_catalog.sqlite3`
 > Generator: `generate_readme.py`
 
@@ -21,17 +21,17 @@
 │       ↓                                                          │
 │  Dual Indexing: Dense (model2vec 256→64 PCA) + Sparse (BM25)    │
 │       ↓                                                          │
-│  PostgreSQL + pgvector (IVFFlat + sparsevec)                     │
+│  PostgreSQL + pgvector (HNSW dense + GIN JSONB sparse)           │
 │       ↓                                                          │
-│  Layer 1: BM25 Seeds                                             │
-│    Retrieve prev_fib(top_k²) seeds with scores                   │
-│    (e.g. top_k=13 → top_k²=169 → prev_fib=144 seeds)            │
+│  Layer 1: Hybrid Seeds                                           │
+│    BM25 pool (top_k²) + Dense pool (top_k²) → RRF               │
+│    → prev_fib(top_k²) seeds (e.g. 169+169 → RRF → 144 chunks)   │
 │       ↓  seeds + ECDF weights as INPUT to Layer 2                │
 │  Layer 2: ECDF-Weighted Dual Expansion                           │
 │    Path A: Graph BM25 — ECDF-weighted TF → triplet BM25         │
-│            oversample 2× → GIST select prev_fib(top_k²)         │
+│            query top_k×2 → filter to top_k per path              │
 │    Path B: Qwen3 Dense — ECDF-weighted centroid → cosine         │
-│            oversample 2× → GIST select prev_fib(top_k²)         │
+│            query top_k×2 → filter to top_k per path              │
 │    RRF merge → prev_fib(top_k²) NEW chunks (seeds excluded)     │
 │       ↓                                                          │
 │  Section Expansion: chunks → all sections from their papers      │
@@ -108,11 +108,11 @@ python tune_bio_tagger.py --data training.msgpack --unfreeze-layers 12 --n-trial
 
 ## 🔍 Hybrid Retriever — Feature Catalog
 
-*Source: `retriever_feature_catalog.sqlite3` — 18 features, 5 architectural decisions, 8 claims*
+*Source: `retriever_feature_catalog.sqlite3` — 19 features, 5 architectural decisions, 8 claims*
 
 | Status | Count |
 |--------|-------|
-| ✅ DONE | 12 |
+| ✅ DONE | 13 |
 | 🔄 IN PROGRESS | 3 |
 | ❌ FAILED | 3 |
 
@@ -148,33 +148,57 @@ Three-Layer phi-Retriever: Production implementation for academic paper retrieva
 
 ## Search Process (How It Works)
 
-### Layer 1: Hybrid Seed Retrieval (BM25-only)
+### Layer 1: Hybrid Seed Retrieval (Facts — BM25-only)
 - BM25 keyword search over 161,389 chunks in PostgreSQL/pgvector
 - Returns prev_fib(top_k^2) seed chunks as starting points (e.g. top_k=13 -> 169 -> 144 seeds)
 - Dense embeddings (M2V) disabled at L1 (too weak for domain queries)
 
-### Layer 2: Dual Expansion (Graph BM25 + Qwen3 Semantic)
+### Layer 2: Dual Expansion (Premises — Graph BM25 + Qwen3 Semantic)
 Two independent expansion paths, each GIST-diversified, then RRF-merged:
+
+**GIST (Greedy Independent Set Thresholding):**
+- Coverage: distance from k-means centroids via clustering over candidates
+- Utility: similarity score via correlation matrix (maximize similarity with query, minimize correlation with other chunks/docs)
+- Selection: score[i] = λ*coverage[i] + (1-λ)*utility[i] where λ=0.7
+- Each Layer 2 path applies GIST independently, then RRF fuses both paths
 
 **Path A: Graph BM25 Expansion**
 1. Extract SPO triplets from seed chunks (via chunk_to_triplets mapping)
 2. Concatenate all lemmatized subject/predicate/object tokens as a mega-query
-3. BM25 search over the 161K triplet corpus -> top candidates
+3. BM25 search over the 161K triplet corpus -> top_k×2 candidates (26 for top_k=13)
 4. Map triplet hits back to their source chunks (via triplet_to_chunks mapping)
-5. GIST select: Qwen3 pairwise coverage matrix + BM25 utility vector (lambda=0.7)
+5. GIST select: k-means clustering for coverage + correlation matrix for utility (lambda=0.7)
+   - Coverage: KMeans(n_clusters=top_k) over BM25 candidate scores
+     → coverage[i] = min_distance_to_centroids[i]
+     → Higher distance = more diverse from cluster centers
+   - Utility: Correlation matrix over BM25 scores
+     → corr_matrix = np.corrcoef(bm25_scores)
+     → utility[i] = bm25_score[i] - mean(corr_matrix[i, j!=i])
+     → Maximize BM25 relevance, minimize inter-chunk correlation
+   - Selection: score[i] = 0.7*coverage[i] + 0.3*utility[i]
+     → Select top_k (13) chunks with highest scores
 6. Result: diverse, graph-adjacent chunks NOT in original seeds
 
 **Path B: Qwen3 Semantic Expansion**
 1. Mean-pool Qwen3 256d embeddings of all seed chunks -> query vector
-2. Cosine similarity against ALL 161K chunk embeddings
+2. Cosine similarity against ALL 161K chunk embeddings -> top_k×2 candidates (26 for top_k=13)
 3. Exclude seed chunks
-4. GIST select: Qwen3 coverage matrix + cosine utility vector (lambda=0.7)
+4. GIST select: k-means clustering for coverage + correlation matrix for utility (lambda=0.7)
+   - Coverage: KMeans(n_clusters=top_k) over candidate embeddings
+     → coverage[i] = min_distance_to_centroids[i]
+     → Higher distance = more diverse from cluster centers
+   - Utility: Correlation matrix over cosine similarity scores
+     → corr_matrix = np.corrcoef(cosine_scores)
+     → utility[i] = cosine_score[i] - mean(corr_matrix[i, j!=i])
+     → Maximize cosine relevance, minimize inter-chunk correlation
+   - Selection: score[i] = 0.7*coverage[i] + 0.3*utility[i]
+     → Select top_k (13) chunks with highest scores
 5. Result: semantically similar chunks NOT in original seeds
 
 **Merge: RRF fusion of Path A + Path B -> prev_fib(top_k^2) expansion chunks**
 Total after Layer 2: prev_fib(top_k^2) expansion chunks (seeds excluded from output)
 
-### Layer 3: Dual Reranking + Paper Selection
+### Layer 3: Dual Reranking + Paper Selection (Syllogism)
 1. ColBERTv2 scores ALL 157 candidates against query -> full ranking
 2. Cross-Encoder scores ALL 157 candidates against query -> full ranking
 3. RRF merges both full rankings (k=60)
@@ -432,45 +456,172 @@ python query_quotes.py "life wisdom"                     # Query quotes
 
 #### 17. Three-Layer Triplet-Based Retrieval (φ-Scaled) ✅ DONE
 
-Three-Layer φ-Scaled Retrieval with ECDF-Weighted Expansion (ACTIVE)
+Three-Layer phi-Scaled Retrieval with ECDF-Weighted Expansion (ACTIVE)
 
-**Architecture:**
+**Architecture (top_k=13):**
 
-Query
-  
-Layer 1: BM25  prev_fib(top_k) SEEDS (144 for top_k=13) with scores
-   (seeds + ECDF weights as INPUT to Layer 2, seeds EXCLUDED from OUTPUT)
-Layer 2: ECDF-Weighted Dual Expansion
-   Graph BM25: ECDF-weighted term repetition (1-3)  BM25 over triplet corpus  oversample 288  GIST select 144
-   Qwen3: ECDF-weighted mean pool  cosine vs all chunks  oversample 288  GIST select 144
-   RRF merge  prev_fib(top_k) = 144 NEW chunks
-  
-Section Expansion: 144 chunks  ALL sections from their papers
-  
-Layer 3: Dual Reranking (ColBERTv2 + Cross-Encoder)  RRF  top-k papers (13)  all sections from those papers
+Layer 1: Hybrid Seeds (Facts)
+  BM25 pool (top_k^2 = 169 chunks) + Dense pool (top_k^2 = 169 chunks)
+  -> Pool 169+169 -> RRF merge -> prev_fib(169) = 144 seed chunks
+  Seeds + ECDF weights as INPUT to Layer 2 (seeds EXCLUDED from output)
 
-**φ-Scaling:**
+Layer 2: ECDF-Weighted Dual Expansion (Premises)
+  Path A: Graph BM25 -- ECDF-weighted TF -> query top_k x 2 (26) -> GIST select top_k (13) per path
+  Path B: Qwen3 Dense -- ECDF-weighted centroid -> query top_k x 2 (26) -> GIST select top_k (13) per path
+  GIST (Greedy Independent Set Thresholding): coverage via k-means clustering + utility via correlation matrix (lambda=0.7)
+  RRF merge -> prev_fib(top_k^2) = 144 NEW chunks (seeds excluded)
+  Section Expansion: 144 chunks -> ALL sections from their papers
+
+Layer 3: Dual Reranking (Syllogism)
+  ColBERTv2 Late Interaction + Cross-Encoder (bge-reranker)
+  RRF merge -> top_k+1 papers -> drop last paper -> top_k (13) papers with all their sections
+
+**phi-Scaling:**
 - top_k = 13
-- top_k = 169
-- prev_fib(169) = 144 via Fibonacci walk-down
-- L1 produces 144 seeds (INPUT only)
-- L2 produces 144 expansions (OUTPUT only)
-- Section expansion before L3
-- L3 selects 13 papers, returns all their sections
+- top_k^2 = 169 (retrieval breadth)
+- prev_fib(169) = 144 (phi cascade output)
+- Dense index: HNSW (NOT IVFFlat)
+- Sparse index: GIN on JSONB (NOT IVFFlat -- IVFFlat is dense-only ANN)
 
 **Key Mechanisms:**
-1. Midpoint ECDF weighting: (count_ + count_<)/(2n) from L1 BM25 scores
-2. Path A term repetition: top-ECDF seeds contribute 3, bottom 1
+1. Midpoint ECDF weighting: (count_leq + count_lt)/(2n) from L1 BM25 scores
+2. Path A term repetition: top-ECDF seeds contribute 3x, bottom 1x
 3. Path B weighted centroid: np.average(embeddings, weights=ecdf)
-4. Both paths oversample 2, GIST diversity-select to prev_fib(top_k)
+4. L2 oversample 2x per path, GIST select top_k per path (diversity), then RRF merge
+   - GIST: k-means clustering (coverage) + correlation matrix (utility), lambda=0.7
 5. Seeds excluded during expansion, not concatenated to output
 
 
+*Notes: LESSON LEARNED (2026-02-13):
+Agent incorrectly reported Layer 1 retrieves 441 chunks (21^2). This was the abstract default from gist_retriever.py (top_k=21), NOT production. Production uses top_k=13 (base_gist_retriever.py), so top_k^2 = 169 per pool.
+
+ROOT CAUSE: Conflated abstract class defaults with production config.
+- gist_retriever.py search() default: top_k=21 -> top_k^2 = 441 (ABSTRACT ONLY)
+- base_gist_retriever.py search() default: top_k=13 -> top_k^2 = 169 (PRODUCTION)
+
+RULE: Always reference the CONCRETE production config (base_gist_retriever.py, top_k=13), never the abstract class defaults (gist_retriever.py, top_k=21).
+
+Also corrected: Production indexes are HNSW (dense) + GIN (JSONB sparse), NOT IVFFlat. IVFFlat is dense-only ANN and cannot index BM25 sparse vectors.
+
+CORRECTED PIPELINE (top_k=13):
+  L1: 169 BM25 + 169 Dense -> RRF -> 144 chunks
+  L2: top_k x 2 = 26 per expansion path -> RRF -> 144 sections
+  L3: RRF -> 13 papers*
+
 #### 18. Layer 2 Query Expansion (ECDF-Weighted Dual Path) ✅ DONE
 
-Dual expansion via BM25 triplet search + Qwen3 embeddings (256d), ECDF-weighted from Layer 1 scores, PostgreSQL pgvector backend. Path A: Weighted mean TF profile for BM25. Path B: Weighted centroid for dense search.
+Dual expansion via BM25 triplet search + Qwen3 embeddings (256d), ECDF-weighted from Layer 1 scores, PostgreSQL pgvector backend.
 
-*Notes: Restored using pgvector tables: layer2_triplet_bm25 (JSONB sparse) and layer2_embeddings_256d (HNSW). Concrete implementations in pgvector_retriever.py, abstract methods in gist_retriever.py. Session 33.*
+Path A: Weighted mean TF profile for BM25 (L2 triplet BM25 table, GIN JSONB index).
+Path B: Weighted centroid for dense search (L2 embeddings 256d table, HNSW index).
+
+Per-path flow: query top_k x 2 from DB -> exclude seeds -> filter to top_k -> RRF merge both paths.
+Index types: HNSW for dense vectors, GIN for JSONB sparse. NOT IVFFlat (IVFFlat is dense-only ANN, cannot index BM25).
+
+*Notes: Restored using pgvector tables: layer2_triplet_bm25 (JSONB sparse, GIN index) and layer2_embeddings_256d (HNSW index).
+Concrete implementations in query_modules/pgvector_retriever.py, abstract methods in gist_retriever.py.
+
+CORRECTION (2026-02-12): Production expansion uses top_k x 2 per path (not top_k^2).
+query_modules/pgvector_retriever.py lines 321, 385: query_layer2_*(query, top_k * 2).
+Abstract default in gist_retriever.py (expansion_count = top_k^2) differs from concrete production path.*
+
+#### 19. 3-Layer Hybrid Retrieval Pipeline (RRF Fusion) ✅ DONE
+
+Core retrieval pipeline architecture using 3-layer cascade with parallel branches and RRF fusion.
+
+**Architecture: 3 Layers × 2 Branches**
+
+**Layer 1: Hybrid Retrieval (Facts)** (169 per branch → RRF → 144)
+- Branch A: BM25 lexical retrieval (JSONB dot product on layer1_bm25_sparse.sparse_vector)
+- Branch B: Dense semantic retrieval (HNSW on layer1_embeddings_128d.embedding)
+- RRF fusion → 144 hybrid seeds (prev_fibonacci(169))
+- 0% overlap confirms diverse signal fusion working correctly
+
+**Layer 2: Graph Expansion (Premises)** (currently disabled)
+- Branch A: Hybrid seeds passthrough (144)
+- Branch B: Graph expansion via Node2Vec (returns [] — disabled)
+- RRF fusion → 144 (unchanged since graph is empty)
+- TODO: Bootstrap Node2Vec from top 50 hybrid seeds
+
+**Layer 3: Document-Level Selection (Syllogism)** (top_k=13)
+- Branch A: Document reconstruction from chunks (groups by paper_id + section_idx)
+- Branch B: ColBERT late interaction scoring (token-level MaxSim)
+- Final selection → top_k documents
+
+**Key Parameters:**
+- top_k = 13
+- retrieval_limit = top_k² = 169
+- hybrid_seeds = prev_fibonacci(169) = 144
+- graph_expansion_limit = retrieval_limit × 2 = 338 (unused)
+
+**Implementation:**
+- Pipeline orchestrator: base_gist_retriever.py (BaseGISTRetriever.search)
+- PostgreSQL backend: pgvector_retriever.py (PGVectorRetriever)
+- RRF fusion: compute_rrf_score() with k=60
+- Inheritance chain: ArxivRetriever → BaseGISTRetriever → PGVectorRetriever → GISTRetriever
+
+**Database Schema:**
+- arxiv_chunks: main table with bm25_sparse (JSONB, GIN index) + embedding (vector(256), HNSW index)
+- layer1_embeddings_128d: reduced-dimension embeddings (vector(128), HNSW index)
+- layer1_bm25_sparse: sparse BM25 vectors (JSONB as sparse_vector, GIN index)
+- layer2_triplet_bm25: triplet-level BM25 (JSONB as triplet_bm25_vector, GIN index)
+
+**GIST Selection Algorithm:** Used for diversity selection within each Layer 2 expansion path. Each path retrieves top_k×2 candidates, then GIST selects top_k diverse results via greedy scoring.
+
+**GIST (Greedy Independent Set Thresholding):**
+- Coverage: distance from k-means centroids via clustering over cartesian product of retrievals with each other (scores)
+- Utility: similarity [default] score via correlation matrix maximizing for similarity with y (query) while minimizing correlation with other x vars (chunk/doc scores)
+- Selection: score[i] = λ*coverage[i] + (1-λ)*utility[i] where λ=0.7
+- Each Layer 2 GIST path processes independently, then results RRF fused together
+
+**GIST Algorithm (Pseudo-code):**
+```python
+# Input: candidates (top_k×2 per path), query, lambda=0.7
+# Output: top_k diverse selections per path
+
+# Step 1: Coverage - k-means clustering over candidate set
+from sklearn.cluster import KMeans
+kmeans = KMeans(n_clusters=top_k).fit(candidate_embeddings)
+distances = kmeans.transform(candidate_embeddings)  # distance to all centroids
+coverage_scores = distances.min(axis=1)  # distance to nearest centroid
+# Higher distance = more diverse (farther from cluster center)
+
+# Step 2: Utility - correlation matrix over similarity scores
+corr_matrix = np.corrcoef(candidate_scores)  # pairwise correlation
+query_sim = [similarity(query, cand) for cand in candidates]
+utility_scores = []
+for i in range(len(candidates)):
+    # Maximize similarity to query, minimize correlation with other candidates
+    avg_corr = np.mean([corr_matrix[i][j] for j in range(len(candidates)) if i != j])
+    utility_scores[i] = query_sim[i] - avg_corr
+
+# Step 3: Combined scoring and selection
+final_scores = lambda * coverage_scores + (1-lambda) * utility_scores
+selected_indices = np.argsort(final_scores)[-top_k:]  # top_k highest scores
+return [candidates[i] for i in selected_indices]
+```
+
+**Key Insight:** GIST balances diversity (coverage via clustering) with relevance (utility via correlation matrix). Lambda=0.7 means 70% weight on diversity, 30% on relevance. RRF then fuses the two GIST-diversified paths. Layer 1 and Layer 3 use pure RRF fusion (no GIST).
+
+
+*Notes: Production implementation validated via test_per_layer_counts.py against live PostgreSQL (161,389 rows).
+
+VERIFIED COUNTS (2026-02-12):
+- L1 BM25: 169 chunks ✓
+- L1 Dense: 100 chunks ✓ (capped by hnsw.ef_search=100)
+- L1 RRF fusion: 144 hybrid seeds ✓
+- L2 Graph: 0 chunks ✓ (disabled)
+- L2 RRF fusion: 144 chunks ✓
+- L3 Reconstruction: 104 sections, 77 papers ✓
+- L3 Final selection: 13 documents ✓
+
+Orphaned methods discovered:
+- query_modules/pgvector_retriever.py: _expand_layer2_bm25() and _expand_layer2_dense() never called by orchestrator
+
+Schema notes:
+- Layer tables use different column names than query_modules code expects (sparse_vector vs bm25_sparse, triplet_bm25_vector vs bm25_sparse)
+- Production bypasses this by querying arxiv_chunks directly
+- No layer2_embeddings_256d table exists — 256d embeddings live in arxiv_chunks.embedding*
 
 ### Architectural Decisions
 
@@ -761,7 +912,7 @@ run_bio_tagger.bat check    # System health check
 
 ## 🔀 Graph Transformer — Feature Catalog
 
-*Source: `graph_transformer_feature_catalog.sqlite3` — 6 features, 3 architectural decisions, 0 claims*
+*Source: `graph_transformer_feature_catalog.sqlite3` — 6 features, 2 architectural decisions, 0 claims*
 
 | Status | Count |
 |--------|-------|
@@ -1012,74 +1163,17 @@ Option C — Cascade:
 
 ### Architectural Decisions
 
-**1. Use Node2Vec + Distillation instead of full BERT inference**
+**1. Use BERT BIO Tagger directly on full corpus (Node2Vec + Distillation rejected)**
 
-- **Rationale:** The BIO tagger (BERT-based) takes 11 hours to process the full corpus (161,389 chunks at 4.08 chunks/sec). This makes full-corpus graph construction infeasible for retrieval.
+- **Rationale:** ACTUAL IMPLEMENTATION: BERT-based BIO tagger was run directly on the full corpus (161,389 chunks). Initial estimate of 11 hours at 4.08 chunks/sec was pessimistic - actual runtime was less than 3 hours. Alternative approaches considered: 1. Node2Vec + DistilBERT distillation → Rejected: Unnecessary complexity, BERT direct is fast enough 2. Graph Transformer trained end-to-end → Deferred: Requires labeled data + complex implementation 3. Graph2Vec embeddings → Superseded by direct BERT extraction
+- **Before:** Considered distillation to avoid "11-hour" BERT inference
+- **After:** BERT direct on full corpus: <3 hours actual runtime, triplets extracted and stored in arxiv_graph_sparse.msgpack
 
-Alternative approaches considered:
-1. Run BERT BIO on full corpus → 11 hours (rejected: too slow)
-2. Graph Transformer trained end-to-end → Requires labeled data + complex implementation (deferred)
-3. Graph2Vec instead of Node2Vec → Similar approach, whole-graph embeddings (comparable)
-4. Node2Vec + distillation → Train fast model on 250 chunks, apply to full corpus
+**2. Full corpus graph construction completed (not just reranker)**
 
-**Why Node2Vec + Distillation:**
-- Proven technique: Node2Vec widely used for graph embeddings
-- Simple implementation: karateclub library has clean API
-- Fast application: DistilBERT ~150 chunks/sec (37x speedup)
-- No labeled data needed: Distillation uses BERT outputs as supervision
-- Modular: Can upgrade to Graph Transformer later if needed
-
-**Trade-offs:**
-- Pros: 37x speedup, simple implementation, proven technique
-- Cons: Requires two-phase training, distillation quality depends on 250-chunk coverage
-- **Before:** BIO tagger on full corpus: 11 hours (4.08 chunks/sec)
-- **After:** Distilled model: 18 minutes (~150 chunks/sec), 37x speedup
-
-**2. Use graph embeddings as reranker over hybrid results (not full corpus expansion)**
-
-- **Rationale:** Graph-based retrieval can be used in two ways:
-1. Recall expansion: Build graph over full corpus, use for initial retrieval
-2. Precision reranking: Apply graph only to hybrid-retrieved candidates
-
-**Why Reranker:**
-- Hybrid retrieval (BM25 + dense) already provides good recall
-- BIO extraction on 161k chunks still takes 18 minutes (with distilled model)
-- Graph structure provides semantic distance signal (LCA convergence level)
-- Reranking 50-100 candidates takes ~5-10 seconds (acceptable latency)
-- Full corpus graph construction + HNSW index is expensive to maintain
-
-**Trade-offs:**
-- Pros: Fast query time, leverages hybrid recall, graph adds precision
-- Cons: Cannot discover documents missed by BM25+dense (no recall improvement)
-
-**Future:** If distilled model proves highly accurate, can explore full-corpus graph retrieval as alternative ranking signal.
-- **Before:** Graph-based retrieval infeasible due to 11-hour BERT inference
-- **After:** Graph reranking on 50-100 candidates: ~5-10 seconds, precision improvement
-
-**3. Use existing 250-chunk BIO training set for distillation**
-
-- **Rationale:** Distillation training requires examples with known graph embeddings. Options:
-1. Use existing 250-chunk BIO training set (already extracted, validated)
-2. Extract new larger set (500-1000 chunks) for better coverage
-3. Active learning: Iteratively select diverse chunks
-
-**Why 250 Chunks:**
-- Already available: bio_training_250chunks_complete_FIXED.msgpack
-- Already validated: BIO tagger trained on this, quality confirmed
-- Sufficient diversity: Academic text from arXiv across multiple domains
-- Fast to process: ~60 seconds BERT inference + graph construction
-- Avoids additional cost: No need to run BIO tagger on more chunks
-
-**Validation Strategy:**
-- If distillation quality is poor (correlation r < 0.7), can expand to 500-1000 chunks
-- Monitor embedding distribution: Check if 250 chunks cover the full corpus distribution
-- Active learning future work: Select chunks that maximize coverage
-
-**Trade-offs:**
-- Pros: No additional cost, already validated, sufficient starting point
-- Cons: May not cover all graph patterns in full corpus (mitigated by validation)
-- **Before:** Need examples with graph embeddings for distillation training
-- **After:** Use bio_training_250chunks_complete_FIXED.msgpack (validated, diverse, sufficient)
+- **Rationale:** With <3 hour extraction time, full corpus graph construction became feasible. The msgpack artifacts (arxiv_graph_sparse.msgpack) contain triplets for all 161k chunks. Triplets extracted via build_arxiv_graph_sparse.py using BERT BIO tagger. Stored in msgpack format for fast loading. Graph can be used for both expansion (Layer 2 triplet BM25) and reranking. No HNSW index needed - BM25 over triplet corpus provides retrieval.
+- **Before:** Planned graph-based reranking only on hybrid-retrieved candidates
+- **After:** Full corpus graph available, used in Layer 2 triplet BM25 expansion
 
 ---
 
@@ -1253,4 +1347,4 @@ MIT
 
 ---
 
-*Generated 2026-02-10 18:06 by `generate_readme.py`*
+*Generated 2026-02-13 06:36 by `generate_readme.py`*
