@@ -39,6 +39,7 @@ Dataset-specific subclasses must implement:
 from typing import List, Dict, Any
 import numpy as np
 from pgvector_retriever import PGVectorRetriever, RetrievedDoc
+from gist_retriever import gist_select
 
 
 class BaseGISTRetriever(PGVectorRetriever):
@@ -101,10 +102,16 @@ class BaseGISTRetriever(PGVectorRetriever):
         gist_pool = self._retrieve_dense(query, retrieval_limit)
         print(f"  \u2514\u2500 Dense  layer1_embeddings_128d   \u2192 {len(gist_pool):4d} chunks")
 
+        # GIST per arm: coverage = doc-doc BM25/cosine, utility = query score
+        gist_limit     = hybrid_seeds // 2
+        bm25_selected  = self._gist_select_pool(bm25_pool,  query, gist_limit, 'bm25')
+        dense_selected = self._gist_select_pool(gist_pool,  query, gist_limit, 'dense')
+        print(f"     GIST(BM25)  \u2192 {len(bm25_selected):4d}  GIST(Dense) \u2192 {len(dense_selected):4d}")
+
         # RRF Fusion → Hybrid Seeds (Fibonacci cascade)
-        hybrid_pool = self._rrf_fusion(bm25_pool, gist_pool)
-        hybrid_seeds_pool = hybrid_pool[:hybrid_seeds]  # Take top Fibonacci seeds
-        print(f"     RRF(L1)                          \u2192 {len(hybrid_seeds_pool):4d} hybrid seeds")
+        hybrid_pool = self._rrf_fusion(bm25_selected, dense_selected)
+        hybrid_seeds_pool = hybrid_pool[:hybrid_seeds]
+        print(f"     RRF(L1-GIST)                     \u2192 {len(hybrid_seeds_pool):4d} hybrid seeds")
         print(_D)
 
         # =================================================================
@@ -232,14 +239,21 @@ class BaseGISTRetriever(PGVectorRetriever):
         else:
             ce_scores = None
 
-        if ce_scores is not None:
-            # RRF merge ColBERT + CE rankings (k=60)
-            rrf_k = 60
-            colbert_order = np.argsort(colbert_scores)[::-1]  # highest-first
-            ce_order      = np.argsort(ce_scores)[::-1]
+        # Build section-level cosine coverage matrix for GIST diversity
+        n_docs          = len(documents)
+        doc_texts_trunc = [d['text'][:512] for d in documents]
+        sec_embs        = self.embedder.encode(doc_texts_trunc)   # (n, dim), L2-normalised
+        coverage_matrix = sec_embs @ sec_embs.T                   # cosine similarity
+        gist_lam        = getattr(self.config, 'gist_lambda', 0.7)
+        rrf_k           = 60
 
-            colbert_rank = {int(idx): rank + 1 for rank, idx in enumerate(colbert_order)}
-            ce_rank      = {int(idx): rank + 1 for rank, idx in enumerate(ce_order)}
+        if ce_scores is not None:
+            # GIST per arm → RRF via GIST rank
+            colbert_gist = gist_select(coverage_matrix, colbert_scores, n_docs, gist_lam)
+            ce_gist      = gist_select(coverage_matrix, ce_scores,      n_docs, gist_lam)
+
+            colbert_rank = {int(idx): rank + 1 for rank, idx in enumerate(colbert_gist)}
+            ce_rank      = {int(idx): rank + 1 for rank, idx in enumerate(ce_gist)}
 
             for i, doc in enumerate(documents):
                 rrf = (1.0 / (rrf_k + colbert_rank[i])
@@ -248,13 +262,16 @@ class BaseGISTRetriever(PGVectorRetriever):
                 doc['colbert_score']        = float(colbert_scores[i])
                 doc['cross_encoder_score']  = float(ce_scores[i])
 
-            print(f"  \u251c\u2500 ColBERT   late interaction")
-            print(f"  \u2514\u2500 MS-MARCO CE + RRF merged")
+            print(f"  \u251c\u2500 ColBERT   GIST late interaction")
+            print(f"  \u2514\u2500 MS-MARCO  GIST + RRF merged")
         else:
-            # CE unavailable — ColBERT only
-            for doc, score in zip(documents, colbert_scores):
-                doc['score'] = float(score)
-            print(f"  \u2514\u2500 ColBERT   late interaction        (CE unavailable)")
+            # CE unavailable — ColBERT GIST only
+            colbert_gist = gist_select(coverage_matrix, colbert_scores, n_docs, gist_lam)
+            colbert_rank = {int(idx): rank + 1 for rank, idx in enumerate(colbert_gist)}
+            for i, doc in enumerate(documents):
+                doc['score']         = 1.0 / (rrf_k + colbert_rank[i])
+                doc['colbert_score'] = float(colbert_scores[i])
+            print(f"  \u2514\u2500 ColBERT   GIST late interaction   (CE unavailable)")
 
         documents.sort(key=lambda d: d['score'], reverse=True)
         return documents
