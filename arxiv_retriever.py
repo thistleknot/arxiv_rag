@@ -14,6 +14,7 @@ Chunk → Section → Paper (3-level aggregation)
 =============================================================================
 """
 
+from collections import defaultdict
 from typing import List, Dict, Any
 from retrieval.base_gist_retriever import BaseGISTRetriever, RetrievedDoc
 
