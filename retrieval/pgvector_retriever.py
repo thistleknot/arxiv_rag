@@ -834,6 +834,8 @@ class PGVectorRetriever(GISTRetriever):
             query_emb = query_emb / norm
 
         with self.conn.cursor() as cur:
+            # ef_search must be >= LIMIT for HNSW to return enough candidates
+            cur.execute(f"SET hnsw.ef_search = {max(limit, 40)}")
             cur.execute("""
                 SELECT l.chunk_id,
                        c.content, c.paper_id, c.section_idx, c.chunk_idx,
@@ -1096,13 +1098,16 @@ class PGVectorRetriever(GISTRetriever):
         emb_str  = '[' + ','.join(map(str, centroid.tolist())) + ']'
 
         seed_set = set(seed_ids)
+        ann_limit = top_k * 2 + len(seed_set)
         with self.conn.cursor() as cur:
+            # ef_search must be >= LIMIT for HNSW to return enough candidates
+            cur.execute(f"SET hnsw.ef_search = {max(ann_limit, 40)}")
             cur.execute("""
                 SELECT chunk_id, 1 - (embedding <=> %s::vector(256)) AS score, embedding
                 FROM layer2_embeddings_256d
                 ORDER BY embedding <=> %s::vector(256)
                 LIMIT %s
-            """, (emb_str, emb_str, top_k * 2 + len(seed_set)))
+            """, (emb_str, emb_str, ann_limit))
             rows = cur.fetchall()
 
         # 4. Exclude seeds, collect candidates with embeddings for GIST
