@@ -1001,7 +1001,7 @@ class PGVectorRetriever(GISTRetriever):
         l1_ids = list(set(l2_to_l1.values()))
         with self.conn.cursor() as cur:
             cur.execute(
-                "SELECT chunk_id, embedding FROM layer1_embeddings_128d WHERE chunk_id = ANY(%s)",
+                "SELECT chunk_id, embedding FROM layer2_embeddings_256d WHERE chunk_id = ANY(%s)",
                 (l1_ids,)
             )
             l1_emb = {row[0]: _np.array(row[1], dtype=_np.float64) for row in cur.fetchall()}
@@ -1043,10 +1043,10 @@ class PGVectorRetriever(GISTRetriever):
         top_k: int,
     ) -> List[RetrievedDoc]:
         """
-        Layer 2 Path B: ECDF-weighted GIST centroid expansion over layer1_embeddings_128d.
+        Layer 2 Path B: ECDF-weighted GIST centroid expansion over layer2_embeddings_256d.
 
-        Takes L1 hybrid seeds, computes a weighted centroid in the 128d PCA space,
-        ANNs against layer1_embeddings_128d (HNSW cosine), then applies GIST
+        Takes L1 hybrid seeds, computes a weighted centroid in the 256d Qwen3 model2vec
+        space, ANNs against layer2_embeddings_256d (HNSW cosine), then applies GIST
         diversity selection over the retrieved candidates.  Seeds are excluded.
 
         GIST clustering is done only over the retrieved results — never the full table.
@@ -1064,10 +1064,10 @@ class PGVectorRetriever(GISTRetriever):
         )
         seed_ids = [doc.doc_id for doc in seed_docs]
 
-        # 2. Fetch seed embeddings from layer1_embeddings_128d (128d PCA-Qwen3)
+        # 2. Fetch seed embeddings from layer2_embeddings_256d (256d Qwen3 model2vec)
         with self.conn.cursor() as cur:
             cur.execute(
-                "SELECT chunk_id, embedding FROM layer1_embeddings_128d WHERE chunk_id = ANY(%s)",
+                "SELECT chunk_id, embedding FROM layer2_embeddings_256d WHERE chunk_id = ANY(%s)",
                 (seed_ids,)
             )
             emb_map = {row[0]: _np.array(row[1], dtype=_np.float64) for row in cur.fetchall()}
@@ -1078,16 +1078,16 @@ class PGVectorRetriever(GISTRetriever):
         vecs    = _np.array([emb_map[cid] for cid in present])
         valid_w = _np.array([ecdf_w[seed_ids.index(cid)] for cid in present])
 
-        # 3. Weighted centroid → cosine ANN in layer1_embeddings_128d
+        # 3. Weighted centroid → cosine ANN in layer2_embeddings_256d
         centroid = _np.average(vecs, axis=0, weights=valid_w)
         emb_str  = '[' + ','.join(map(str, centroid.tolist())) + ']'
 
         seed_set = set(seed_ids)
         with self.conn.cursor() as cur:
             cur.execute("""
-                SELECT chunk_id, 1 - (embedding <=> %s::vector) AS score, embedding
-                FROM layer1_embeddings_128d
-                ORDER BY embedding <=> %s::vector
+                SELECT chunk_id, 1 - (embedding <=> %s::vector(256)) AS score, embedding
+                FROM layer2_embeddings_256d
+                ORDER BY embedding <=> %s::vector(256)
                 LIMIT %s
             """, (emb_str, emb_str, top_k * 2 + len(seed_set)))
             rows = cur.fetchall()

@@ -117,7 +117,7 @@ class BaseGISTRetriever(PGVectorRetriever):
         l2_bm25  = self._expand_layer2_bm25(hybrid_seeds_pool, seed_scores, hybrid_seeds)
         l2_dense = self._expand_layer2_dense(hybrid_seeds_pool, seed_scores, hybrid_seeds)
         print(f"  \u251c\u2500 BM25   layer2_triplet_bm25      \u2192 {len(l2_bm25):4d} new chunks")
-        print(f"  \u2514\u2500 Dense  GIST centroid (128d)      \u2192 {len(l2_dense):4d} new chunks")
+        print(f"  \u2514\u2500 Dense  GIST centroid (256d)      \u2192 {len(l2_dense):4d} new chunks")
 
         graph_expanded = self._rrf_fusion(l2_bm25, l2_dense)
         print(f"     RRF(L2-BM25, L2-Dense)           \u2192 {len(graph_expanded):4d} merged")
