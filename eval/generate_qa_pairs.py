@@ -32,14 +32,14 @@ import re
 import sys
 
 import psycopg2
-import requests
+import openai
 
 # ── Config ────────────────────────────────────────────────────────────────────
 DB = dict(host="localhost", port=5432, dbname="langchain",
           user="langchain", password="langchain")
 
-OLLAMA_URL   = "http://localhost:11434/api/generate"
-GEN_MODEL    = "granite3.3:latest"   # instruct model for QA generation
+COPILOT_PROXY = "http://127.0.0.1:8069/v1"
+GEN_MODEL     = "gpt-4.1"   # via GitHub Copilot proxy
 N_SAMPLE     = 200  # candidate sections to query
 N_TARGET     = 150  # QA pairs to actually generate (after LLM filter)
 TRAIN_FRAC   = 0.70
@@ -118,20 +118,19 @@ def fetch_sections(conn, n_sample: int) -> list[dict]:
 # ── LLM call ──────────────────────────────────────────────────────────────────
 def generate_qa(section_text: str) -> tuple[str, str] | None:
     """
-    Call Ollama to generate (question, answer) from section_text.
+    Call gpt-4.1 via Copilot proxy to generate (question, answer) from section_text.
     Returns (question, answer) or None on failure / invalid output.
     """
-    prompt = QA_PROMPT.format(section_text=section_text[:3000])  # truncate for context
-    payload = {
-        "model": GEN_MODEL,
-        "prompt": prompt,
-        "stream": False,
-        "options": {"temperature": 0.3, "num_predict": 400},
-    }
+    client = openai.OpenAI(api_key="dummy-key", base_url=COPILOT_PROXY)
+    prompt = QA_PROMPT.format(section_text=section_text[:3000])
     try:
-        resp = requests.post(OLLAMA_URL, json=payload, timeout=60)
-        resp.raise_for_status()
-        text = resp.json()["response"].strip()
+        response = client.chat.completions.create(
+            model=GEN_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+            max_tokens=400,
+        )
+        text = response.choices[0].message.content.strip()
     except Exception as e:
         print(f"  [LLM error] {e}")
         return None

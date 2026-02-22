@@ -51,13 +51,16 @@ from textgrad.engine import LiteLLMEngine
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
+# Point LiteLLM at the Copilot proxy (gpt-4.1 via GitHub Copilot)
+os.environ["OPENAI_API_BASE"] = "http://127.0.0.1:8069/v1"
+os.environ["OPENAI_API_KEY"]  = "dummy-key"
+
 from arxiv_retriever import ArxivRetriever
 from retrieval.pgvector_retriever import PGVectorConfig
 from eval.ragas_eval import run_eval
 
 # ── Constants ─────────────────────────────────────────────────────────────────
-OLLAMA_MODEL   = "granite3.3:latest"
-LITELLM_MODEL  = "ollama/" + OLLAMA_MODEL
+LITELLM_MODEL = "gpt-4.1"  # routed through Copilot proxy via OPENAI_API_BASE
 QA_FILE        = os.path.join(ROOT, "eval", "data", "qa_pairs.json")
 MLFLOW_EXP     = "arxiv-3layer-retrieval-optimization"
 RETRIEVER_FILES = [
@@ -268,8 +271,8 @@ def main(
     # MLflow experiment
     mlflow.set_experiment(MLFLOW_EXP)
 
-    # TextGrad engine
-    print(f"\n  Initialising TextGrad engine: {LITELLM_MODEL}")
+    # TextGrad engine — gpt-4.1 via Copilot proxy (OPENAI_API_BASE already set)
+    print(f"\n  Initialising TextGrad engine: {LITELLM_MODEL} -> {os.environ['OPENAI_API_BASE']}")
     engine = LiteLLMEngine(LITELLM_MODEL)
     tg.set_backward_engine(engine, override=True)
 
@@ -311,6 +314,7 @@ def main(
         mlflow.log_param("train_batch_size",   train_batch_size)
         mlflow.log_param("eval_top_k",         eval_top_k)
         mlflow.log_param("textgrad_engine",    LITELLM_MODEL)
+        mlflow.log_param("llm_proxy",           os.environ["OPENAI_API_BASE"])
         mlflow.log_dict(DEFAULT_CONFIG,        "default_config.json")
 
         for iteration in range(n_iterations):

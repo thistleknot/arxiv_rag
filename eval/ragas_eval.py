@@ -26,9 +26,9 @@ import sys
 import json
 from typing import Optional
 
-import requests
+import openai
 
-# ── Imports guarded for graceful fallback during smoke tests ──────────────────
+# ── Imports ───────────────────────────────────────────────────────────────────
 from ragas import EvaluationDataset, evaluate
 from ragas.llms import LangchainLLMWrapper
 from ragas.metrics import (
@@ -37,12 +37,11 @@ from ragas.metrics import (
     LLMContextPrecisionWithReference,
     LLMContextRecall,
 )
-from langchain_ollama import ChatOllama
+from langchain_openai import ChatOpenAI
 
 # ── Config ────────────────────────────────────────────────────────────────────
-OLLAMA_BASE  = "http://localhost:11434"
-OLLAMA_GEN   = "http://localhost:11434/api/generate"
-DEFAULT_MODEL = "granite3.3:latest"
+COPILOT_PROXY = "http://127.0.0.1:8069/v1"
+DEFAULT_MODEL = "gpt-4.1"   # via GitHub Copilot proxy
 
 from ragas import SingleTurnSample
 
@@ -50,24 +49,24 @@ from ragas import SingleTurnSample
 def _generate_answer(question: str, contexts: list[str],
                      model: str = DEFAULT_MODEL, max_tokens: int = 300) -> str:
     """
-    Generate a grounded answer from retrieved contexts using Ollama HTTP API.
+    Generate a grounded answer from retrieved contexts via Copilot proxy.
     Used to populate SingleTurnSample.response.
     """
+    client = openai.OpenAI(api_key="dummy-key", base_url=COPILOT_PROXY)
     joined = "\n\n---\n\n".join(contexts[:5])
     prompt = (
-        f"Using only the passages below, answer the question concisely (2-4 sentences).\n\n"
+        "Using only the passages below, answer the question concisely (2-4 sentences).\n\n"
         f"Passages:\n{joined}\n\n"
         f"Question: {question}\n\nAnswer:"
     )
     try:
-        resp = requests.post(OLLAMA_GEN, json={
-            "model": model,
-            "prompt": prompt,
-            "stream": False,
-            "options": {"temperature": 0.1, "num_predict": max_tokens},
-        }, timeout=60)
-        resp.raise_for_status()
-        return resp.json()["response"].strip()
+        response = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.1,
+            max_tokens=max_tokens,
+        )
+        return response.choices[0].message.content.strip()
     except Exception as e:
         return f"[generation error: {e}]"
 
@@ -103,9 +102,13 @@ def run_eval(
     if n_pairs:
         qa_pairs = qa_pairs[:n_pairs]
 
-    # Build RAGAS LLM wrapper
-    langchain_llm = ChatOllama(model=llm_model, base_url=OLLAMA_BASE,
-                               temperature=0.1)
+    # Build RAGAS LLM wrapper pointing at the Copilot proxy
+    langchain_llm = ChatOpenAI(
+        model=llm_model,
+        openai_api_key="dummy-key",
+        openai_api_base=COPILOT_PROXY,
+        temperature=0.1,
+    )
     ragas_llm = LangchainLLMWrapper(langchain_llm)
 
     metrics = [
@@ -193,7 +196,7 @@ def main():
         qa_data = json.load(f)
     pairs = qa_data[args.split]
 
-    print(f"RAGAS Eval — {args.split} split ({len(pairs)} pairs), top_k={args.top_k}")
+    print(f"RAGAS Eval — {args.split} split ({len(pairs)} pairs), top_k={args.top_k}, model={args.model}")
     retriever = ArxivRetriever(PGVectorConfig())
     scores = run_eval(retriever, pairs, top_k=args.top_k,
                       llm_model=args.model, n_pairs=args.n_pairs)
