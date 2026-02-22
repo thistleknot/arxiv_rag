@@ -130,8 +130,10 @@ class BaseGISTRetriever(PGVectorRetriever):
         # Layer 3: Reconstruct → Score (ColBERT + CE) → Select
         # =================================================================
         print("[L3 Scoring]")
-        documents = self._reconstruct_documents_from_chunks(fused_chunks)
-        print(f"  \u251c\u2500 Reconstruct                     \u2192 {len(documents):4d} documents")
+        # Section expansion: rank fused chunks by score, take top hybrid_seeds
+        # unique (paper_id, section_idx) keys, reconstruct full section text.
+        documents = self._reconstruct_documents_from_chunks(fused_chunks, hybrid_seeds)
+        print(f"  \u251c\u2500 Reconstruct                     \u2192 {len(documents):4d} sections")
 
         if self.config.use_colbert and len(documents) > 0:
             scored_documents = self._score_documents(query, documents, len(documents))
@@ -263,21 +265,30 @@ class BaseGISTRetriever(PGVectorRetriever):
     
     def _reconstruct_documents_from_chunks(
         self,
-        chunks: List[RetrievedDoc]
+        chunks: List[RetrievedDoc],
+        target_sections: int,
     ) -> List[Dict[str, Any]]:
         """
-        Reconstruct full documents from retrieved chunks.
-        
+        Reconstruct full sections from the top-target_sections unique section keys
+        in the fused chunk pool.
+
+        Spec (Feature 17):
+          Sort chunks by score desc (tiebreak: chunk_idx, section_idx, doc_id).
+          Walk sorted list, collect unique (paper_id, section_idx) until
+          target_sections reached.  Then fetch ALL chunks per section to rebuild
+          full section text.
+
         Dataset-specific aggregation:
-          - Arxiv: Group by (paper_id, section_idx) → fetch all chunks → rebuild section
-          - Quotes: Group by quote_id → fetch all chunks → rebuild quote
-        
+          - Arxiv: section key = (paper_id, section_idx)
+          - Quotes: section key = (quote_id,)
+
         Args:
-            chunks: List of retrieved chunk documents
-        
+            chunks: Fused chunk pool sorted by RRF score
+            target_sections: Max unique sections to reconstruct (= hybrid_seeds)
+
         Returns:
-            List of document dicts with reconstructed text
-        
+            List of section dicts with reconstructed text
+
         Raises:
             NotImplementedError: Must be implemented by subclass
         """

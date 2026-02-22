@@ -15,7 +15,6 @@ Chunk → Section → Paper (3-level aggregation)
 """
 
 from typing import List, Dict, Any
-from collections import defaultdict
 from retrieval.base_gist_retriever import BaseGISTRetriever, RetrievedDoc
 
 
@@ -36,63 +35,69 @@ class ArxivRetriever(BaseGISTRetriever):
     
     def _reconstruct_documents_from_chunks(
         self,
-        chunks: List[RetrievedDoc]
+        chunks: List[RetrievedDoc],
+        target_sections: int,
     ) -> List[Dict[str, Any]]:
         """
-        Reconstruct ALL sections from every paper that has ≥1 chunk in fused pool.
+        Section expansion: select top-target_sections unique sections from the
+        fused chunk pool, then reconstruct each section's full text.
 
-        Spec (Feature 17, Layer 2 Section Expansion):
-          '144 chunks → ALL sections from their papers'
+        Spec (Feature 17):
+          Sort chunks by score desc (tiebreak: chunk_idx, section_idx, doc_id).
+          Walk sorted list, collecting unique (paper_id, section_idx) keys until
+          target_sections reached.  For each collected key, fetch ALL chunks in
+          that section from the DB to rebuild the full section text.
 
-        Rather than reconstructing only the (paper_id, section_idx) pairs that
-        appeared in fused_chunks, expand to ALL sections for every unique
-        paper_id in the pool.  This gives L3 scoring the full paper context
-        before selecting top_k papers.
+        This ensures we get exactly target_sections sections (= hybrid_seeds = 144
+        for top_k=13), ranked by the best-scoring chunk in each section.
 
         Args:
-            chunks: Retrieved chunk documents from L1+L2 fused pool
+            chunks: Fused chunk pool (RRF-sorted)
+            target_sections: Max unique sections to reconstruct (= hybrid_seeds)
 
         Returns:
-            All sections from all papers referenced by any chunk in the pool
+            List of section dicts (up to target_sections), each with full text
         """
-        # Step 1: unique paper_ids in fused pool
-        paper_ids: set = set()
-        for chunk in chunks:
+        # Sort by score desc; tiebreak by chunk_idx, section_idx, doc_id
+        sorted_chunks = sorted(
+            chunks,
+            key=lambda c: (
+                -c.final_score,
+                c.metadata.get('chunk_idx', 0),
+                c.metadata.get('section_idx', 0),
+                c.doc_id,
+            )
+        )
+
+        # Walk sorted chunks, collect unique section keys (preserves rank order)
+        seen: Dict[tuple, None] = {}  # ordered dict as ordered set
+        for chunk in sorted_chunks:
             pid = chunk.metadata.get('paper_id')
-            if pid:
-                paper_ids.add(pid)
+            sidx = chunk.metadata.get('section_idx')
+            if pid is not None and sidx is not None:
+                key = (pid, sidx)
+                if key not in seen:
+                    seen[key] = None
+                    if len(seen) >= target_sections:
+                        break
 
-        if not paper_ids:
-            return []
-
+        # Reconstruct each selected section from DB
         sections: List[Dict[str, Any]] = []
-        for paper_id in paper_ids:
-            # Query ALL chunks for this paper, ordered by section then chunk
+        for paper_id, section_idx in seen:
             with self.conn.cursor() as cur:
                 cur.execute(
                     f"""
-                    SELECT
-                        content,
-                        chunk_idx,
-                        section_idx
+                    SELECT content, chunk_idx
                     FROM {self.pg_config.table_name}
-                    WHERE paper_id = %s
-                    ORDER BY section_idx ASC, chunk_idx ASC
+                    WHERE paper_id = %s AND section_idx = %s
+                    ORDER BY chunk_idx ASC
                     """,
-                    (paper_id,)
+                    (paper_id, section_idx)
                 )
                 rows = cur.fetchall()
 
-            if not rows:
-                continue
-
-            # Group chunks by section_idx in Python
-            by_section: Dict[int, list] = defaultdict(list)
-            for content, chunk_idx, section_idx in rows:
-                by_section[section_idx].append((chunk_idx, content))
-
-            for section_idx, chunk_list in sorted(by_section.items()):
-                section_text = ' '.join(content for _, content in chunk_list)
+            if rows:
+                section_text = ' '.join(r[0] for r in rows)
                 sections.append({
                     'section_id': f"{paper_id}_s{section_idx}",
                     'paper_id': paper_id,
