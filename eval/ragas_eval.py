@@ -60,7 +60,10 @@ def _score_answer_relevancy_llm(question: str, answer: str,
     LLM rubric scorer for answer_relevancy (no embeddings needed).
     Returns float 0.0-1.0.
     """
-    client = openai.OpenAI(api_key="dummy-key", base_url=COPILOT_PROXY)
+    client = openai.OpenAI(
+        api_key=os.environ.get("OPENAI_API_KEY", "ollama"),
+        base_url=COPILOT_PROXY,
+    )
     prompt = (
         "Rate how relevant this answer is to the question on a scale from 0.0 to 1.0.\n\n"
         f"Question: {question}\n\n"
@@ -76,9 +79,11 @@ def _score_answer_relevancy_llm(question: str, answer: str,
             model=model,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.0,
-            max_tokens=10,
+            max_tokens=150,
         )
         text = resp.choices[0].message.content.strip()
+        # Strip <think>...</think> reasoning blocks (qwen3 / o-series thinking models)
+        text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
         m = re.search(r"(\d+\.?\d*)", text)
         if m:
             return max(0.0, min(1.0, float(m.group(1))))
@@ -106,12 +111,15 @@ def _extract_contexts(docs) -> list[str]:
 
 
 def _generate_answer(question: str, contexts: list[str],
-                     model: str = DEFAULT_MODEL, max_tokens: int = 300) -> str:
+                     model: str = DEFAULT_MODEL, max_tokens: int = 600) -> str:
     """
     Generate a grounded answer from retrieved contexts via Copilot proxy.
     Used to populate SingleTurnSample.response.
     """
-    client = openai.OpenAI(api_key="dummy-key", base_url=COPILOT_PROXY)
+    client = openai.OpenAI(
+        api_key=os.environ.get("OPENAI_API_KEY", "ollama"),
+        base_url=COPILOT_PROXY,
+    )
     joined = "\n\n---\n\n".join(contexts[:5])
     prompt = (
         "Using only the passages below, answer the question concisely (2-4 sentences).\n\n"
@@ -125,7 +133,10 @@ def _generate_answer(question: str, contexts: list[str],
             temperature=0.1,
             max_tokens=max_tokens,
         )
-        return response.choices[0].message.content.strip()
+        text = response.choices[0].message.content.strip()
+        # Strip <think>...</think> reasoning blocks (qwen3 / o-series thinking models)
+        text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+        return text
     except Exception as e:
         return f"[generation error: {e}]"
 

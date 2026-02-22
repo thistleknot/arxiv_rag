@@ -360,6 +360,8 @@ _QA_GEN_PROMPT = (
 
 
 def _parse_qa_pairs(text: str) -> list:
+    # Strip <think>...</think> reasoning blocks (qwen3 / o-series thinking models)
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
     pairs = []
     questions = re.findall(r"Q\d+:\s*(.+?)(?=A\d+:)", text, re.DOTALL)
     answers = re.findall(r"A\d+:\s*(.+?)(?=Q\d+:|$)", text, re.DOTALL)
@@ -381,7 +383,10 @@ def generate_qa_from_retrieval(
     gpt-4.1 to derive QA pairs from the retrieved passages.
     Returns list of dicts: question, answer, topic, section_texts.
     """
-    client = openai.OpenAI(api_key="dummy-key", base_url=COPILOT_PROXY)
+    client = openai.OpenAI(
+        api_key=os.environ.get("OPENAI_API_KEY", "ollama"),
+        base_url=COPILOT_PROXY,
+    )
     all_pairs: list = []
 
     for topic in TOPIC_QUERIES:
@@ -415,7 +420,7 @@ def generate_qa_from_retrieval(
                 model=OPENAI_MODEL,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.3,
-                max_tokens=700,
+                max_tokens=1500,
             )
             raw = response.choices[0].message.content.strip()
         except Exception as e:
