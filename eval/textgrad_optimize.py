@@ -39,6 +39,12 @@ import os
 import re
 import sys
 import copy
+
+# Force UTF-8 output on Windows (avoids UnicodeEncodeError with box-drawing chars)
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 import shutil
 import tempfile
 import random
@@ -208,40 +214,40 @@ Update == CURRENT CONFIG == to improve the mean RAGAS score.
     return feedback.strip()
 
 
-def log_iteration(run_id: str, iteration: int, scores: dict,
+def log_iteration(iteration: int, scores: dict,
                   config: dict, prompt_text: str, tmpdir: str) -> None:
-    """Log all artifacts and metrics for one TextGrad iteration to MLflow."""
-    with mlflow.start_run(run_id=run_id):
-        # Metrics
-        mlflow.log_metrics(
-            {k: v for k, v in scores.items() if isinstance(v, float)},
-            step=iteration,
-        )
-        mean_score = sum(
-            scores[k] for k in ("context_precision", "context_recall", "faithfulness")
-        ) / 3.0
-        mlflow.log_metric("mean_ragas", mean_score, step=iteration)
+    """Log all artifacts and metrics for one TextGrad iteration to the active MLflow run."""
+    # Parent run is already active in main() — log directly to it; no re-open needed
+    # Metrics
+    mlflow.log_metrics(
+        {k: v for k, v in scores.items() if isinstance(v, float)},
+        step=iteration,
+    )
+    mean_score = sum(
+        scores[k] for k in ("context_precision", "context_recall", "faithfulness")
+    ) / 3.0
+    mlflow.log_metric("mean_ragas", mean_score, step=iteration)
 
-        # Params (only on first iteration to avoid overwrite conflicts)
-        if iteration == 0:
-            mlflow.log_params({
-                f"init_{k}": v for k, v in config.items()
-            })
-        else:
-            mlflow.log_params({f"iter{iteration}_{k}": v for k, v in config.items()})
+    # Params (only on first iteration to avoid overwrite conflicts)
+    if iteration == 0:
+        mlflow.log_params({
+            f"init_{k}": v for k, v in config.items()
+        })
+    else:
+        mlflow.log_params({f"iter{iteration}_{k}": v for k, v in config.items()})
 
-        # System prompt artifact
-        prompt_path = os.path.join(tmpdir, f"system_prompt_v{iteration}.txt")
-        with open(prompt_path, "w", encoding="utf-8") as f:
-            f.write(prompt_text)
-        mlflow.log_artifact(prompt_path, artifact_path="prompts")
+    # System prompt artifact
+    prompt_path = os.path.join(tmpdir, f"system_prompt_v{iteration}.txt")
+    with open(prompt_path, "w", encoding="utf-8") as f:
+        f.write(prompt_text)
+    mlflow.log_artifact(prompt_path, artifact_path="prompts")
 
-        # Full code snapshots
-        for fpath in RETRIEVER_FILES:
-            if os.path.exists(fpath):
-                dest = os.path.join(tmpdir, f"iter{iteration}_{os.path.basename(fpath)}")
-                shutil.copy2(fpath, dest)
-                mlflow.log_artifact(dest, artifact_path=f"code/iter{iteration}")
+    # Full code snapshots
+    for fpath in RETRIEVER_FILES:
+        if os.path.exists(fpath):
+            dest = os.path.join(tmpdir, f"iter{iteration}_{os.path.basename(fpath)}")
+            shutil.copy2(fpath, dest)
+            mlflow.log_artifact(dest, artifact_path=f"code/iter{iteration}")
 
 
 # ── Main optimization loop ────────────────────────────────────────────────────
@@ -355,7 +361,7 @@ def main(
                 print(f"  ★ New best: {mean_score:.4f}")
 
             # 5. MLflow log
-            log_iteration(run_id, iteration, scores, current_config,
+            log_iteration(iteration, scores, current_config,
                           system_prompt.value, tmpdir)
 
             # 6. TextGrad backward + step

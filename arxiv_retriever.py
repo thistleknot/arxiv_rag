@@ -39,57 +39,69 @@ class ArxivRetriever(BaseGISTRetriever):
         chunks: List[RetrievedDoc]
     ) -> List[Dict[str, Any]]:
         """
-        Reconstruct full sections from retrieved chunks.
-        
-        Groups chunks by (paper_id, section_idx), then fetches all chunks
-        in each section to rebuild complete section text.
-        
+        Reconstruct ALL sections from every paper that has ≥1 chunk in fused pool.
+
+        Spec (Feature 17, Layer 2 Section Expansion):
+          '144 chunks → ALL sections from their papers'
+
+        Rather than reconstructing only the (paper_id, section_idx) pairs that
+        appeared in fused_chunks, expand to ALL sections for every unique
+        paper_id in the pool.  This gives L3 scoring the full paper context
+        before selecting top_k papers.
+
         Args:
-            chunks: List of retrieved chunk documents
-        
+            chunks: Retrieved chunk documents from L1+L2 fused pool
+
         Returns:
-            List of section dicts with full reconstructed text
+            All sections from all papers referenced by any chunk in the pool
         """
-        # Extract unique (paper_id, section_idx) tuples
-        section_keys = set()
+        # Step 1: unique paper_ids in fused pool
+        paper_ids: set = set()
         for chunk in chunks:
-            paper_id = chunk.metadata.get('paper_id')
-            section_idx = chunk.metadata.get('section_idx')
-            if paper_id and section_idx is not None:
-                section_keys.add((paper_id, section_idx))
-        
-        sections = []
-        for paper_id, section_idx in section_keys:
-            # Query database for ALL chunks in this section
+            pid = chunk.metadata.get('paper_id')
+            if pid:
+                paper_ids.add(pid)
+
+        if not paper_ids:
+            return []
+
+        sections: List[Dict[str, Any]] = []
+        for paper_id in paper_ids:
+            # Query ALL chunks for this paper, ordered by section then chunk
             with self.conn.cursor() as cur:
                 cur.execute(
                     f"""
-                    SELECT 
-                        chunk_id,
+                    SELECT
                         content,
-                        chunk_idx
+                        chunk_idx,
+                        section_idx
                     FROM {self.pg_config.table_name}
-                    WHERE paper_id = %s AND section_idx = %s
-                    ORDER BY chunk_idx ASC
+                    WHERE paper_id = %s
+                    ORDER BY section_idx ASC, chunk_idx ASC
                     """,
-                    (paper_id, section_idx)
+                    (paper_id,)
                 )
-                
-                result = cur.fetchall()
-            
-            if result:
-                # Reconstruct full section text from all chunks
-                section_text = ' '.join([row[1] for row in result])
-                
+                rows = cur.fetchall()
+
+            if not rows:
+                continue
+
+            # Group chunks by section_idx in Python
+            by_section: Dict[int, list] = defaultdict(list)
+            for content, chunk_idx, section_idx in rows:
+                by_section[section_idx].append((chunk_idx, content))
+
+            for section_idx, chunk_list in sorted(by_section.items()):
+                section_text = ' '.join(content for _, content in chunk_list)
                 sections.append({
                     'section_id': f"{paper_id}_s{section_idx}",
                     'paper_id': paper_id,
                     'text': section_text,
-                    'heading': '',  # No heading column in database
+                    'heading': '',
                     'section_index': section_idx,
-                    'score': 0.0  # Will be scored by late interaction
+                    'score': 0.0,
                 })
-        
+
         return sections
     
     def _select_final_documents(

@@ -130,6 +130,8 @@ def run_eval(
         openai_api_key="dummy-key",
         openai_api_base=COPILOT_PROXY,
         temperature=0.1,
+        request_timeout=60,  # prevent indefinite hangs on proxy stall
+        max_retries=1,       # one retry only; fail fast on repeated stall
     )
     ragas_llm = LangchainLLMWrapper(langchain_llm)
 
