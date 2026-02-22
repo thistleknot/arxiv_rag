@@ -44,11 +44,11 @@ from ragas.metrics import (
 from langchain_openai import ChatOpenAI
 
 # ── Config ────────────────────────────────────────────────────────────────────
-COPILOT_PROXY = "http://127.0.0.1:8069/v1"
-DEFAULT_MODEL = "gpt-4.1"   # via GitHub Copilot proxy
+COPILOT_PROXY = os.environ.get("LLM_PROXY_URL", "http://localhost:11434/v1")
+DEFAULT_MODEL = os.environ.get("LLM_MODEL",     "qwen3-vl:8b")
 
 # Set env vars so RAGAS internal OpenAIEmbeddings() fallback also hits the proxy
-os.environ.setdefault("OPENAI_API_KEY",  "dummy-key")
+os.environ.setdefault("OPENAI_API_KEY",  "ollama")
 os.environ.setdefault("OPENAI_BASE_URL", COPILOT_PROXY)
 
 from ragas import SingleTurnSample
