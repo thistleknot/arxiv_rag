@@ -116,61 +116,54 @@ class ArxivRetriever(BaseGISTRetriever):
         top_k: int
     ) -> List[RetrievedDoc]:
         """
-        Select top K papers by iterating scored sections.
-        
-        Iterates through sections sorted by score until we have K unique papers.
-        Each paper gets all its relevant sections (not all sections from the paper).
-        
-        Args:
-            scored_sections: Sections sorted by relevance score
-            top_k: Number of unique papers to select
-        
-        Returns:
-            List of paper RetrievedDoc objects with sections
+        Select top_k papers' worth of sections from L3-scored sections.
+
+        Pass 1: walk sections in descending L3 RRF score order, collecting
+                unique paper_ids until top_k distinct papers are identified.
+        Pass 2: collect ALL sections (from `scored_sections`) that belong to
+                those top_k papers — including sections that ranked below
+                an (top_k+1)th paper's first occurrence.
+
+        Each paper's sections are sorted by section_index for coherent reading.
+        Papers are sorted by their best-section L3 score (descending).
         """
-        seen_papers = set()
-        selected_sections = []
-        
-        # Iterate scored sections until K unique papers
+        # Pass 1: identify top_k paper_ids by L3 rank order
+        top_paper_ids: list = []
+        seen: set = set()
         for section in scored_sections:
-            paper_id = section['paper_id']
-            
-            # Track unique papers
-            if paper_id not in seen_papers:
-                seen_papers.add(paper_id)
-            
-            # Stop after K unique papers
-            if len(seen_papers) > top_k:
+            pid = section['paper_id']
+            if pid not in seen:
+                seen.add(pid)
+                top_paper_ids.append(pid)
+            if len(top_paper_ids) == top_k:
                 break
-            
-            # Keep this section
-            selected_sections.append(section)
-        
-        # Group sections by paper
+
+        # Pass 2: collect ALL sections belonging to those top_k papers
         papers_dict = defaultdict(list)
-        for section in selected_sections:
-            papers_dict[section['paper_id']].append(section)
+        for section in scored_sections:
+            if section['paper_id'] in seen:
+                papers_dict[section['paper_id']].append(section)
         
         # Convert to RetrievedDoc format
         results = []
         for paper_id, sections in papers_dict.items():
-            # Sort sections by index within paper
+            # Sort sections by index within paper for coherent reading
             sections.sort(key=lambda s: s.get('section_index', 0))
-            
-            # Calculate paper-level score (average of section scores)
-            avg_score = sum(s['score'] for s in sections) / len(sections)
+
+            # Paper-level score = best section score (paper rank derived from top section)
+            best_score = max(s['score'] for s in sections)
             
             # Create paper RetrievedDoc
             paper_doc = RetrievedDoc(
                 doc_id=paper_id,
-                content='',  # Content is in sections
+                content='',
                 metadata={
                     'paper_id': paper_id,
                     'total_sections': len(sections)
                 }
             )
-            paper_doc.final_score = avg_score
-            paper_doc.rrf_score = avg_score
+            paper_doc.final_score = best_score
+            paper_doc.rrf_score = best_score
             
             # Add sections
             paper_doc.sections = []
