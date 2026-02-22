@@ -914,11 +914,13 @@ class PGVectorRetriever(GISTRetriever):
         """
         Layer 2 Path A: ECDF-weighted BM25 expansion over layer2_triplet_bm25.
 
-        Builds a weighted TF profile from L1 seed texts, vectorizes it with IDF,
-        and queries layer2_triplet_bm25 for top_k NEW chunks (seeds excluded from
-        DB results).  Combines new chunks with seeds present in layer2_triplet_bm25,
-        builds a pairwise BM25 coverage matrix over the combined pool, and
-        GIST-ranks all (seeds + new) together.  Returns the full ranked list.
+        Builds a weighted TF profile from all L1 seed texts, vectorizes it with
+        IDF, and queries layer2_triplet_bm25 for top_k NEW chunks (seeds excluded).
+        Combines ALL seeds (not just those in the BM25 table) with new candidates
+        into a pool of up to 2×top_k items.  Scores all items against the query's
+        term weights via text-based TF overlap, builds a coverage matrix over the
+        query vocabulary, and GIST-ranks the full combined pool.
+        Returns the full ranked list (~seeds + new candidates).
         """
         from collections import Counter
         import numpy as _np
@@ -995,57 +997,51 @@ class PGVectorRetriever(GISTRetriever):
             for row in rows if row[0] not in seed_set
         ][:top_k]
 
-        # 6. Fetch BM25 vectors for seeds + new (for GIST coverage matrix)
-        all_ids = seed_ids + [doc.doc_id for doc in new_candidates]
-        with self.conn.cursor() as cur:
-            cur.execute(
-                "SELECT chunk_id, triplet_bm25_vector "
-                "FROM layer2_triplet_bm25 WHERE chunk_id = ANY(%s)",
-                (all_ids,)
-            )
-            bm25_vec_map = {row[0]: row[1] for row in cur.fetchall()}
-
-        # Combined pool: seeds present in layer2_triplet_bm25 + new candidates with vectors
-        seeds_in_l2 = [doc for doc in seed_docs      if doc.doc_id in bm25_vec_map]
-        new_in_l2   = [doc for doc in new_candidates if doc.doc_id in bm25_vec_map]
-        combined    = seeds_in_l2 + new_in_l2
-        n_seeds     = len(seeds_in_l2)
+        # 6. Combined pool: ALL seeds + new candidates (no table-presence filter)
+        #    seeds already have texts from step 2; fetch texts for new candidates.
+        combined = list(seed_docs) + new_candidates
+        n_seeds  = len(seed_docs)
 
         if len(combined) < 2:
             for rank, doc in enumerate(new_candidates, 1):
                 doc.bm25_rank = rank
             return new_candidates
 
-        # Scores: seeds use L1 rrf_score; new candidates use L2 bm25_score
+        new_ids   = [doc.doc_id for doc in new_candidates]
+        new_texts = self.get_chunk_texts(new_ids) if new_ids else []
+        all_texts = seed_texts + new_texts   # len == len(combined)
+
+        # 7. Scores: seeds carry L1 rrf_score; new candidates carry L2 bm25_score
         scores_arr = _np.array([
             (doc.rrf_score if i < n_seeds else doc.bm25_score)
             for i, doc in enumerate(combined)
         ])
 
-        # 7. Pairwise BM25 coverage matrix over combined pool
-        comb_ids  = [doc.doc_id for doc in combined]
-        id_to_idx = {cid: i for i, cid in enumerate(comb_ids)}
-        n         = len(combined)
-        coverage_matrix = _np.zeros((n, n))
-        with self.conn.cursor() as cur:
-            cur.execute(f"""
-                SELECT a.chunk_id, b.chunk_id,
-                       -(a.triplet_bm25_vector <#> b.triplet_bm25_vector) AS score
-                FROM layer2_triplet_bm25 a, layer2_triplet_bm25 b
-                WHERE a.chunk_id = ANY(%s) AND b.chunk_id = ANY(%s)
-            """, (comb_ids, comb_ids))
-            for a_id, b_id, score in cur.fetchall():
-                i = id_to_idx.get(a_id)
-                j = id_to_idx.get(b_id)
-                if i is not None and j is not None:
-                    coverage_matrix[i, j] = float(score) if score is not None else 0.0
+        # 8. TF coverage matrix over query vocabulary
+        #    Represents how much each pair of items shares terms from the BM25 query.
+        #    Using query terms as the shared vocabulary keeps this coherent with the
+        #    weighted-term query that retrieved the new candidates.
+        query_vocab = sorted(term_weights.keys())
+        qv_idx      = {t: i for i, t in enumerate(query_vocab)}
+        q_len       = len(query_vocab)
+        n           = len(combined)
 
-        max_val = coverage_matrix.max()
-        if max_val > 0:
-            coverage_matrix /= max_val
+        tf_vecs = _np.zeros((n, q_len), dtype=_np.float64)
+        for i, text in enumerate(all_texts):
+            if text.strip():
+                tf = Counter(text.lower().split())
+                for term in query_vocab:
+                    if term in tf:
+                        # weight term contribution by query term weight (TF × query-weight)
+                        tf_vecs[i, qv_idx[term]] = tf[term] * term_weights[term]
+
+        norms           = _np.linalg.norm(tf_vecs, axis=1, keepdims=True)
+        norms           = _np.where(norms == 0, 1.0, norms)
+        tf_norm         = tf_vecs / norms
+        coverage_matrix = tf_norm @ tf_norm.T
         _np.fill_diagonal(coverage_matrix, 1.0)
 
-        # 8. GIST-rank the full combined pool (seeds + new) in diversity order
+        # 9. GIST-rank the full combined pool (ALL seeds + new) in diversity order
         selected = gist_select(coverage_matrix, scores_arr, n)
         results  = [combined[i] for i in selected]
         for rank, doc in enumerate(results, 1):
