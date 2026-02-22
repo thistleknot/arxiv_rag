@@ -1041,8 +1041,16 @@ class PGVectorRetriever(GISTRetriever):
         coverage_matrix = tf_norm @ tf_norm.T
         _np.fill_diagonal(coverage_matrix, 1.0)
 
-        # 9. GIST-rank the full combined pool (ALL seeds + new) in diversity order
-        selected = gist_select(coverage_matrix, scores_arr, n)
+        # 9. Utility vector = corr(doc_i, query) in TF-term-weight space
+        #    q_vec[j] = term_weights[term_j]; cosine with each doc's tf_vec gives
+        #    how much doc_i aligns with the query term distribution (X'y analog)
+        q_vec     = _np.array([term_weights[t] for t in query_vocab], dtype=_np.float64)
+        q_norm_val = _np.linalg.norm(q_vec)
+        q_norm    = q_vec / q_norm_val if q_norm_val > 0 else q_vec
+        y_scores  = tf_norm @ q_norm   # shape (n,): corr(x_i, y) for each doc
+
+        # 10. GIST-rank: max corr(x_i, y) subject to min mean_corr(x_i, selected)
+        selected = gist_select(coverage_matrix, y_scores, n)
         results  = [combined[i] for i in selected]
         for rank, doc in enumerate(results, 1):
             doc.bm25_rank = rank
@@ -1147,8 +1155,15 @@ class PGVectorRetriever(GISTRetriever):
         emb_norm        = combined_embs / norms
         coverage_matrix = emb_norm @ emb_norm.T
 
-        # 7. GIST-rank the full combined pool (seeds + new) in diversity order
-        selected = gist_select(coverage_matrix, scores_arr, n)
+        # 7. Utility vector = corr(doc_i, query) in embedding space
+        #    centroid = ECDF-weighted mean of seed embeddings (the query proxy)
+        #    y_scores[i] = cosine(emb_i, centroid) = corr(x_i, y) (X'y analog)
+        centroid_norm_val = _np.linalg.norm(centroid)
+        centroid_norm_vec = centroid / centroid_norm_val if centroid_norm_val > 0 else centroid
+        y_scores          = emb_norm @ centroid_norm_vec   # shape (n,): corr(x_i, y)
+
+        # 8. GIST-rank: max corr(x_i, y) subject to min mean_corr(x_i, selected)
+        selected = gist_select(coverage_matrix, y_scores, n)
         results  = [combined_docs[i] for i in selected]
         for rank, doc in enumerate(results, 1):
             doc.dense_rank = rank
