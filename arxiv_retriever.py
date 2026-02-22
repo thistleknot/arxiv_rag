@@ -237,3 +237,113 @@ class ArxivRetriever(BaseGISTRetriever):
         results.sort(key=lambda p: p.final_score, reverse=True)
         
         return results[:top_k]
+
+
+if __name__ == "__main__":
+    import argparse
+    import datetime
+    import time
+
+    parser = argparse.ArgumentParser(
+        description="ArxivRetriever — full 3-layer pipeline (L1 BM25+GIST, L2 ECDF, L3 ColBERT)"
+    )
+    parser.add_argument("--search", type=str, required=True, help="Search query")
+    parser.add_argument("--top-k", type=int, default=13, help="Number of papers to return")
+    parser.add_argument("--save", type=str, default=None, help="Save markdown results to this file")
+    parser.add_argument("--no-colbert", action="store_true", help="Disable ColBERT reranking")
+    parser.add_argument("--host", type=str, default="localhost")
+    parser.add_argument("--port", type=int, default=5432)
+    parser.add_argument("--db", type=str, default="langchain")
+    parser.add_argument("--user", type=str, default="langchain")
+    parser.add_argument("--password", type=str, default="langchain")
+    parser.add_argument("--table", type=str, default="arxiv_chunks")
+    args = parser.parse_args()
+
+    from pgvector_retriever import PGVectorConfig
+
+    config = PGVectorConfig(
+        db_host=args.host,
+        db_port=args.port,
+        db_name=args.db,
+        db_user=args.user,
+        db_password=args.password,
+        table_name=args.table,
+        use_colbert=not args.no_colbert,
+        use_cross_encoder=True,
+        use_doc_doc_diversity=True,
+        use_hnsw_diversity=False,
+        bm25_min_score=0.0,
+        dense_min_similarity=0.0,
+        colbert_min_score=0.0,
+        cross_encoder_min_score=0.0,
+    )
+
+    retriever = ArxivRetriever(config)
+
+    t0 = time.time()
+    results = retriever.search(args.search, top_k=args.top_k)
+    elapsed = time.time() - t0
+
+    total_sections = sum(len(p.sections) for p in results)
+    score_lo = results[-1].final_score if results else 0.0
+    score_hi = results[0].final_score if results else 0.0
+
+    print(f"\nQuery : {args.search}")
+    print(f"Papers: {len(results)}  |  Sections: {total_sections}  |  {elapsed:.1f}s")
+    print(f"Scores: {score_lo:.4f} – {score_hi:.4f}\n")
+    for i, p in enumerate(results, 1):
+        secs = p.sections or []
+        sec_scores = " ".join(f"{s.final_score:.4f}" for s in secs)
+        print(f"  {i:2d}. {p.doc_id:<20s}  paper={p.final_score:.4f}  sections=[{sec_scores}]")
+
+    if args.save:
+        lines = [
+            "# Retrieval Results",
+            "",
+            f"**Query:** {args.search}",
+            f"**Run:** {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            "**Pipeline:** L1 BM25+GIST→RRF | L2 BM25-triplet+Dense-centroid→RRF "
+            "| L3 ColBERT+Cross-Encoder+GIST-diversity",
+            f"**Time:** {elapsed:.1f}s",
+            f"**Papers:** {len(results)}",
+            "",
+            "> Scores are ColBERT late-interaction composites computed at **section level**.",
+            "> Paper score = avg(section scores).",
+            "",
+            "## Summary",
+            "",
+            "| Metric | Value |",
+            "|--------|-------|",
+            f"| Unique papers | {len(results)} |",
+            f"| Total sections | {total_sections} |",
+            f"| Avg sections / paper | {total_sections / max(len(results), 1):.1f} |",
+            f"| Score range | {score_lo:.4f} – {score_hi:.4f} |",
+            "",
+            "## Rankings",
+            "",
+        ]
+        for rank, p in enumerate(results, 1):
+            secs = p.sections or []
+            lines += [
+                f"### [{rank}] {p.doc_id}",
+                "",
+                f"**Paper score:** {p.final_score:.4f} &nbsp;|&nbsp; **Sections:** {len(secs)}",
+                "",
+            ]
+            for j, sec in enumerate(secs, 1):
+                meta = sec.metadata or {}
+                heading = meta.get("heading", "") or ""
+                sidx = meta.get("section_index", j)
+                content = (sec.content or "").strip()
+                preview = (content[:300] + "…") if len(content) > 300 else content
+                heading_str = f" — *{heading}*" if heading else ""
+                lines += [
+                    f"**Section {j}** "
+                    f"(section_idx={sidx}, ColBERT score={sec.final_score:.4f}){heading_str}",
+                    "",
+                    f"> {preview.replace(chr(10), ' ')}",
+                    "",
+                ]
+        with open(args.save, "w", encoding="utf-8") as fh:
+            fh.write("\n".join(lines))
+        print(f"\nSaved to {args.save}")
