@@ -135,16 +135,16 @@ class BaseGISTRetriever(PGVectorRetriever):
 
         fused_chunks = self._rrf_fusion(hybrid_seeds_pool, graph_expanded)
         print(f"     RRF(seeds + L2)                  \u2192 {len(fused_chunks):4d} fused pool")
+
+        # Select top hybrid_seeds unique section_idx from fused pool → L2 output
+        documents = self._reconstruct_documents_from_chunks(fused_chunks, hybrid_seeds)
+        print(f"     Select top-{hybrid_seeds} sections         \u2192 {len(documents):4d} sections")
         print(_D)
 
         # =================================================================
-        # Layer 3: Reconstruct → Score (ColBERT + CE) → Select
+        # Layer 3: Score (ColBERT + CE) → Select
         # =================================================================
-        print("[L3 Scoring]")
-        # Section expansion: rank fused chunks by score, take top hybrid_seeds
-        # unique (paper_id, section_idx) keys, reconstruct full section text.
-        documents = self._reconstruct_documents_from_chunks(fused_chunks, hybrid_seeds)
-        print(f"  \u251c\u2500 Reconstruct                     \u2192 {len(documents):4d} sections")
+        print(f"[L3 Scoring]  {len(documents)} sections in")
 
         if self.config.use_colbert and len(documents) > 0:
             scored_documents = self._score_documents(query, documents, len(documents))
