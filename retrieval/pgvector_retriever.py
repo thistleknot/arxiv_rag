@@ -993,14 +993,24 @@ class PGVectorRetriever(GISTRetriever):
         if not candidates:
             return []
 
-        # 6. GIST selection: fetch embeddings for coverage matrix
+        # 6. GIST selection: fetch embeddings via L2→L1 chunk_id mapping
+        # L2 triplet ids have doubled suffix: 'paper_sX_cY_sX_cY' → strip last '_sN_cM'
+        import re as _re
         cand_ids = [doc.doc_id for doc in candidates]
+        l2_to_l1 = {cid: _re.sub(r'_s\d+_c\d+$', '', cid) for cid in cand_ids}
+        l1_ids = list(set(l2_to_l1.values()))
         with self.conn.cursor() as cur:
             cur.execute(
-                "SELECT chunk_id, embedding FROM arxiv_chunks WHERE chunk_id = ANY(%s)",
-                (cand_ids,)
+                "SELECT chunk_id, embedding FROM layer1_embeddings_128d WHERE chunk_id = ANY(%s)",
+                (l1_ids,)
             )
-            emb_map = {row[0]: _np.array(row[1], dtype=_np.float64) for row in cur.fetchall()}
+            l1_emb = {row[0]: _np.array(row[1], dtype=_np.float64) for row in cur.fetchall()}
+        # Map L2 candidate ids → embeddings via L1 key
+        emb_map = {
+            cid: l1_emb[l2_to_l1[cid]]
+            for cid in cand_ids
+            if l2_to_l1[cid] in l1_emb
+        }
 
         valid_idx = [i for i, doc in enumerate(candidates) if doc.doc_id in emb_map]
         if len(valid_idx) < 2:
@@ -1033,10 +1043,13 @@ class PGVectorRetriever(GISTRetriever):
         top_k: int,
     ) -> List[RetrievedDoc]:
         """
-        Layer 2 Path B: ECDF-weighted dense centroid expansion over arxiv_chunks.
+        Layer 2 Path B: ECDF-weighted GIST centroid expansion over layer1_embeddings_128d.
 
-        Builds a weighted centroid from L1 seed embeddings (ECDF-weighted) and
-        finds nearest neighbours via cosine distance.  Seeds are excluded.
+        Takes L1 hybrid seeds, computes a weighted centroid in the 128d PCA space,
+        ANNs against layer1_embeddings_128d (HNSW cosine), then applies GIST
+        diversity selection over the retrieved candidates.  Seeds are excluded.
+
+        GIST clustering is done only over the retrieved results — never the full table.
         """
         import numpy as _np
 
@@ -1045,16 +1058,16 @@ class PGVectorRetriever(GISTRetriever):
 
         self.connect()
 
-        # 1. ECDF weights
+        # 1. ECDF weights from L1 RRF scores
         ecdf_w   = self._midpoint_ecdf_weights(
             _np.array(seed_scores, dtype=_np.float64)
         )
         seed_ids = [doc.doc_id for doc in seed_docs]
 
-        # 2. Fetch seed embeddings
+        # 2. Fetch seed embeddings from layer1_embeddings_128d (128d PCA-Qwen3)
         with self.conn.cursor() as cur:
             cur.execute(
-                "SELECT chunk_id, embedding FROM arxiv_chunks WHERE chunk_id = ANY(%s)",
+                "SELECT chunk_id, embedding FROM layer1_embeddings_128d WHERE chunk_id = ANY(%s)",
                 (seed_ids,)
             )
             emb_map = {row[0]: _np.array(row[1], dtype=_np.float64) for row in cur.fetchall()}
@@ -1065,7 +1078,7 @@ class PGVectorRetriever(GISTRetriever):
         vecs    = _np.array([emb_map[cid] for cid in present])
         valid_w = _np.array([ecdf_w[seed_ids.index(cid)] for cid in present])
 
-        # 3. Weighted centroid → cosine query
+        # 3. Weighted centroid → cosine ANN in layer1_embeddings_128d
         centroid = _np.average(vecs, axis=0, weights=valid_w)
         emb_str  = '[' + ','.join(map(str, centroid.tolist())) + ']'
 
@@ -1073,13 +1086,13 @@ class PGVectorRetriever(GISTRetriever):
         with self.conn.cursor() as cur:
             cur.execute("""
                 SELECT chunk_id, 1 - (embedding <=> %s::vector) AS score, embedding
-                FROM arxiv_chunks
+                FROM layer1_embeddings_128d
                 ORDER BY embedding <=> %s::vector
                 LIMIT %s
             """, (emb_str, emb_str, top_k * 2 + len(seed_set)))
             rows = cur.fetchall()
 
-        # 4. Exclude seeds, collect all candidates with embeddings
+        # 4. Exclude seeds, collect candidates with embeddings for GIST
         candidates = [
             (row[0], float(row[1]), _np.array(row[2], dtype=_np.float64))
             for row in rows if row[0] not in seed_set
@@ -1093,7 +1106,7 @@ class PGVectorRetriever(GISTRetriever):
             for c in candidates
         ]
 
-        # 5. GIST selection using fetched embeddings
+        # 5. GIST selection: cluster only the retrieved results, not the full table
         emb_matrix = _np.array([c[2] for c in candidates])
         scores_arr = _np.array([c[1] for c in candidates])
 
