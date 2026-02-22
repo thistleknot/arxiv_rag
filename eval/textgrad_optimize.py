@@ -29,7 +29,9 @@ import re
 import sys
 import copy
 import shutil
+import socket
 import tempfile
+import time
 import random
 from typing import Optional
 
@@ -89,6 +91,38 @@ TOPIC_QUERIES = [
     "vision transformer patch embedding image classification ViT",
     "chain of thought reasoning few-shot prompting emergent abilities",
 ]
+
+# ── Helpers ──────────────────────────────────────────────────────────────────
+
+def _wait_for_postgres(
+    host: str = "localhost",
+    port: int = 5432,
+    timeout: int = 30,
+) -> None:
+    """
+    Block until Postgres accepts TCP connections on host:port.
+    Retries every 1 s up to `timeout` seconds, then raises RuntimeError.
+    Called once at startup so the script never fails due to slow container init.
+    """
+    deadline = time.monotonic() + timeout
+    attempt = 0
+    while True:
+        try:
+            with socket.create_connection((host, port), timeout=2):
+                if attempt > 0:
+                    print(f"  [pg-wait] Postgres ready after {attempt}s.", flush=True)
+                return
+        except (ConnectionRefusedError, OSError):
+            if time.monotonic() >= deadline:
+                raise RuntimeError(
+                    f"Postgres at {host}:{port} not ready after {timeout}s — "
+                    "is the docker container running?"
+                )
+            attempt += 1
+            if attempt == 1:
+                print(f"  [pg-wait] Waiting for Postgres on {host}:{port} ...", flush=True)
+            time.sleep(1)
+
 
 # ── Pipeline code walkthrough ─────────────────────────────────────────────────
 PIPELINE_CODE_WALKTHROUGH = """\
@@ -527,6 +561,9 @@ def main(
 
     current_config = copy.copy(DEFAULT_CONFIG)
     current_config["top_k"] = eval_top_k
+
+    _wait_for_postgres()  # guard against slow docker container init
+
     print(f"\n  Building initial retriever (top_k={eval_top_k})...")
     init_retriever = make_retriever(current_config)
 
