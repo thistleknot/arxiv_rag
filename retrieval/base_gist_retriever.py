@@ -117,13 +117,16 @@ class BaseGISTRetriever(PGVectorRetriever):
 
         # =================================================================
         # Layer 2: ECDF-Weighted Dual Expansion from Hybrid Seeds
-        #   Each arm queries hybrid_seeds*2, excludes seeds,
-        #   returns up to hybrid_seeds NEW chunks → pool = 2×hybrid_seeds
+        #   Each arm independently GIST-selects 2×hybrid_seeds NEW chunks
+        #   (seeds excluded). Two arms × 2×seeds = 4×seeds total before RRF.
+        #   RRF(BM25-arm, Dense-arm) deduplicates → top hybrid_seeds unique
+        #   section_idx selected by _reconstruct_documents_from_chunks.
         # =================================================================
-        print(f"[L2 Expansion]  seeds={hybrid_seeds}  target={hybrid_seeds * 2} new  (excludes seeds)")
+        l2_arm_size = hybrid_seeds * 2   # 288 for top_k=13
+        print(f"[L2 Expansion]  seeds={hybrid_seeds}  arm={l2_arm_size}  target={l2_arm_size * 2} combined  (excludes seeds)")
         seed_scores = [doc.rrf_score for doc in hybrid_seeds_pool]
-        l2_bm25  = self._expand_layer2_bm25(hybrid_seeds_pool, seed_scores, hybrid_seeds)
-        l2_dense = self._expand_layer2_dense(hybrid_seeds_pool, seed_scores, hybrid_seeds)
+        l2_bm25  = self._expand_layer2_bm25(hybrid_seeds_pool, seed_scores, l2_arm_size)
+        l2_dense = self._expand_layer2_dense(hybrid_seeds_pool, seed_scores, l2_arm_size)
         print(f"  \u251c\u2500 BM25   layer2_triplet_bm25      \u2192 {len(l2_bm25):4d} new chunks")
         print(f"  \u2514\u2500 Dense  GIST centroid (256d)      \u2192 {len(l2_dense):4d} new chunks")
 
