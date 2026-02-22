@@ -56,6 +56,7 @@ results = retriever.search("my query", top_k=21)
 """
 
 import math
+import msgpack
 import re
 import threading
 import time
@@ -558,6 +559,8 @@ class PGVectorRetriever(GISTRetriever):
         self._embedder = None
         self._bm25_manager = None
         self._scheduler    = None
+        self._l1_vocab_cache = None
+        self._l1_pca_cache   = None
     
     # =========================================================================
     # Connection Management
@@ -594,10 +597,17 @@ class PGVectorRetriever(GISTRetriever):
     
     @property
     def embedder(self) -> Model2VecEmbedder:
-        """Lazy-load embedder."""
+        """Lazy-load embedder, resolving relative model paths against project root."""
         if self._embedder is None:
+            model_name = self.pg_config.embedding_model
+            # Resolve relative paths against project root (parent of retrieval/)
+            model_path = Path(model_name)
+            if not model_path.is_absolute() and not model_path.exists():
+                resolved = (Path(__file__).parent.parent / model_name).resolve()
+                if resolved.exists():
+                    model_name = str(resolved)
             self._embedder = Model2VecEmbedder(
-                model_name=self.pg_config.embedding_model,
+                model_name=model_name,
                 target_dim=self.pg_config.embedding_dim,
                 use_full_embed=self.pg_config.use_full_embed
             )
@@ -694,27 +704,100 @@ class PGVectorRetriever(GISTRetriever):
 
         return SparseVector(dict(zip(indices, values)), n_buckets)
 
-    def _retrieve_bm25(self, query: str, limit: int) -> List[RetrievedDoc]:
-        """Retrieve via signed-hash BM25 sparsevec <#> inner product."""
-        self.connect()
-        n_buckets = self.pg_config.n_buckets
+    # -------------------------------------------------------------------------
+    # L1 vocab helpers (lemmatized BERT BM25 — layer1_bm25_sparse JSONB)
+    # -------------------------------------------------------------------------
 
-        q_sv = self._q_bm25_vectorize(
-            query,
-            stat_table='bm25_global_stats',
-            term_table='bm25_term_global',
-        )
-        if not q_sv.indices():          # empty query → no results
+    @property
+    def _l1_vocab(self) -> Dict[str, int]:
+        """Lazy-load L1 BM25 vocabulary (token_str → CSR column index)."""
+        if self._l1_vocab_cache is None:
+            vocab_path = Path(__file__).parent.parent / 'checkpoints' / 'chunk_bm25_sparse.msgpack'
+            with open(vocab_path, 'rb') as f:
+                data = msgpack.unpackb(f.read(), strict_map_key=False)
+            self._l1_vocab_cache = data['vocab']   # {str: int}
+        return self._l1_vocab_cache
+
+    def _l1_bm25_term_ids(self, query: str) -> List[str]:
+        """
+        Tokenize *query* (lowercase split) and return unique JSONB key strings
+        for terms present in the L1 BM25 vocab.
+        """
+        vocab  = self._l1_vocab
+        seen:  Set[int] = set()
+        ids:   List[str] = []
+        for token in query.lower().split():
+            tid = vocab.get(token)
+            if tid is not None and tid not in seen:
+                ids.append(str(tid))
+                seen.add(tid)
+        return ids
+
+    # -------------------------------------------------------------------------
+    # L1 PCA helper (Qwen3 256d → 128d)
+    # -------------------------------------------------------------------------
+
+    @property
+    def _l1_pca(self):
+        """Lazy-load PCA transform (256d → 128d) from numpy npz checkpoint.
+
+        Returns a lightweight object with a .transform(X) method so call sites
+        are unchanged.  Loading from .npz avoids numpy-version pickle issues.
+        """
+        if self._l1_pca_cache is None:
+            npz_path = Path(__file__).parent.parent / 'checkpoints' / 'pca_256to128.npz'
+            npz = np.load(str(npz_path))
+            components = npz['components'].astype(np.float32)  # (128, 256)
+            mean      = npz['mean'].astype(np.float32)         # (256,)
+
+            class _NpzPCA:
+                """Minimal PCA wrapper: transform(X) → (X - mean) @ components.T"""
+                def __init__(self, C, mu):
+                    self.C  = C   # (128, 256)
+                    self.mu = mu  # (256,)
+                def transform(self, X: np.ndarray) -> np.ndarray:
+                    # X: (n_samples, 256) or (1, 256)
+                    return (X.astype(np.float32) - self.mu) @ self.C.T  # → (n, 128)
+
+            self._l1_pca_cache = _NpzPCA(components, mean)
+        return self._l1_pca_cache
+
+    # -------------------------------------------------------------------------
+    # L1 retrieval methods
+    # -------------------------------------------------------------------------
+
+    def _retrieve_bm25(self, query: str, limit: int) -> List[RetrievedDoc]:
+        """
+        Layer 1 BM25: lemmatized JSONB dot product over layer1_bm25_sparse.
+
+        Tokenizes *query* with the same lowercase-split tokenizer used at
+        ingest time, maps tokens to CSR column indices via the saved vocab,
+        then sums the stored BM25 weights for matching JSONB keys using the
+        GIN index on layer1_bm25_sparse.sparse_vector.
+        """
+        self.connect()
+
+        term_ids = self._l1_bm25_term_ids(query)
+        if not term_ids:
             return []
 
         with self.conn.cursor() as cur:
-            cur.execute(f"""
-                SELECT chunk_id, content, paper_id, section_idx, chunk_idx,
-                       -(bm25_sparse <#> %s::sparsevec({n_buckets})) AS score
-                FROM {self.pg_config.table_name}
-                ORDER BY bm25_sparse <#> %s::sparsevec({n_buckets}) ASC
+            cur.execute("""
+                SELECT scored.chunk_id,
+                       c.content, c.paper_id, c.section_idx, c.chunk_idx,
+                       scored.score
+                FROM (
+                    SELECT l.chunk_id,
+                           SUM((l.sparse_vector->>k)::float) AS score
+                    FROM layer1_bm25_sparse l,
+                         unnest(%s::text[]) AS k
+                    WHERE l.sparse_vector ? k
+                    GROUP BY l.chunk_id
+                ) scored
+                JOIN arxiv_chunks c ON c.chunk_id = scored.chunk_id
+                ORDER BY scored.score DESC
                 LIMIT %s
-            """, (q_sv, q_sv, limit))
+            """, (term_ids, limit))
 
             results = []
             for rank, row in enumerate(cur.fetchall(), 1):
@@ -724,32 +807,43 @@ class PGVectorRetriever(GISTRetriever):
                     metadata={
                         'paper_id': row[2],
                         'section_idx': row[3],
-                        'chunk_idx': row[4]
+                        'chunk_idx': row[4],
                     },
                     bm25_score=float(row[5]) if row[5] is not None else 0.0,
-                    bm25_rank=rank
+                    bm25_rank=rank,
                 )
                 results.append(doc)
 
         return results
 
     def _retrieve_dense(self, query: str, limit: int) -> List[RetrievedDoc]:
-        """Retrieve from dense index (cosine similarity)."""
+        """
+        Layer 1 Dense: PCA-reduced Qwen3 128d HNSW search (layer1_embeddings_128d).
+
+        Encodes *query* with the Qwen3 256d embedder, applies the saved PCA
+        (256d → 128d), L2-normalises, then queries the HNSW index on
+        layer1_embeddings_128d using cosine distance.
+        """
         self.connect()
-        
-        # Encode query
-        query_emb = self.embedder.encode([query])[0]
-        
+
+        # Qwen3 256d → PCA 128d → L2-normalised
+        raw_emb   = self.embedder.encode([query])[0]                          # (256,)
+        query_emb = self._l1_pca.transform(raw_emb.reshape(1, -1))[0]        # (128,)
+        norm      = np.linalg.norm(query_emb)
+        if norm > 1e-10:
+            query_emb = query_emb / norm
+
         with self.conn.cursor() as cur:
-            # Cosine distance (lower = more similar)
-            cur.execute(f"""
-                SELECT chunk_id, content, paper_id, section_idx, chunk_idx,
-                       (embedding <=> %s::vector) as distance
-                FROM {self.pg_config.table_name}
-                ORDER BY embedding <=> %s::vector
+            cur.execute("""
+                SELECT l.chunk_id,
+                       c.content, c.paper_id, c.section_idx, c.chunk_idx,
+                       1.0 - (l.embedding <=> %s::vector) AS score
+                FROM layer1_embeddings_128d l
+                JOIN arxiv_chunks c ON c.chunk_id = l.chunk_id
+                ORDER BY l.embedding <=> %s::vector
                 LIMIT %s
             """, (query_emb.tolist(), query_emb.tolist(), limit))
-            
+
             results = []
             for rank, row in enumerate(cur.fetchall(), 1):
                 doc = RetrievedDoc(
@@ -758,13 +852,13 @@ class PGVectorRetriever(GISTRetriever):
                     metadata={
                         'paper_id': row[2],
                         'section_idx': row[3],
-                        'chunk_idx': row[4]
+                        'chunk_idx': row[4],
                     },
-                    dense_score=1.0 - row[5],  # Convert distance to similarity
-                    dense_rank=rank
+                    dense_score=float(row[5]) if row[5] is not None else 0.0,
+                    dense_rank=rank,
                 )
                 results.append(doc)
-        
+
         return results
     
     # -------------------------------------------------------------------------
