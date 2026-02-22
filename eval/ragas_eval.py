@@ -9,7 +9,7 @@ Metrics (RAGAS 0.2.x):
     - context_precision   : are retrieved contexts relevant to the question?
     - context_recall      : do retrieved contexts cover the reference answer?
     - faithfulness        : is the LLM answer grounded in retrieved contexts?
-    - answer_relevancy    : does the LLM answer address the question?
+    (AnswerRelevancy excluded — Copilot proxy has no /v1/embeddings endpoint)
 
 Workflow:
     1. For each QA pair: retriever.search(question) → retrieved contexts
@@ -32,18 +32,41 @@ import openai
 from ragas import EvaluationDataset, evaluate
 from ragas.llms import LangchainLLMWrapper
 from ragas.metrics import (
-    AnswerRelevancy,
     Faithfulness,
     LLMContextPrecisionWithReference,
     LLMContextRecall,
 )
+# Note: AnswerRelevancy is excluded — it requires /v1/embeddings which the
+# GitHub Copilot proxy does not expose.  Three LLM-only metrics are used.
 from langchain_openai import ChatOpenAI
 
 # ── Config ────────────────────────────────────────────────────────────────────
 COPILOT_PROXY = "http://127.0.0.1:8069/v1"
 DEFAULT_MODEL = "gpt-4.1"   # via GitHub Copilot proxy
 
+# Set env vars so RAGAS internal OpenAIEmbeddings() fallback also hits the proxy
+os.environ.setdefault("OPENAI_API_KEY",  "dummy-key")
+os.environ.setdefault("OPENAI_BASE_URL", COPILOT_PROXY)
+
 from ragas import SingleTurnSample
+
+
+def _extract_contexts(docs) -> list[str]:
+    """
+    Extract text strings from RetrievedDoc objects.
+
+    Top-level docs aggregated at paper level have content=''; the actual text
+    lives in doc.sections[*].content.  Fall back to sections when content is empty.
+    """
+    contexts: list[str] = []
+    for d in docs:
+        if d.content:
+            contexts.append(d.content)
+        elif hasattr(d, "sections") and d.sections:
+            for sec in d.sections:
+                if sec.content:
+                    contexts.append(sec.content)
+    return contexts
 
 
 def _generate_answer(question: str, contexts: list[str],
@@ -95,14 +118,13 @@ def run_eval(
             context_precision: float,
             context_recall:    float,
             faithfulness:      float,
-            answer_relevancy:  float,
             n_evaluated:       int,
         }
     """
     if n_pairs:
         qa_pairs = qa_pairs[:n_pairs]
 
-    # Build RAGAS LLM wrapper pointing at the Copilot proxy
+    # Build RAGAS LLM + embeddings wrappers pointing at the Copilot proxy
     langchain_llm = ChatOpenAI(
         model=llm_model,
         openai_api_key="dummy-key",
@@ -111,11 +133,12 @@ def run_eval(
     )
     ragas_llm = LangchainLLMWrapper(langchain_llm)
 
+    # The Copilot proxy does not expose /v1/embeddings, so AnswerRelevancy is
+    # excluded.  ContextPrecision, ContextRecall, Faithfulness are LLM-only.
     metrics = [
         LLMContextPrecisionWithReference(),
         LLMContextRecall(),
         Faithfulness(),
-        AnswerRelevancy(),
     ]
 
     samples = []
@@ -127,7 +150,7 @@ def run_eval(
         # Retrieve
         try:
             docs = retriever.search(question, top_k=top_k)
-            contexts = [d.content for d in docs if d.content]
+            contexts = _extract_contexts(docs)
         except Exception as e:
             if verbose:
                 print(f"  [{i+1:3d}] SKIP retrieval error: {e}")
@@ -167,11 +190,11 @@ def run_eval(
     )
 
     scores = result.to_pandas()
+    # RAGAS metric .name values: llm_context_precision_with_reference, context_recall, faithfulness
     agg = {
-        "context_precision": float(scores["context_precision"].mean()),
+        "context_precision": float(scores["llm_context_precision_with_reference"].mean()),
         "context_recall":    float(scores["context_recall"].mean()),
         "faithfulness":      float(scores["faithfulness"].mean()),
-        "answer_relevancy":  float(scores["answer_relevancy"].mean()),
         "n_evaluated":       len(samples),
     }
     return agg

@@ -28,7 +28,8 @@ TextGrad is instructed to only modify the == CURRENT CONFIG == block.
 Values are parsed with regex and mapped to PGVectorConfig kwargs.
 
 MLflow logging per iteration:
-    - Metrics : context_precision, context_recall, faithfulness, answer_relevancy
+    - Metrics : context_precision, context_recall, faithfulness
+      (AnswerRelevancy excluded — Copilot proxy has no /v1/embeddings)
     - Params  : all 7 hyperparameters
     - Artifacts: system_prompt_v{iter}.txt, pgvector_retriever.py snapshot
 """
@@ -103,11 +104,12 @@ Layer 3 — Cross-encoder re-ranking
   - Score thresholds applied: bm25_min_score, dense_min_similarity,
     colbert_min_score, cross_encoder_min_score
 
-Evaluation uses RAGAS 4 metrics on academic paper QA pairs:
-  - context_precision, context_recall, faithfulness, answer_relevancy
+Evaluation uses RAGAS 3 metrics on academic paper QA pairs:
+  - context_precision, context_recall, faithfulness
+  (AnswerRelevancy excluded — Copilot proxy has no /v1/embeddings endpoint)
 
 OPTIMIZATION TASK:
-Adjust the == CURRENT CONFIG == values below to improve the mean of all 4 RAGAS metrics.
+Adjust the == CURRENT CONFIG == values below to improve the mean of all 3 RAGAS metrics.
 - top_k: number of final results (integer, 3–20)
 - rrf_k: RRF constant (integer, 30–120); higher smooths rank differences
 - gist_lambda: float 0–1; 1.0 = pure relevance, 0.0 = pure diversity
@@ -182,9 +184,8 @@ def score_to_loss_text(scores: dict, config: dict, iteration: int) -> str:
     Format RAGAS scores as natural-language feedback for TextGrad backward pass.
     """
     mean_score = sum(
-        scores[k] for k in ("context_precision", "context_recall",
-                             "faithfulness", "answer_relevancy")
-    ) / 4.0
+        scores[k] for k in ("context_precision", "context_recall", "faithfulness")
+    ) / 3.0
 
     feedback = f"""
 Iteration {iteration} evaluation results (higher = better for all metrics):
@@ -192,7 +193,6 @@ Iteration {iteration} evaluation results (higher = better for all metrics):
   context_precision   : {scores['context_precision']:.4f}   (goal >= 0.70)
   context_recall      : {scores['context_recall']:.4f}   (goal >= 0.70)
   faithfulness        : {scores['faithfulness']:.4f}   (goal >= 0.75)
-  answer_relevancy    : {scores['answer_relevancy']:.4f}   (goal >= 0.70)
   ------------------------------------------
   MEAN RAGAS SCORE    : {mean_score:.4f}   (target >= 0.70)
 
@@ -203,8 +203,6 @@ Analysis:
 {"context_recall is LOW — try increasing top_k or reducing dense_min_similarity to retrieve more context." if scores['context_recall'] < 0.5 else ""}
 {"context_precision is LOW — try increasing cross_encoder_min_score or bm25_min_score to filter irrelevant chunks." if scores['context_precision'] < 0.5 else ""}
 {"faithfulness is LOW — consider increasing cross_encoder_min_score to ensure more topically relevant chunks." if scores['faithfulness'] < 0.5 else ""}
-{"answer_relevancy is LOW — try increasing gist_lambda toward 1.0 to prioritize relevance over diversity." if scores['answer_relevancy'] < 0.5 else ""}
-
 Update == CURRENT CONFIG == to improve the mean RAGAS score.
 """
     return feedback.strip()
@@ -220,9 +218,8 @@ def log_iteration(run_id: str, iteration: int, scores: dict,
             step=iteration,
         )
         mean_score = sum(
-            scores[k] for k in ("context_precision", "context_recall",
-                                 "faithfulness", "answer_relevancy")
-        ) / 4.0
+            scores[k] for k in ("context_precision", "context_recall", "faithfulness")
+        ) / 3.0
         mlflow.log_metric("mean_ragas", mean_score, step=iteration)
 
         # Params (only on first iteration to avoid overwrite conflicts)
@@ -344,13 +341,11 @@ def main(
                 continue
 
             mean_score = sum(
-                scores[k] for k in ("context_precision", "context_recall",
-                                     "faithfulness", "answer_relevancy")
-            ) / 4.0
+                scores[k] for k in ("context_precision", "context_recall", "faithfulness")
+            ) / 3.0
             print(f"  Scores: CP={scores['context_precision']:.3f}  "
                   f"CR={scores['context_recall']:.3f}  "
                   f"F={scores['faithfulness']:.3f}  "
-                  f"AR={scores['answer_relevancy']:.3f}  "
                   f"| mean={mean_score:.3f}")
 
             # Track best
@@ -398,9 +393,8 @@ def main(
 
         if final_scores:
             final_mean = sum(
-                final_scores[k] for k in ("context_precision", "context_recall",
-                                           "faithfulness", "answer_relevancy")
-            ) / 4.0
+                final_scores[k] for k in ("context_precision", "context_recall", "faithfulness")
+            ) / 3.0
             print(f"\n  Final mean RAGAS: {final_mean:.4f}")
             mlflow.log_metrics({f"final_{k}": v for k, v in final_scores.items()
                                 if isinstance(v, float)})
