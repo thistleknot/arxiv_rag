@@ -915,7 +915,10 @@ class PGVectorRetriever(GISTRetriever):
         Layer 2 Path A: ECDF-weighted BM25 expansion over layer2_triplet_bm25.
 
         Builds a weighted TF profile from L1 seed texts, vectorizes it with IDF,
-        and queries the triplet BM25 sparse-vector table.  Seeds are excluded.
+        and queries layer2_triplet_bm25 for top_k NEW chunks (seeds excluded from
+        DB results).  Combines new chunks with seeds present in layer2_triplet_bm25,
+        builds a pairwise BM25 coverage matrix over the combined pool, and
+        GIST-ranks all (seeds + new) together.  Returns the full ranked list.
         """
         from collections import Counter
         import numpy as _np
@@ -979,53 +982,50 @@ class PGVectorRetriever(GISTRetriever):
                 FROM layer2_triplet_bm25
                 ORDER BY triplet_bm25_vector <#> %s::sparsevec({n_buckets}) ASC
                 LIMIT %s
-            """, (q_sv, q_sv, top_k * 2 + len(seed_set)))
+            """, (q_sv, q_sv, top_k + len(seed_set)))
             rows = cur.fetchall()
 
-        # 5. Exclude seeds, collect all candidates
-        candidates = [
+        # 5. Exclude seeds → new candidates (capped at top_k)
+        new_candidates = [
             RetrievedDoc(
                 doc_id=row[0], content='',
                 metadata={'source': 'layer2_triplet_bm25'},
                 bm25_score=float(row[1]),
             )
             for row in rows if row[0] not in seed_set
-        ]
+        ][:top_k]
 
-        if not candidates:
-            return []
-
-        # 6. GIST selection using BM25 doc-doc coverage from layer2_triplet_bm25
-        #    Each path uses its own scoring space:
-        #      BM25  path → pairwise BM25 inner-product as coverage (this function)
-        #      Dense path → pairwise cosine similarity as coverage (_expand_layer2_dense)
-        #    Both GIST outputs are then RRF-fused in the caller.
-        cand_ids   = [doc.doc_id for doc in candidates]
-        scores_arr = _np.array([doc.bm25_score for doc in candidates])
-
-        # Fetch BM25 vectors for candidates from layer2_triplet_bm25
+        # 6. Fetch BM25 vectors for seeds + new (for GIST coverage matrix)
+        all_ids = seed_ids + [doc.doc_id for doc in new_candidates]
         with self.conn.cursor() as cur:
             cur.execute(
                 "SELECT chunk_id, triplet_bm25_vector "
                 "FROM layer2_triplet_bm25 WHERE chunk_id = ANY(%s)",
-                (cand_ids,)
+                (all_ids,)
             )
             bm25_vec_map = {row[0]: row[1] for row in cur.fetchall()}
 
-        valid_idx = [i for i, cid in enumerate(cand_ids) if cid in bm25_vec_map]
-        if len(valid_idx) < 2:
-            # Fallback: score-sorted when too few vectors available
-            results = sorted(candidates, key=lambda d: d.bm25_score, reverse=True)[:top_k]
-            for rank, doc in enumerate(results, 1):
+        # Combined pool: seeds present in layer2_triplet_bm25 + new candidates with vectors
+        seeds_in_l2 = [doc for doc in seed_docs      if doc.doc_id in bm25_vec_map]
+        new_in_l2   = [doc for doc in new_candidates if doc.doc_id in bm25_vec_map]
+        combined    = seeds_in_l2 + new_in_l2
+        n_seeds     = len(seeds_in_l2)
+
+        if len(combined) < 2:
+            for rank, doc in enumerate(new_candidates, 1):
                 doc.bm25_rank = rank
-            return results
+            return new_candidates
 
-        valid_ids    = [cand_ids[i]   for i in valid_idx]
-        valid_scores = scores_arr[valid_idx]
-        n            = len(valid_idx)
+        # Scores: seeds use L1 rrf_score; new candidates use L2 bm25_score
+        scores_arr = _np.array([
+            (doc.rrf_score if i < n_seeds else doc.bm25_score)
+            for i, doc in enumerate(combined)
+        ])
 
-        # Pairwise BM25 inner-product: -(a <#> b), normalised to [0, 1]
-        id_to_idx = {cid: i for i, cid in enumerate(valid_ids)}
+        # 7. Pairwise BM25 coverage matrix over combined pool
+        comb_ids  = [doc.doc_id for doc in combined]
+        id_to_idx = {cid: i for i, cid in enumerate(comb_ids)}
+        n         = len(combined)
         coverage_matrix = _np.zeros((n, n))
         with self.conn.cursor() as cur:
             cur.execute(f"""
@@ -1033,7 +1033,7 @@ class PGVectorRetriever(GISTRetriever):
                        -(a.triplet_bm25_vector <#> b.triplet_bm25_vector) AS score
                 FROM layer2_triplet_bm25 a, layer2_triplet_bm25 b
                 WHERE a.chunk_id = ANY(%s) AND b.chunk_id = ANY(%s)
-            """, (valid_ids, valid_ids))
+            """, (comb_ids, comb_ids))
             for a_id, b_id, score in cur.fetchall():
                 i = id_to_idx.get(a_id)
                 j = id_to_idx.get(b_id)
@@ -1045,8 +1045,9 @@ class PGVectorRetriever(GISTRetriever):
             coverage_matrix /= max_val
         _np.fill_diagonal(coverage_matrix, 1.0)
 
-        selected = gist_select(coverage_matrix, valid_scores, top_k)
-        results  = [candidates[valid_idx[i]] for i in selected]
+        # 8. GIST-rank the full combined pool (seeds + new) in diversity order
+        selected = gist_select(coverage_matrix, scores_arr, n)
+        results  = [combined[i] for i in selected]
         for rank, doc in enumerate(results, 1):
             doc.bm25_rank = rank
         return results
@@ -1060,11 +1061,11 @@ class PGVectorRetriever(GISTRetriever):
         """
         Layer 2 Path B: ECDF-weighted GIST centroid expansion over layer2_embeddings_256d.
 
-        Takes L1 hybrid seeds, computes a weighted centroid in the 256d Qwen3 model2vec
-        space, ANNs against layer2_embeddings_256d (HNSW cosine), then applies GIST
-        diversity selection over the retrieved candidates.  Seeds are excluded.
-
-        GIST clustering is done only over the retrieved results — never the full table.
+        Computes an ECDF-weighted centroid of seed embeddings, ANNs against
+        layer2_embeddings_256d for top_k NEW chunks (seeds excluded from DB results).
+        Combines new chunks with seeds that have embeddings, builds a cosine coverage
+        matrix over the combined pool, and GIST-ranks all (seeds + new) together.
+        Returns the full ranked list.
         """
         import numpy as _np
 
@@ -1097,10 +1098,10 @@ class PGVectorRetriever(GISTRetriever):
         centroid = _np.average(vecs, axis=0, weights=valid_w)
         emb_str  = '[' + ','.join(map(str, centroid.tolist())) + ']'
 
-        seed_set = set(seed_ids)
-        ann_limit = top_k * 2 + len(seed_set)
+        seed_set  = set(seed_ids)
+        seed_map  = {doc.doc_id: doc for doc in seed_docs}
+        ann_limit = top_k + len(seed_set)
         with self.conn.cursor() as cur:
-            # ef_search must be >= LIMIT for HNSW to return enough candidates
             cur.execute(f"SET hnsw.ef_search = {max(ann_limit, 40)}")
             cur.execute("""
                 SELECT chunk_id, 1 - (embedding <=> %s::vector(256)) AS score, embedding
@@ -1110,35 +1111,49 @@ class PGVectorRetriever(GISTRetriever):
             """, (emb_str, emb_str, ann_limit))
             rows = cur.fetchall()
 
-        # 4. Exclude seeds, collect candidates with embeddings for GIST
-        candidates = [
+        # 4. Exclude seeds → new candidates (capped at top_k)
+        new_candidates = [
             (row[0], float(row[1]), _np.array(row[2], dtype=_np.float64))
             for row in rows if row[0] not in seed_set
-        ]
+        ][:top_k]
 
-        if not candidates:
+        if not new_candidates:
             return []
 
-        cand_docs = [
-            RetrievedDoc(doc_id=c[0], content='', metadata={'source': 'layer2_dense'}, dense_score=c[1])
-            for c in candidates
+        # 5. Combine seeds (those with embeddings) + new candidates
+        seeds_in_l2 = [seed_map[cid] for cid in present]   # seed RetrievedDoc objects
+        seed_embs   = [emb_map[cid]   for cid in present]
+        n_seeds     = len(seeds_in_l2)
+
+        new_docs = [
+            RetrievedDoc(doc_id=c[0], content='',
+                         metadata={'source': 'layer2_dense'}, dense_score=c[1])
+            for c in new_candidates
         ]
+        new_embs = [c[2] for c in new_candidates]
 
-        # 5. GIST selection: cluster only the retrieved results, not the full table
-        emb_matrix = _np.array([c[2] for c in candidates])
-        scores_arr = _np.array([c[1] for c in candidates])
+        combined_docs = seeds_in_l2 + new_docs
+        combined_embs = _np.array(seed_embs + new_embs)
+        scores_arr    = _np.concatenate([
+            _np.array([doc.rrf_score for doc in seeds_in_l2]),
+            _np.array([c[1] for c in new_candidates]),
+        ])
 
-        norms = _np.linalg.norm(emb_matrix, axis=1, keepdims=True)
-        norms = _np.where(norms == 0, 1.0, norms)
-        emb_norm = emb_matrix / norms
+        n = len(combined_docs)
+        if n < 2:
+            for rank, doc in enumerate(combined_docs, 1):
+                doc.dense_rank = rank
+            return combined_docs
+
+        # 6. Cosine coverage matrix over combined pool (seeds + new)
+        norms           = _np.linalg.norm(combined_embs, axis=1, keepdims=True)
+        norms           = _np.where(norms == 0, 1.0, norms)
+        emb_norm        = combined_embs / norms
         coverage_matrix = emb_norm @ emb_norm.T
 
-        if len(cand_docs) < 2:
-            results = cand_docs[:top_k]
-        else:
-            selected = gist_select(coverage_matrix, scores_arr, top_k)
-            results = [cand_docs[i] for i in selected]
-
+        # 7. GIST-rank the full combined pool (seeds + new) in diversity order
+        selected = gist_select(coverage_matrix, scores_arr, n)
+        results  = [combined_docs[i] for i in selected]
         for rank, doc in enumerate(results, 1):
             doc.dense_rank = rank
         return results

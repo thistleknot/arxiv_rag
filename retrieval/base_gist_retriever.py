@@ -122,22 +122,23 @@ class BaseGISTRetriever(PGVectorRetriever):
         #   RRF(BM25-arm, Dense-arm) deduplicates → top hybrid_seeds unique
         #   section_idx selected by _reconstruct_documents_from_chunks.
         # =================================================================
-        l2_arm_size = hybrid_seeds * 2   # 288 for top_k=13
-        print(f"[L2 Expansion]  seeds={hybrid_seeds}  arm={l2_arm_size}  target={l2_arm_size * 2} combined  (excludes seeds)")
+        # Each arm: ECDF-weighted query; seeds excluded from DB hits.
+        # Arm combines seeds+new in one GIST pool (~288 chunks) ranked by diversity.
+        # RRF(bm25_arm, dense_arm) → up to 3×seeds unique chunks;
+        # walk rrf_score for unique section_idx → exactly hybrid_seeds sections.
+        l2_arm_size = hybrid_seeds        # 144 new per arm; each arm returns seeds+new (~288)
+        print(f"[L2 Expansion]  seeds={hybrid_seeds}  new_per_arm={l2_arm_size}  combined≤{hybrid_seeds + l2_arm_size} per arm")
         seed_scores = [doc.rrf_score for doc in hybrid_seeds_pool]
         l2_bm25  = self._expand_layer2_bm25(hybrid_seeds_pool, seed_scores, l2_arm_size)
         l2_dense = self._expand_layer2_dense(hybrid_seeds_pool, seed_scores, l2_arm_size)
-        print(f"  \u251c\u2500 BM25   layer2_triplet_bm25      \u2192 {len(l2_bm25):4d} new chunks")
-        print(f"  \u2514\u2500 Dense  GIST centroid (256d)      \u2192 {len(l2_dense):4d} new chunks")
+        print(f"  \u251c\u2500 BM25   layer2_triplet_bm25      \u2192 {len(l2_bm25):4d} chunks  (seeds+new, GIST-ranked)")
+        print(f"  \u2514\u2500 Dense  GIST centroid (256d)      \u2192 {len(l2_dense):4d} chunks  (seeds+new, GIST-ranked)")
 
         graph_expanded = self._rrf_fusion(l2_bm25, l2_dense)
-        print(f"     RRF(L2-BM25, L2-Dense)           \u2192 {len(graph_expanded):4d} merged")
+        print(f"     RRF(L2-BM25, L2-Dense)           \u2192 {len(graph_expanded):4d} unique chunks")
 
-        fused_chunks = self._rrf_fusion(hybrid_seeds_pool, graph_expanded)
-        print(f"     RRF(seeds + L2)                  \u2192 {len(fused_chunks):4d} fused pool")
-
-        # Select top hybrid_seeds unique section_idx from fused pool → L2 output
-        documents = self._reconstruct_documents_from_chunks(fused_chunks, hybrid_seeds)
+        # Select top hybrid_seeds unique section_idx from RRF result → L2 output
+        documents = self._reconstruct_documents_from_chunks(graph_expanded, hybrid_seeds)
         print(f"     Select top-{hybrid_seeds} sections         \u2192 {len(documents):4d} sections")
         print(_D)
 
