@@ -993,45 +993,58 @@ class PGVectorRetriever(GISTRetriever):
         if not candidates:
             return []
 
-        # 6. GIST selection: fetch embeddings via L2→L1 chunk_id mapping
-        # L2 triplet ids have doubled suffix: 'paper_sX_cY_sX_cY' → strip last '_sN_cM'
-        import re as _re
-        cand_ids = [doc.doc_id for doc in candidates]
-        l2_to_l1 = {cid: _re.sub(r'_s\d+_c\d+$', '', cid) for cid in cand_ids}
-        l1_ids = list(set(l2_to_l1.values()))
+        # 6. GIST selection using BM25 doc-doc coverage from layer2_triplet_bm25
+        #    Each path uses its own scoring space:
+        #      BM25  path → pairwise BM25 inner-product as coverage (this function)
+        #      Dense path → pairwise cosine similarity as coverage (_expand_layer2_dense)
+        #    Both GIST outputs are then RRF-fused in the caller.
+        cand_ids   = [doc.doc_id for doc in candidates]
+        scores_arr = _np.array([doc.bm25_score for doc in candidates])
+
+        # Fetch BM25 vectors for candidates from layer2_triplet_bm25
         with self.conn.cursor() as cur:
             cur.execute(
-                "SELECT chunk_id, embedding FROM layer2_embeddings_256d WHERE chunk_id = ANY(%s)",
-                (l1_ids,)
+                "SELECT chunk_id, triplet_bm25_vector "
+                "FROM layer2_triplet_bm25 WHERE chunk_id = ANY(%s)",
+                (cand_ids,)
             )
-            l1_emb = {row[0]: _np.array(row[1], dtype=_np.float64) for row in cur.fetchall()}
-        # Map L2 candidate ids → embeddings via L1 key
-        emb_map = {
-            cid: l1_emb[l2_to_l1[cid]]
-            for cid in cand_ids
-            if l2_to_l1[cid] in l1_emb
-        }
+            bm25_vec_map = {row[0]: row[1] for row in cur.fetchall()}
 
-        valid_idx = [i for i, doc in enumerate(candidates) if doc.doc_id in emb_map]
+        valid_idx = [i for i, cid in enumerate(cand_ids) if cid in bm25_vec_map]
         if len(valid_idx) < 2:
-            # Not enough embeddings — fall back to score-sorted
+            # Fallback: score-sorted when too few vectors available
             results = sorted(candidates, key=lambda d: d.bm25_score, reverse=True)[:top_k]
             for rank, doc in enumerate(results, 1):
                 doc.bm25_rank = rank
             return results
 
-        emb_matrix = _np.array([emb_map[candidates[i].doc_id] for i in valid_idx])
-        scores_arr = _np.array([candidates[i].bm25_score for i in valid_idx])
+        valid_ids    = [cand_ids[i]   for i in valid_idx]
+        valid_scores = scores_arr[valid_idx]
+        n            = len(valid_idx)
 
-        # Pairwise cosine similarity as coverage matrix
-        norms = _np.linalg.norm(emb_matrix, axis=1, keepdims=True)
-        norms = _np.where(norms == 0, 1.0, norms)
-        emb_norm = emb_matrix / norms
-        coverage_matrix = emb_norm @ emb_norm.T
+        # Pairwise BM25 inner-product: -(a <#> b), normalised to [0, 1]
+        id_to_idx = {cid: i for i, cid in enumerate(valid_ids)}
+        coverage_matrix = _np.zeros((n, n))
+        with self.conn.cursor() as cur:
+            cur.execute(f"""
+                SELECT a.chunk_id, b.chunk_id,
+                       -(a.triplet_bm25_vector <#> b.triplet_bm25_vector) AS score
+                FROM layer2_triplet_bm25 a, layer2_triplet_bm25 b
+                WHERE a.chunk_id = ANY(%s) AND b.chunk_id = ANY(%s)
+            """, (valid_ids, valid_ids))
+            for a_id, b_id, score in cur.fetchall():
+                i = id_to_idx.get(a_id)
+                j = id_to_idx.get(b_id)
+                if i is not None and j is not None:
+                    coverage_matrix[i, j] = float(score) if score is not None else 0.0
 
-        # MMR-style selection: relevance + diversity
-        selected = gist_select(coverage_matrix, scores_arr, top_k)
-        results = [candidates[valid_idx[i]] for i in selected]
+        max_val = coverage_matrix.max()
+        if max_val > 0:
+            coverage_matrix /= max_val
+        _np.fill_diagonal(coverage_matrix, 1.0)
+
+        selected = gist_select(coverage_matrix, valid_scores, top_k)
+        results  = [candidates[valid_idx[i]] for i in selected]
         for rank, doc in enumerate(results, 1):
             doc.bm25_rank = rank
         return results
