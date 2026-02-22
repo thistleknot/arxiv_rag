@@ -87,82 +87,61 @@ class BaseGISTRetriever(PGVectorRetriever):
         
         hybrid_seeds = get_previous_fibonacci(retrieval_limit)  # 169 -> 144
         
-        print(f"Pipeline: BM25+GIST {retrieval_limit} -> RRF {hybrid_seeds} hybrid seeds -> L2 triplet-BM25+dense (target {hybrid_seeds} new each = {hybrid_seeds*2} total pool) -> RRF fusion -> Reconstruct documents -> Late Interaction -> Select {top_k} final")
-        
+        _D = "\u2500" * 66
+        print(f"Pipeline  top_k={top_k}  pool={retrieval_limit}  seeds={hybrid_seeds}")
+        print(_D)
+
         # =================================================================
-        # Layer 1: BM25 Retrieval (Lexical)
+        # Layer 1: BM25 + GIST Retrieval (parallel arms)
         # =================================================================
-        print(f"  [1/7] BM25 retrieval (lexical matching)...")
+        print("[L1 Retrieval]")
         bm25_pool = self._retrieve_bm25(query, retrieval_limit)
-        print(f"        Retrieved {len(bm25_pool)} chunks")
-        
-        # =================================================================
-        # Layer 2: GIST Retrieval (Semantic)
-        # =================================================================
-        print(f"  [2/7] GIST retrieval (semantic similarity)...")
+        print(f"  \u251c\u2500 BM25   layer1_bm25_sparse       \u2192 {len(bm25_pool):4d} chunks")
+
         gist_pool = self._retrieve_dense(query, retrieval_limit)
-        print(f"        Retrieved {len(gist_pool)} chunks")
-        
-        # =================================================================
-        # Layer 3: RRF Fusion → Hybrid Seeds (Fibonacci cascade)
-        # =================================================================
-        print(f"  [3/7] RRF fusion (BM25 + GIST) -> {hybrid_seeds} hybrid seeds...")
+        print(f"  \u2514\u2500 Dense  layer1_embeddings_128d   \u2192 {len(gist_pool):4d} chunks")
+
+        # RRF Fusion → Hybrid Seeds (Fibonacci cascade)
         hybrid_pool = self._rrf_fusion(bm25_pool, gist_pool)
         hybrid_seeds_pool = hybrid_pool[:hybrid_seeds]  # Take top Fibonacci seeds
-        print(f"        Hybrid seeds: {len(hybrid_seeds_pool)} chunks")
-        
+        print(f"     RRF(L1)                          \u2192 {len(hybrid_seeds_pool):4d} hybrid seeds")
+        print(_D)
+
         # =================================================================
-        # Layer 4: L2 ECDF-Weighted Dual Expansion from Hybrid Seeds
-        # Expansion target = hybrid_seeds (not top_k):
-        #   hybrid_seeds = prev_fib(top_k²) = 144 for top_k=13
-        #   Each path queries hybrid_seeds*2 from DB, excludes seeds,
-        #   returns up to hybrid_seeds NEW chunks → total pool: 2×144 = 288
+        # Layer 2: ECDF-Weighted Dual Expansion from Hybrid Seeds
+        #   Each arm queries hybrid_seeds*2, excludes seeds,
+        #   returns up to hybrid_seeds NEW chunks → pool = 2×hybrid_seeds
         # =================================================================
-        print(f"  [4/7] L2 expansion from hybrid seeds (BM25 triplet + Dense centroid)...")
+        print(f"[L2 Expansion]  seeds={hybrid_seeds}  target={hybrid_seeds * 2} new  (excludes seeds)")
         seed_scores = [doc.rrf_score for doc in hybrid_seeds_pool]
         l2_bm25  = self._expand_layer2_bm25(hybrid_seeds_pool, seed_scores, hybrid_seeds)
         l2_dense = self._expand_layer2_dense(hybrid_seeds_pool, seed_scores, hybrid_seeds)
-        print(f"        L2 BM25: {len(l2_bm25)} | L2 Dense: {len(l2_dense)}")
+        print(f"  \u251c\u2500 BM25   layer2_triplet_bm25      \u2192 {len(l2_bm25):4d} new chunks")
+        print(f"  \u2514\u2500 Dense  GIST centroid (128d)     \u2192 {len(l2_dense):4d} new chunks")
 
-        # RRF merge the two L2 paths → combined expansion pool
         graph_expanded = self._rrf_fusion(l2_bm25, l2_dense)
-        print(f"        L2 RRF merged: {len(graph_expanded)} chunks")
+        print(f"     RRF(L2-BM25, L2-Dense)           \u2192 {len(graph_expanded):4d} merged")
+
+        fused_chunks = self._rrf_fusion(hybrid_seeds_pool, graph_expanded)
+        print(f"     RRF(seeds + L2)                  \u2192 {len(fused_chunks):4d} fused pool")
+        print(_D)
 
         # =================================================================
-        # Layer 5: RRF Fusion (Hybrid Seeds + L2 Expansion)
+        # Layer 3: Reconstruct → Score (ColBERT + CE) → Select
         # =================================================================
-        print(f"  [5/7] RRF fusion (Hybrid seeds + L2 expansion)...")
-        fused_chunks = self._rrf_fusion(hybrid_seeds_pool, graph_expanded)
-        # Keep more chunks after graph expansion (don't limit to k²)
-        print(f"        Fused pool: {len(fused_chunks)} chunks")
-        
-        # =================================================================
-        # Layer 6: Document Reconstruction (Dataset-Specific)
-        # =================================================================
-        print(f"  [6/7] Reconstructing documents from chunks...")
+        print("[L3 Scoring]")
         documents = self._reconstruct_documents_from_chunks(fused_chunks)
-        print(f"        Reconstructed {len(documents)} unique documents")
-        
-        # =================================================================
-        # Layer 7: Late Interaction on Documents (ColBERT)
-        # =================================================================
-        print(f"  [7/7] Late Interaction on documents (ColBERT scoring)...")
+        print(f"  \u251c\u2500 Reconstruct                     \u2192 {len(documents):4d} documents")
+
         if self.config.use_colbert and len(documents) > 0:
-            # Score ALL documents - let final selection choose top_k
             scored_documents = self._score_documents(query, documents, len(documents))
         else:
-            # Fallback: keep documents as-is (already have base scores from chunks)
             scored_documents = documents
-        print(f"        Scored {len(scored_documents)} documents")
-        
-        # =================================================================
-        # Layer 8: Final Document Selection (Dataset-Specific)
-        # =================================================================
-        print(f"  [8/8] Selecting {top_k} final documents...")
+        print(f"     Scored {len(scored_documents):4d} documents")
+
         results = self._select_final_documents(scored_documents, top_k)
-        print(f"        Selected {len(results)} documents")
-        
-        print(f"  Returning {len(results)} documents")
+        print(f"     Select top-{top_k:<3d}                    \u2192 {len(results):4d} final")
+        print(_D)
         return results
     
     def _rrf_fusion(
@@ -267,12 +246,13 @@ class BaseGISTRetriever(PGVectorRetriever):
                 doc['colbert_score']        = float(colbert_scores[i])
                 doc['cross_encoder_score']  = float(ce_scores[i])
 
-            print(f"        L3 RRF: ColBERT + MS-MARCO CE merged")
+            print(f"  \u251c\u2500 ColBERT   late interaction")
+            print(f"  \u2514\u2500 MS-MARCO CE + RRF merged")
         else:
             # CE unavailable — ColBERT only
             for doc, score in zip(documents, colbert_scores):
                 doc['score'] = float(score)
-            print(f"        L3: ColBERT only (CE unavailable)")
+            print(f"  \u2514\u2500 ColBERT   late interaction        (CE unavailable)")
 
         documents.sort(key=lambda d: d['score'], reverse=True)
         return documents
