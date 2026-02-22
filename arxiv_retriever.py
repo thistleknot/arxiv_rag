@@ -16,11 +16,7 @@ Chunk → Section → Paper (3-level aggregation)
 
 from typing import List, Dict, Any
 from collections import defaultdict
-import msgpack
-import numpy as np
-from pathlib import Path
-from rank_bm25 import BM25Okapi
-from base_gist_retriever import BaseGISTRetriever, RetrievedDoc
+from retrieval.base_gist_retriever import BaseGISTRetriever, RetrievedDoc
 
 
 class ArxivRetriever(BaseGISTRetriever):
@@ -28,44 +24,15 @@ class ArxivRetriever(BaseGISTRetriever):
     Arxiv-specific retriever with 3-level aggregation:
       chunk → section → paper
     
-    Graph expansion uses semantic triplet extraction (not Node2Vec).
+    L2 expansion queries layer2_triplet_bm25 (pgvector sparsevec, 118k triplets).
     """
     
     def __init__(self, config):
         """
-        Initialize with triplet graph data for Layer 2 expansion.
-        
         Args:
             config: PGVectorConfig with database settings
         """
         super().__init__(config)
-        
-        # Load triplet graph data (for graph expansion)
-        try:
-            # Load arxiv_graph_sparse.msgpack (triplet-based graph)
-            graph_path = Path("arxiv_graph_sparse.msgpack")
-            if graph_path.exists():
-                with open(graph_path, 'rb') as f:
-                    graph_data = msgpack.unpackb(f.read(), raw=False, strict_map_key=False)
-                    self.chunk_to_triplets = graph_data.get('forward_index', {})
-                    self.triplet_to_chunks = graph_data.get('inverse_index', {})
-                    metadata = graph_data.get('metadata', {})
-                    
-                    # Note: This sparse format doesn't include triplet text,
-                    # just the mappings. We'll need to load triplet texts separately
-                    # or use a different approach for BM25.
-                    print(f"    Loaded graph: {len(self.triplet_to_chunks):,} triplets, {len(self.chunk_to_triplets):,} chunks")
-                    self.graph_bm25 = None  # TODO: Load triplet corpus for BM25
-            else:
-                print(f"    Warning: {graph_path} not found - graph expansion disabled")
-                self.chunk_to_triplets = {}
-                self.triplet_to_chunks = {}
-                self.graph_bm25 = None
-        except Exception as e:
-            print(f"    Warning: Failed to load graph data: {e}")
-            self.chunk_to_triplets = {}
-            self.triplet_to_chunks = {}
-            self.graph_bm25 = None
     
     def _reconstruct_documents_from_chunks(
         self,
@@ -124,33 +91,6 @@ class ArxivRetriever(BaseGISTRetriever):
                 })
         
         return sections
-    
-    def _retrieve_graph(
-        self,
-        query: str,
-        limit: int
-    ) -> List[RetrievedDoc]:
-        """
-        Graph expansion via semantic triplet connections.
-        
-        Uses forward/inverse index to expand from hybrid seed chunks.
-        Triplets act as edges connecting related chunks.
-        
-        Args:
-            query: Search query (not used - we expand from hybrid seeds)
-            limit: Maximum number of chunks to retrieve
-        
-        Returns:
-            List of expanded chunks from graph traversal
-        """
-        if not self.chunk_to_triplets or not self.triplet_to_chunks:
-            return []  # Graph data not loaded
-        
-        # Note: We can't access hybrid seeds here without refactoring BaseGISTRetriever
-        # For now, return empty list - graph expansion happens via triplet BM25 in ThreeLayerPhiRetriever
-        # TODO: Refactor base class to pass hybrid seeds to _retrieve_graph()
-        
-        return []
     
     def _select_final_documents(
         self,

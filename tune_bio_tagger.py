@@ -923,7 +923,7 @@ def objective(trial: Trial, train_examples: List[Dict], eval_examples: List[Dict
 
 def main():
     parser = argparse.ArgumentParser(description='Tune BIO tagger hyperparameters with Optuna')
-    parser.add_argument('--data', type=str, default='bio_training_250chunks_complete.msgpack',
+    parser.add_argument('--data', type=str, default='data/bio_training_250chunks_complete.msgpack',
                        help='Training data file')
     parser.add_argument('--tune-samples', type=int, default=50,
                        help='Number of examples for tuning (default: 50)')
@@ -1329,11 +1329,11 @@ def main():
         'total_examples': len(all_examples)
     }
     
-    with open('tuning_results.msgpack', 'wb') as f:
+    with open('data/tuning_results.msgpack', 'wb') as f:
         f.write(msgpack.packb(results, use_bin_type=True))
     
     print("\nTuned model saved: bio_tagger_atomic.pt")
-    print("Results saved: tuning_results.msgpack")
+    print("Results saved: data/tuning_results.msgpack")
 
 
 if __name__ == '__main__':
