@@ -102,13 +102,14 @@ class BaseGISTRetriever(PGVectorRetriever):
         gist_pool = self._retrieve_dense(query, retrieval_limit)
         print(f"  \u2514\u2500 Dense  layer1_embeddings_128d   \u2192 {len(gist_pool):4d} chunks")
 
-        # GIST per arm: coverage = doc-doc BM25/cosine, utility = query score
-        gist_limit     = hybrid_seeds // 2
-        bm25_selected  = self._gist_select_pool(bm25_pool,  query, gist_limit, 'bm25')
-        dense_selected = self._gist_select_pool(gist_pool,  query, gist_limit, 'dense')
+        # GIST per arm: each arm selects hybrid_seeds diverse docs independently.
+        # After RRF union, len(hybrid_pool) >= hybrid_seeds (arms may partially
+        # overlap), so slicing [:hybrid_seeds] always yields exactly hybrid_seeds.
+        bm25_selected  = self._gist_select_pool(bm25_pool,  query, hybrid_seeds, 'bm25')
+        dense_selected = self._gist_select_pool(gist_pool,  query, hybrid_seeds, 'dense')
         print(f"     GIST(BM25)  \u2192 {len(bm25_selected):4d}  GIST(Dense) \u2192 {len(dense_selected):4d}")
 
-        # RRF Fusion → Hybrid Seeds (Fibonacci cascade)
+        # RRF Fusion → exactly hybrid_seeds seeds
         hybrid_pool = self._rrf_fusion(bm25_selected, dense_selected)
         hybrid_seeds_pool = hybrid_pool[:hybrid_seeds]
         print(f"     RRF(L1-GIST)                     \u2192 {len(hybrid_seeds_pool):4d} hybrid seeds")
