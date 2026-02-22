@@ -9,7 +9,9 @@ Metrics (RAGAS 0.2.x):
     - context_precision   : are retrieved contexts relevant to the question?
     - context_recall      : do retrieved contexts cover the reference answer?
     - faithfulness        : is the LLM answer grounded in retrieved contexts?
-    (AnswerRelevancy excluded — Copilot proxy has no /v1/embeddings endpoint)
+    - answer_relevancy    : is the generated answer relevant to the question? (LLM-scored)
+    Note: RAGAS native AnswerRelevancy excluded — Copilot proxy has no /v1/embeddings.
+    answer_relevancy uses an LLM rubric call instead (no embeddings needed).
 
 Workflow:
     1. For each QA pair: retriever.search(question) → retrieved contexts
@@ -22,6 +24,7 @@ Public API:
 """
 
 import os
+import re
 import sys
 import json
 from typing import Optional
@@ -49,6 +52,39 @@ os.environ.setdefault("OPENAI_API_KEY",  "dummy-key")
 os.environ.setdefault("OPENAI_BASE_URL", COPILOT_PROXY)
 
 from ragas import SingleTurnSample
+
+
+def _score_answer_relevancy_llm(question: str, answer: str,
+                                model: str = DEFAULT_MODEL) -> float:
+    """
+    LLM rubric scorer for answer_relevancy (no embeddings needed).
+    Returns float 0.0-1.0.
+    """
+    client = openai.OpenAI(api_key="dummy-key", base_url=COPILOT_PROXY)
+    prompt = (
+        "Rate how relevant this answer is to the question on a scale from 0.0 to 1.0.\n\n"
+        f"Question: {question}\n\n"
+        f"Answer: {answer}\n\n"
+        "Criteria:\n"
+        "  1.0 = directly and completely addresses the question\n"
+        "  0.5 = partially addresses the question\n"
+        "  0.0 = irrelevant or off-topic\n\n"
+        "Respond with ONLY a single decimal number between 0.0 and 1.0."
+    )
+    try:
+        resp = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.0,
+            max_tokens=10,
+        )
+        text = resp.choices[0].message.content.strip()
+        m = re.search(r"(\d+\.?\d*)", text)
+        if m:
+            return max(0.0, min(1.0, float(m.group(1))))
+    except Exception:
+        pass
+    return 0.5
 
 
 def _extract_contexts(docs) -> list[str]:
@@ -118,11 +154,14 @@ def run_eval(
             context_precision: float,
             context_recall:    float,
             faithfulness:      float,
+            answer_relevancy:  float,
             n_evaluated:       int,
         }
     """
     if n_pairs:
         qa_pairs = qa_pairs[:n_pairs]
+
+    qa_responses: list = []   # (question, generated_response) collected during sample build
 
     # Build RAGAS LLM + embeddings wrappers pointing at the Copilot proxy
     langchain_llm = ChatOpenAI(
@@ -173,6 +212,7 @@ def run_eval(
             retrieved_contexts=contexts,
         )
         samples.append(sample)
+        qa_responses.append((question, response))
 
         if verbose:
             print(f"  [{i+1:3d}] ✓  {len(contexts)} ctx  Q: {question[:60]}...", flush=True)
@@ -192,11 +232,20 @@ def run_eval(
     )
 
     scores = result.to_pandas()
-    # RAGAS metric .name values: llm_context_precision_with_reference, context_recall, faithfulness
+
+    # 4th metric: answer_relevancy via LLM rubric (no embeddings endpoint needed)
+    if verbose:
+        print(f"  Scoring answer_relevancy for {len(qa_responses)} pairs...")
+    ar_scores = [
+        _score_answer_relevancy_llm(q, a, model=llm_model)
+        for q, a in qa_responses
+    ]
+
     agg = {
         "context_precision": float(scores["llm_context_precision_with_reference"].mean()),
         "context_recall":    float(scores["context_recall"].mean()),
         "faithfulness":      float(scores["faithfulness"].mean()),
+        "answer_relevancy":  float(sum(ar_scores) / len(ar_scores)) if ar_scores else 0.0,
         "n_evaluated":       len(samples),
     }
     return agg
@@ -229,6 +278,9 @@ def main():
     print("\n── Results ──")
     for k, v in scores.items():
         print(f"  {k:<22}: {v:.4f}" if isinstance(v, float) else f"  {k:<22}: {v}")
+    mean_ragas = sum(scores[k] for k in ("context_precision", "context_recall",
+                                         "faithfulness", "answer_relevancy")) / 4.0
+    print(f"  {'mean_ragas (4-metric)':<22}: {mean_ragas:.4f}")
 
 
 if __name__ == "__main__":
