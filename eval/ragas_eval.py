@@ -46,6 +46,7 @@ from langchain_openai import ChatOpenAI
 # ── Config ────────────────────────────────────────────────────────────────────
 COPILOT_PROXY = os.environ.get("LLM_PROXY_URL", "http://localhost:11434/v1")
 DEFAULT_MODEL = os.environ.get("LLM_MODEL",     "qwen3-vl:8b")
+RASGAS_MODEL  = os.environ.get("RAGAS_MODEL",   "granite3.3:latest")
 
 # Set env vars so RAGAS internal OpenAIEmbeddings() fallback also hits the proxy
 os.environ.setdefault("OPENAI_API_KEY",  "ollama")
@@ -55,7 +56,7 @@ from ragas import SingleTurnSample
 
 
 def _score_answer_relevancy_llm(question: str, answer: str,
-                                model: str = DEFAULT_MODEL) -> float:
+                                model: str = RASGAS_MODEL) -> float:
     """
     LLM rubric scorer for answer_relevancy (no embeddings needed).
     Returns float 0.0-1.0.
@@ -111,7 +112,7 @@ def _extract_contexts(docs) -> list[str]:
 
 
 def _generate_answer(question: str, contexts: list[str],
-                     model: str = DEFAULT_MODEL, max_tokens: int = 600) -> str:
+                     model: str = RASGAS_MODEL, max_tokens: int = 600) -> str:
     """
     Generate a grounded answer from retrieved contexts via Copilot proxy.
     Used to populate SingleTurnSample.response.
@@ -145,7 +146,7 @@ def run_eval(
     retriever,
     qa_pairs: list[dict],
     top_k: int = 5,
-    llm_model: str = DEFAULT_MODEL,
+    llm_model: str = RASGAS_MODEL,
     n_pairs: Optional[int] = None,
     verbose: bool = True,
 ) -> dict:
@@ -181,7 +182,7 @@ def run_eval(
         openai_api_base=COPILOT_PROXY,
         temperature=0.1,
         request_timeout=180,  # Ollama local inference can be slow
-        max_retries=1,        # one retry only; fail fast on repeated stall
+        max_retries=0,        # no retries; timeout already set to 180s
     )
     ragas_llm = LangchainLLMWrapper(langchain_llm)
 

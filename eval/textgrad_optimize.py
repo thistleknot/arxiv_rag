@@ -66,6 +66,7 @@ _BASE_MODEL   = os.environ.get("LLM_MODEL",     "qwen3-vl:8b")
 # gpt-* and already-prefixed names are passed through unchanged.
 LITELLM_MODEL = _BASE_MODEL if _BASE_MODEL.startswith(("gpt-", "openai/")) else f"openai/{_BASE_MODEL}"
 OPENAI_MODEL  = _BASE_MODEL   # bare name for direct openai.OpenAI() client calls
+RASGAS_MODEL  = os.environ.get("RAGAS_MODEL", "granite3.3:latest")  # fast non-thinking model for RAGAS eval
 MLFLOW_EXP = "arxiv-3layer-retrieval-optimization"
 RETRIEVER_FILES = [
     os.path.join(ROOT, "retrieval", "pgvector_retriever.py"),
@@ -448,6 +449,7 @@ def run_4metric_eval(
     top_k: int = 5,
     n_pairs: Optional[int] = None,
     verbose: bool = True,
+    llm_model: str = RASGAS_MODEL,
 ) -> dict:
     """
     Thin wrapper around run_eval that returns all 4 RAGAS metrics:
@@ -460,6 +462,7 @@ def run_4metric_eval(
         top_k=top_k,
         n_pairs=n_pairs,
         verbose=verbose,
+        llm_model=llm_model,
     )
 
 
