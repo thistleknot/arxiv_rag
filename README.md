@@ -1,6 +1,6 @@
 # Hybrid Retrieval & Knowledge Extraction System
 
-> Auto-generated from feature catalogs on 2026-02-13 06:36.
+> Auto-generated from feature catalogs on 2026-02-21 17:46.
 > Source databases: `retriever_feature_catalog.sqlite3`, `bio_tagger_features.sqlite3`, `graph_transformer_feature_catalog.sqlite3`
 > Generator: `generate_readme.py`
 
@@ -757,11 +757,11 @@ Coverage gaps (benchmarking, production scaling, security) are LITERATURE GAPS n
 
 ## 🏷️ BIO Tagger — Feature Catalog
 
-*Source: `bio_tagger_features.sqlite3` — 13 features, 4 architectural decisions, 1 claims*
+*Source: `bio_tagger_features.sqlite3` — 14 features, 4 architectural decisions, 1 claims*
 
 | Status | Count |
 |--------|-------|
-| ✅ DONE | 12 |
+| ✅ DONE | 13 |
 | 🔄 IN PROGRESS | 1 |
 
 ### Features
@@ -804,9 +804,9 @@ Production inference class for SPO triplet extraction. Script: inference_bio_tag
 
 #### 7. Post-Inference Stopword Removal ✅ DONE
 
-Strip stopwords from extracted spans AFTER model inference (model learns full boundaries). Script: inference_bio_tagger.py. SPAN_STOPWORDS set (line 71): articles (a/an/the), prepositions (to/of/in/on/at/by/for/with/from/into/through), conjunctions (and/or/but/nor), copulas (is/are/was/were/be/been/being), relative pronouns (that/which/who), pronouns (this/these/those/it/its). _COPULAS set (line 86): is/are/was/were/be/been/being. clean_span_tokens(tokens, label_type) (line 88): strips all stopwords from SUBJ/OBJ but KEEPS copulas in PRED spans. Never returns empty list (falls back to original tokens).
+Strip stopwords from extracted spans AFTER model inference (model trains on full boundaries). Script: inference_bio_tagger.py. SPAN_STOPWORDS (line ~71): articles (a/an/the), prepositions (to/of/in/on/at/by/for/with/from/into/through), conjunctions (and/or/but/nor), copulas (is/are/was/were/be/been/being), relative pronouns (that/which/who), pronouns (this/these/those/it/its), auxiliaries (has/have/had). clean_span_tokens(tokens, label_type): strips all stopwords from ALL span types including PRED. BUG FIXED: old code had fallback 'return cleaned if cleaned else tokens' which silently returned original tokens if model fired on a bare copula (is/are/has etc). Fix: removed fallback so copulas and auxiliaries are now stripped from PRED spans and can return empty list. Can return empty list for any label type — which are then skipped during triplet reconstruction. Stopwords covered for predicates: is, are, was, were, be, been, being, has, have, had, to, of, in, on, at, by, for, with, from.
 
-*Notes: Post-inference design: model trains on full spans, cleanup happens at output.*
+*Notes: Fixed: removed fallback for all types. All span types now consistently strip stopwords and can return empty. Paired with training-time copula construction fix (see feature 14).*
 
 #### 8. Cartesian Product Triplet Expansion ✅ DONE
 
@@ -881,6 +881,12 @@ run_bio_tagger.bat          # Interactive menu
 run_bio_tagger.bat app      # Launch Streamlit
 run_bio_tagger.bat test     # Run unit tests
 run_bio_tagger.bat check    # System health check
+
+#### 14. Copula Construction Fix (extract_spo_from_sentence) ✅ DONE
+
+Training-time fix in extract_bio_training_data.py: extract_spo_from_sentence() now detects UD copula constructions via Stanza dependency parse and labels them correctly. Detection: when ROOT token is NOUN or ADJ and has a 'cop' dependency child, the nominal/adjectival ROOT is labelled B-PRED instead of the copula verb. Example: 'The bible is the word of God' — Stanza parse gives ROOT=word (NOUN), cop=is. Old behaviour: 'is' labelled B-PRED -> stripped by SPAN_STOPWORDS -> empty predicate -> triplet dropped. Fixed behaviour: 'word' labelled B-PRED -> triplet (bible, word, god). Implementation detail: cop_children = [ch for ch in token.children if ch.deprel == 'cop'] check on the ROOT token; if present, ROOT is used as predicate head and its nominal modifiers get I-PRED. Affects: predicate span boundary in training data. Requires retraining bio_tagger_atomic.pt to take effect. Works in tandem with clean_span_tokens PRED fix (feature 7) as defence-in-depth: training fix teaches correct predicate; inference fix handles edge cases if model misfires on a copula.
+
+*Notes: Retraining required and in progress (2026-02-19). bio_training_data.msgpack (1,168 examples) generated from fixed extractor. bio_tagger_atomic.pt predates this fix; new model will replace it.*
 
 ### Architectural Decisions
 
@@ -1347,4 +1353,4 @@ MIT
 
 ---
 
-*Generated 2026-02-13 06:36 by `generate_readme.py`*
+*Generated 2026-02-21 17:46 by `generate_readme.py`*

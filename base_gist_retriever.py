@@ -111,18 +111,22 @@ class BaseGISTRetriever(PGVectorRetriever):
         print(f"        Hybrid seeds: {len(hybrid_seeds_pool)} chunks")
         
         # =================================================================
-        # Layer 4: Graph Expansion from Hybrid Seeds (Node2Vec)
+        # Layer 4: L2 ECDF-Weighted Dual Expansion from Hybrid Seeds
         # =================================================================
-        print(f"  [4/7] Graph expansion from hybrid seeds (Node2Vec)...")
-        # TODO: Bootstrap Node2Vec from top 50 hybrid seeds
-        # For now, use existing graph retrieval as placeholder
-        graph_expanded = self._retrieve_graph(query, graph_expansion_limit)
-        print(f"        Graph expanded: {len(graph_expanded)} chunks")
-        
+        print(f"  [4/7] L2 expansion from hybrid seeds (BM25 triplet + Dense centroid)...")
+        seed_scores = [doc.rrf_score for doc in hybrid_seeds_pool]
+        l2_bm25  = self._expand_layer2_bm25(hybrid_seeds_pool, seed_scores, top_k)
+        l2_dense = self._expand_layer2_dense(hybrid_seeds_pool, seed_scores, top_k)
+        print(f"        L2 BM25: {len(l2_bm25)} | L2 Dense: {len(l2_dense)}")
+
+        # RRF merge the two L2 paths → combined expansion pool
+        graph_expanded = self._rrf_fusion(l2_bm25, l2_dense)
+        print(f"        L2 RRF merged: {len(graph_expanded)} chunks")
+
         # =================================================================
-        # Layer 5: RRF Fusion (Hybrid + Graph)
+        # Layer 5: RRF Fusion (Hybrid Seeds + L2 Expansion)
         # =================================================================
-        print(f"  [5/7] RRF fusion (Hybrid seeds + Graph expansion)...")
+        print(f"  [5/7] RRF fusion (Hybrid seeds + L2 expansion)...")
         fused_chunks = self._rrf_fusion(hybrid_seeds_pool, graph_expanded)
         # Keep more chunks after graph expansion (don't limit to k²)
         print(f"        Fused pool: {len(fused_chunks)} chunks")
