@@ -886,15 +886,48 @@ class PGVectorRetriever(GISTRetriever):
             """, (q_sv, q_sv, top_k * 2 + len(seed_set)))
             rows = cur.fetchall()
 
-        # 5. Exclude seeds, cap at top_k, set ranks
-        results = [
+        # 5. Exclude seeds, collect all candidates
+        candidates = [
             RetrievedDoc(
                 doc_id=row[0], content='',
                 metadata={'source': 'layer2_triplet_bm25'},
                 bm25_score=float(row[1]),
             )
             for row in rows if row[0] not in seed_set
-        ][:top_k]
+        ]
+
+        if not candidates:
+            return []
+
+        # 6. GIST selection: fetch embeddings for coverage matrix
+        cand_ids = [doc.doc_id for doc in candidates]
+        with self.conn.cursor() as cur:
+            cur.execute(
+                "SELECT chunk_id, embedding FROM arxiv_chunks WHERE chunk_id = ANY(%s)",
+                (cand_ids,)
+            )
+            emb_map = {row[0]: _np.array(row[1], dtype=_np.float64) for row in cur.fetchall()}
+
+        valid_idx = [i for i, doc in enumerate(candidates) if doc.doc_id in emb_map]
+        if len(valid_idx) < 2:
+            # Not enough embeddings — fall back to score-sorted
+            results = sorted(candidates, key=lambda d: d.bm25_score, reverse=True)[:top_k]
+            for rank, doc in enumerate(results, 1):
+                doc.bm25_rank = rank
+            return results
+
+        emb_matrix = _np.array([emb_map[candidates[i].doc_id] for i in valid_idx])
+        scores_arr = _np.array([candidates[i].bm25_score for i in valid_idx])
+
+        # Pairwise cosine similarity as coverage matrix
+        norms = _np.linalg.norm(emb_matrix, axis=1, keepdims=True)
+        norms = _np.where(norms == 0, 1.0, norms)
+        emb_norm = emb_matrix / norms
+        coverage_matrix = emb_norm @ emb_norm.T
+
+        # MMR-style selection: relevance + diversity
+        selected = gist_select(coverage_matrix, scores_arr, top_k)
+        results = [candidates[valid_idx[i]] for i in selected]
         for rank, doc in enumerate(results, 1):
             doc.bm25_rank = rank
         return results
@@ -945,22 +978,42 @@ class PGVectorRetriever(GISTRetriever):
         seed_set = set(seed_ids)
         with self.conn.cursor() as cur:
             cur.execute("""
-                SELECT chunk_id, 1 - (embedding <=> %s::vector) AS score
+                SELECT chunk_id, 1 - (embedding <=> %s::vector) AS score, embedding
                 FROM arxiv_chunks
                 ORDER BY embedding <=> %s::vector
                 LIMIT %s
             """, (emb_str, emb_str, top_k * 2 + len(seed_set)))
             rows = cur.fetchall()
 
-        # 4. Exclude seeds, cap at top_k, set ranks
-        results = [
-            RetrievedDoc(
-                doc_id=row[0], content='',
-                metadata={'source': 'layer2_dense'},
-                dense_score=float(row[1]),
-            )
+        # 4. Exclude seeds, collect all candidates with embeddings
+        candidates = [
+            (row[0], float(row[1]), _np.array(row[2], dtype=_np.float64))
             for row in rows if row[0] not in seed_set
-        ][:top_k]
+        ]
+
+        if not candidates:
+            return []
+
+        cand_docs = [
+            RetrievedDoc(doc_id=c[0], content='', metadata={'source': 'layer2_dense'}, dense_score=c[1])
+            for c in candidates
+        ]
+
+        # 5. GIST selection using fetched embeddings
+        emb_matrix = _np.array([c[2] for c in candidates])
+        scores_arr = _np.array([c[1] for c in candidates])
+
+        norms = _np.linalg.norm(emb_matrix, axis=1, keepdims=True)
+        norms = _np.where(norms == 0, 1.0, norms)
+        emb_norm = emb_matrix / norms
+        coverage_matrix = emb_norm @ emb_norm.T
+
+        if len(cand_docs) < 2:
+            results = cand_docs[:top_k]
+        else:
+            selected = gist_select(coverage_matrix, scores_arr, top_k)
+            results = [cand_docs[i] for i in selected]
+
         for rank, doc in enumerate(results, 1):
             doc.dense_rank = rank
         return results

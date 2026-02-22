@@ -217,33 +217,65 @@ class BaseGISTRetriever(PGVectorRetriever):
         top_k: int
     ) -> List[Dict[str, Any]]:
         """
-        Score documents using ColBERT late interaction (token-level matching).
-        
+        Score documents using ColBERT + MS-MARCO cross-encoder with RRF fusion.
+
+        L3 scoring pipeline:
+          1. ColBERTv2 token-level matching → full ranking
+          2. cross-encoder/ms-marco-MiniLM-L-6-v2 → full ranking
+          3. RRF merge (k=60) of both rankings
+          4. Sort by RRF score (_select_final_documents handles top_k cutoff)
+
         Args:
             query: Search query
             documents: List of document dicts with 'text' field
-            top_k: Number of top documents to return
-        
+            top_k: Unused here; _select_final_documents handles cutoff
+
         Returns:
-            Sorted list of documents with scores
+            All documents sorted by RRF score (no top_k cap)
         """
-        if not self.config.use_colbert or not documents:
-            return documents[:top_k]
-        
-        # Extract document texts
+        if not documents:
+            return documents
+
         doc_texts = [d['text'] for d in documents]
-        
-        # Score using ColBERT (token-level matching)
-        scores = self.colbert_scorer.score(query, doc_texts)
-        
-        # Assign scores
-        for doc, score in zip(documents, scores):
-            doc['score'] = float(score)
-        
-        # Sort by score (descending)
+
+        # --- ColBERT scores ---
+        if self.config.use_colbert:
+            colbert_scores = self.colbert_scorer.score(query, doc_texts)
+        else:
+            colbert_scores = np.zeros(len(documents))
+
+        # --- Cross-encoder scores (ms-marco) ---
+        ce_scorer = self.cross_encoder_scorer if self.config.use_cross_encoder else None
+        if ce_scorer is not None and ce_scorer.available:
+            ce_scores = ce_scorer.score(query, doc_texts)
+        else:
+            ce_scores = None
+
+        if ce_scores is not None:
+            # RRF merge ColBERT + CE rankings (k=60)
+            rrf_k = 60
+            colbert_order = np.argsort(colbert_scores)[::-1]  # highest-first
+            ce_order      = np.argsort(ce_scores)[::-1]
+
+            colbert_rank = {int(idx): rank + 1 for rank, idx in enumerate(colbert_order)}
+            ce_rank      = {int(idx): rank + 1 for rank, idx in enumerate(ce_order)}
+
+            for i, doc in enumerate(documents):
+                rrf = (1.0 / (rrf_k + colbert_rank[i])
+                       + 1.0 / (rrf_k + ce_rank[i]))
+                doc['score']                = rrf
+                doc['colbert_score']        = float(colbert_scores[i])
+                doc['cross_encoder_score']  = float(ce_scores[i])
+
+            print(f"        L3 RRF: ColBERT + MS-MARCO CE merged")
+        else:
+            # CE unavailable — ColBERT only
+            for doc, score in zip(documents, colbert_scores):
+                doc['score'] = float(score)
+            print(f"        L3: ColBERT only (CE unavailable)")
+
         documents.sort(key=lambda d: d['score'], reverse=True)
-        
-        return documents[:top_k]
+        return documents
     
     # =================================================================
     # ABSTRACT METHODS (Must be implemented by subclasses)
