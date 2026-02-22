@@ -191,6 +191,8 @@ class ArxivRetriever(BaseGISTRetriever):
 
 
 if __name__ == "__main__":
+    import sys
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
     import argparse
     import datetime
     import time
@@ -286,13 +288,17 @@ if __name__ == "__main__":
                 heading = meta.get("heading", "") or ""
                 sidx = meta.get("section_index", j)
                 content = (sec.content or "").strip()
-                preview = (content[:300] + "…") if len(content) > 300 else content
                 heading_str = f" — *{heading}*" if heading else ""
+                # Blockquote: prefix every non-empty line with "> "
+                blockquote = "\n".join(
+                    f"> {ln}" if ln.strip() else ">"
+                    for ln in content.splitlines()
+                )
                 lines += [
                     f"**Section {j}** "
                     f"(section_idx={sidx}, ColBERT score={sec.final_score:.4f}){heading_str}",
                     "",
-                    f"> {preview.replace(chr(10), ' ')}",
+                    blockquote,
                     "",
                 ]
         with open(args.save, "w", encoding="utf-8") as fh:
