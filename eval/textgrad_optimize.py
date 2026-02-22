@@ -24,6 +24,7 @@ MLflow logging per iteration:
 """
 
 import json
+import math
 import os
 import re
 import sys
@@ -685,11 +686,19 @@ def main(
             # CRITICAL FIX: predecessors=[system_prompt] wires the computation graph.
             # Without this, loss_var.backward() has no path to system_prompt and
             # optimizer.step() never changes system_prompt.value (no-op optimizer).
+            if math.isnan(mean_score):
+                print("  [SKIP] All RAGAS scores are nan -- skipping TextGrad step")
+                continue
+
             loss_text = score_to_loss_text(scores, current_config, iteration)
+            # requires_grad=True required: TextGrad rejects requires_grad=False
+            # when any predecessor has requires_grad=True (system_prompt does).
+            # The optimizer is bound to parameters=[system_prompt] only, so
+            # loss_var itself is never updated -- it is purely the loss root.
             loss_var = tg.Variable(
                 loss_text,
-                requires_grad=False,
-                predecessors=[system_prompt],   # <-- key fix: wires gradient path
+                requires_grad=True,
+                predecessors=[system_prompt],
                 role_description="RAGAS 4-metric evaluation feedback",
             )
             optimizer.zero_grad()

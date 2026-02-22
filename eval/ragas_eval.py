@@ -180,8 +180,8 @@ def run_eval(
         openai_api_key="dummy-key",
         openai_api_base=COPILOT_PROXY,
         temperature=0.1,
-        request_timeout=60,  # prevent indefinite hangs on proxy stall
-        max_retries=1,       # one retry only; fail fast on repeated stall
+        request_timeout=180,  # Ollama local inference can be slow
+        max_retries=1,        # one retry only; fail fast on repeated stall
     )
     ragas_llm = LangchainLLMWrapper(langchain_llm)
 
@@ -240,6 +240,7 @@ def run_eval(
         dataset=dataset,
         metrics=metrics,
         llm=ragas_llm,
+        batch_size=1,   # sequential to avoid overwhelming local Ollama
     )
 
     scores = result.to_pandas()
