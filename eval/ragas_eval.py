@@ -44,12 +44,12 @@ from ragas.metrics import (
 from langchain_openai import ChatOpenAI
 
 # ── Config ────────────────────────────────────────────────────────────────────
-COPILOT_PROXY = os.environ.get("LLM_PROXY_URL", "http://localhost:11434/v1")
-DEFAULT_MODEL = os.environ.get("LLM_MODEL",     "qwen3-vl:8b")
-RASGAS_MODEL  = os.environ.get("RAGAS_MODEL",   "granite3.3:latest")
+COPILOT_PROXY = os.environ.get("LLM_PROXY_URL", "http://127.0.0.1:8069/v1")
+DEFAULT_MODEL = os.environ.get("LLM_MODEL",     "gpt-4.1")
+RASGAS_MODEL  = os.environ.get("RAGAS_MODEL",   "gpt-4.1")
 
 # Set env vars so RAGAS internal OpenAIEmbeddings() fallback also hits the proxy
-os.environ.setdefault("OPENAI_API_KEY",  "ollama")
+os.environ.setdefault("OPENAI_API_KEY",  "copilot")
 os.environ.setdefault("OPENAI_BASE_URL", COPILOT_PROXY)
 
 from ragas import SingleTurnSample
@@ -62,7 +62,7 @@ def _score_answer_relevancy_llm(question: str, answer: str,
     Returns float 0.0-1.0.
     """
     client = openai.OpenAI(
-        api_key=os.environ.get("OPENAI_API_KEY", "ollama"),
+        api_key=os.environ.get("OPENAI_API_KEY", "copilot"),
         base_url=COPILOT_PROXY,
     )
     prompt = (
@@ -118,7 +118,7 @@ def _generate_answer(question: str, contexts: list[str],
     Used to populate SingleTurnSample.response.
     """
     client = openai.OpenAI(
-        api_key=os.environ.get("OPENAI_API_KEY", "ollama"),
+        api_key=os.environ.get("OPENAI_API_KEY", "copilot"),
         base_url=COPILOT_PROXY,
     )
     joined = "\n\n---\n\n".join(contexts[:5])
@@ -178,10 +178,10 @@ def run_eval(
     # Build RAGAS LLM + embeddings wrappers pointing at the Copilot proxy
     langchain_llm = ChatOpenAI(
         model=llm_model,
-        openai_api_key="dummy-key",
+        openai_api_key=os.environ.get("OPENAI_API_KEY", "copilot"),
         openai_api_base=COPILOT_PROXY,
         temperature=0.1,
-        request_timeout=180,  # Ollama local inference can be slow
+        request_timeout=180,  # 180s timeout per batch
         max_retries=0,        # no retries; timeout already set to 180s
     )
     ragas_llm = LangchainLLMWrapper(langchain_llm)
@@ -241,7 +241,7 @@ def run_eval(
         dataset=dataset,
         metrics=metrics,
         llm=ragas_llm,
-        batch_size=1,   # sequential to avoid overwhelming local Ollama
+        batch_size=1,   # sequential for rate limiting
     )
 
     scores = result.to_pandas()

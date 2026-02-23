@@ -51,22 +51,22 @@ import openai
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-# Point LiteLLM + RAGAS at the proxy; default to local Ollama when Copilot proxy is unavailable
-os.environ["OPENAI_API_BASE"] = os.environ.get("LLM_PROXY_URL", "http://localhost:11434/v1")
-os.environ["OPENAI_API_KEY"]  = os.environ.get("OPENAI_API_KEY", "ollama")
+# Point LiteLLM + RAGAS at the copilot proxy
+os.environ["OPENAI_API_BASE"] = os.environ.get("LLM_PROXY_URL", "http://127.0.0.1:8069/v1")
+os.environ["OPENAI_API_KEY"]  = os.environ.get("OPENAI_API_KEY", "copilot")
 
 from arxiv_retriever import ArxivRetriever
 from retrieval.pgvector_retriever import PGVectorConfig
 from eval.ragas_eval import run_eval  # 3-metric baseline
 
 # ── Constants ─────────────────────────────────────────────────────────────────
-COPILOT_PROXY = os.environ.get("LLM_PROXY_URL", "http://localhost:11434/v1")
-_BASE_MODEL   = os.environ.get("LLM_MODEL",     "qwen3-vl:8b")
+COPILOT_PROXY = os.environ.get("LLM_PROXY_URL", "http://127.0.0.1:8069/v1")
+_BASE_MODEL   = os.environ.get("LLM_MODEL",     "gpt-4.1")
 # LiteLLMEngine needs "openai/" prefix to route via OpenAI-compat endpoint;
 # gpt-* and already-prefixed names are passed through unchanged.
 LITELLM_MODEL = _BASE_MODEL if _BASE_MODEL.startswith(("gpt-", "openai/")) else f"openai/{_BASE_MODEL}"
 OPENAI_MODEL  = _BASE_MODEL   # bare name for direct openai.OpenAI() client calls
-RASGAS_MODEL  = os.environ.get("RAGAS_MODEL", "granite3.3:latest")  # fast non-thinking model for RAGAS eval
+RASGAS_MODEL  = os.environ.get("RAGAS_MODEL", "gpt-4.1")  # RAGAS eval model
 MLFLOW_EXP = "arxiv-3layer-retrieval-optimization"
 RETRIEVER_FILES = [
     os.path.join(ROOT, "retrieval", "pgvector_retriever.py"),
@@ -386,7 +386,7 @@ def generate_qa_from_retrieval(
     Returns list of dicts: question, answer, topic, section_texts.
     """
     client = openai.OpenAI(
-        api_key=os.environ.get("OPENAI_API_KEY", "ollama"),
+        api_key=os.environ.get("OPENAI_API_KEY", "copilot"),
         base_url=COPILOT_PROXY,
     )
     all_pairs: list = []
