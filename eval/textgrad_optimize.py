@@ -72,6 +72,8 @@ RETRIEVER_FILES = [
     os.path.join(ROOT, "retrieval", "pgvector_retriever.py"),
     os.path.join(ROOT, "retrieval", "base_gist_retriever.py"),
     os.path.join(ROOT, "retrieval", "gist_retriever.py"),
+    os.path.join(ROOT, "eval", "textgrad_optimize.py"),  # snapshot the optimizer itself
+    os.path.join(ROOT, "eval", "ragas_eval.py"),  # snapshot the eval logic
 ]
 
 DEFAULT_CONFIG = {
