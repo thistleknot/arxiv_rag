@@ -1,6 +1,6 @@
 # Hybrid Retrieval & Knowledge Extraction System
 
-> Auto-generated from feature catalogs on 2026-02-21 19:29.
+> Auto-generated from feature catalogs on 2026-03-08 16:14.
 > Source database: `feature_catalog_master.sqlite3` (1,756 features)
 > Generator: `generate_readme.py`
 
@@ -101,11 +101,11 @@ python tune_bio_tagger.py --data training.msgpack --unfreeze-layers 12 --n-trial
 
 ## 🔍 Hybrid Retriever — Feature Catalog
 
-*Source: `feature_catalog_master.sqlite3` (category: retrieval) — 862 features*
+*Source: `feature_catalog_master.sqlite3` (category: retrieval) — 866 features*
 
 | Status | Count |
 |--------|-------|
-| ✅ DONE | 459 |
+| ✅ DONE | 463 |
 | 📋 TODO | 385 |
 
 ### Features
@@ -6769,15 +6769,47 @@ def main() — no docstring
 
 *Category: `retrieval`*
 
+#### 1766. GIST mean collinearity penalty ✅ done
+
+gist_select uses mean pairwise correlation with already-selected docs instead of max. mean_corr(d,S) = sum(sim(d,s) for s in S) / |S|. Prevents over-pruning when a candidate is similar to only one outlier in the selected set; gives unbiased VIF pressure proportional to true redundancy across all selected docs.
+
+*Definition: mean_corr(d, S) = (1/|S|) * sum_{s in S} cos(d, s)*
+
+*Category: `retrieval`*
+
+#### 1767. GIST explicit utility vector BM25 arm ✅ done
+
+L2 BM25 arm utility vector y uses explicit query-doc TF cosine instead of mixing RRF scores with BM25 scores. q_norm = normalised query term-weight vector over shared vocab; y_scores = tf_norm @ q_norm. Ensures y is a principled correlation(x_i, y) proxy on the same cosine scale as collinearity S, making GIST numerically coherent.
+
+*Definition: y_scores = tf_norm @ q_norm  (TF cosine with query term-weight vector)*
+
+*Category: `retrieval`*
+
+#### 1768. GIST explicit utility vector dense arm ✅ done
+
+L2 dense arm utility vector y uses explicit embedding cosine with seed centroid instead of mixing dense_score proxy. centroid_norm = normalised mean of seed embeddings; y_scores = emb_norm @ centroid_norm. Ensures utility y is on the same cosine scale as collinearity S.
+
+*Definition: y_scores = emb_norm @ centroid_norm  (embedding cosine to seed centroid)*
+
+*Category: `retrieval`*
+
+#### 1769. BM25 arm ALL seeds in GIST pool ✅ done
+
+BM25 L2 arm includes all hybrid seeds in the GIST candidate pool regardless of whether they have a precomputed bm25_vec_map entry. Previously seeds were silently dropped if missing from the DB vector map, causing the arm to return ~144 instead of ~288 candidates. Fix: seeds forwarded directly; TF coverage matrix built over actual query vocab from the seeds+new-candidates pool.
+
+*Definition: pool = seeds + bm25_new_candidates (no DB vector filter on seeds)*
+
+*Category: `retrieval`*
+
 ---
 
 ## 🏷️ BIO Tagger — Feature Catalog
 
-*Source: `feature_catalog_master.sqlite3` (category: training) — 466 features*
+*Source: `feature_catalog_master.sqlite3` (category: training) — 467 features*
 
 | Status | Count |
 |--------|-------|
-| ✅ DONE | 311 |
+| ✅ DONE | 312 |
 | 📋 TODO | 149 |
 
 ### Features
@@ -10201,15 +10233,23 @@ Validate BIO sequences in training data.
 
 *Category: `training`*
 
+#### 1775. BIO extraction v15: 50/52 complete S+P+O rows ✅ done
+
+Re-ran BIO extraction on 10-chunk test batch (seed=42) with all v15 fixes applied. Result: 50 of 52 examples have complete Subject+Predicate+Object BIO labels (up from 46 in v14). The 2 remaining incomplete rows (20, 29) are linguistically unresolvable: row 20 has expletive 'it' (expl deprel, not nsubj), row 29 is imperative with understood-you subject.
+
+*Definition: Command: python extraction/extract_bio_atomic_clean.py --chunks 10 --input checkpoints/chunks.msgpack --output data/bio_training_test10_v15.msgpack --seed 42*
+
+*Category: `training`*
+
 ---
 
 ## 📋 All Features — Master Catalog
 
-*Source: `feature_catalog_master.sqlite3` — 1756 features*
+*Source: `feature_catalog_master.sqlite3` — 1766 features*
 
 | Status | Count |
 |--------|-------|
-| ✅ DONE | 1067 |
+| ✅ DONE | 1077 |
 | 📋 TODO | 662 |
 
 ### Features
@@ -23488,6 +23528,86 @@ def main() — no docstring
 
 *Category: `retrieval`*
 
+#### 1766. GIST mean collinearity penalty ✅ done
+
+gist_select uses mean pairwise correlation with already-selected docs instead of max. mean_corr(d,S) = sum(sim(d,s) for s in S) / |S|. Prevents over-pruning when a candidate is similar to only one outlier in the selected set; gives unbiased VIF pressure proportional to true redundancy across all selected docs.
+
+*Definition: mean_corr(d, S) = (1/|S|) * sum_{s in S} cos(d, s)*
+
+*Category: `retrieval`*
+
+#### 1767. GIST explicit utility vector BM25 arm ✅ done
+
+L2 BM25 arm utility vector y uses explicit query-doc TF cosine instead of mixing RRF scores with BM25 scores. q_norm = normalised query term-weight vector over shared vocab; y_scores = tf_norm @ q_norm. Ensures y is a principled correlation(x_i, y) proxy on the same cosine scale as collinearity S, making GIST numerically coherent.
+
+*Definition: y_scores = tf_norm @ q_norm  (TF cosine with query term-weight vector)*
+
+*Category: `retrieval`*
+
+#### 1768. GIST explicit utility vector dense arm ✅ done
+
+L2 dense arm utility vector y uses explicit embedding cosine with seed centroid instead of mixing dense_score proxy. centroid_norm = normalised mean of seed embeddings; y_scores = emb_norm @ centroid_norm. Ensures utility y is on the same cosine scale as collinearity S.
+
+*Definition: y_scores = emb_norm @ centroid_norm  (embedding cosine to seed centroid)*
+
+*Category: `retrieval`*
+
+#### 1769. BM25 arm ALL seeds in GIST pool ✅ done
+
+BM25 L2 arm includes all hybrid seeds in the GIST candidate pool regardless of whether they have a precomputed bm25_vec_map entry. Previously seeds were silently dropped if missing from the DB vector map, causing the arm to return ~144 instead of ~288 candidates. Fix: seeds forwarded directly; TF coverage matrix built over actual query vocab from the seeds+new-candidates pool.
+
+*Definition: pool = seeds + bm25_new_candidates (no DB vector filter on seeds)*
+
+*Category: `retrieval`*
+
+#### 1770. find_phrase_fuzzy: punctuation-only token strip ✅ done
+
+Strip punctuation-only tokens from phrase_words before fuzzy matching so objects like '- starting at 0 089' or 'First , a token set' are recoverable after leading punctuation is removed by normalize_for_matching.
+
+*Definition: After splitting phrase_norm, filter: phrase_words = [w for w in phrase_words if re.search(r'\w', w)]*
+
+*Category: `extraction`*
+
+#### 1771. find_phrase_fuzzy: max_token_gap 2→4 ✅ done
+
+Increased default max_token_gap from 2 to 4 to allow fuzzy matching to stitch together tokens with wider gaps, handling ccomp/xcomp objects whose subtree text contains punctuation tokens separated by pruned branches.
+
+*Definition: max_token_gap default changed from 2 to 4 in find_phrase_fuzzy signature*
+
+*Category: `extraction`*
+
+#### 1772. find_phrase_fuzzy: first-to-last span for non-contiguous ccomp objects ✅ done
+
+For long phrases (>8 words) that cannot be found as contiguous substrings because branch pruning (skip_deps) creates gaps, fall back to spanning from first phrase word position to last phrase word position in the sentence. Fixes rows where ccomp/xcomp objects like 'that , under broad conditions , black-box ... separated' appear non-contiguously.
+
+*Definition: When len(phrase_words) > 8 and exact substring match fails: find first_sent_idx (first occurrence of phrase_words[0]) and last_sent_idx (last occurrence of phrase_words[-1]), return char span from sent_words[first_sent_idx] to end of sent_words[last_sent_idx].*
+
+*Category: `extraction`*
+
+#### 1773. find_phrase_fuzzy: word-index counting for long-phrase char reconstruction ✅ done
+
+Replaced fragile forward character search for long-phrase start_char with word-index counting: count words in prefix of sentence_norm before the matched substring, map that count to sequential word scan in sentence_lower to find the exact character offset. Prevents spurious matches on short common words like 's', 'a', 'by' that appear multiple times.
+
+*Definition: prefix = sentence_norm[:pos]; prefix_word_count = len(prefix.split()) if prefix.strip() else 0; scan sentence_lower word-by-word counting to prefix_word_count to get start_char.*
+
+*Category: `extraction`*
+
+#### 1774. extraction: replace checkmark unicode with [OK] for Windows cp1252 ✅ done
+
+Replaced U+2713 (✓) checkmark characters in print() calls with '[OK]' to prevent UnicodeEncodeError on Windows when stdout is redirected to a file or terminal with cp1252 encoding (which cannot encode U+2713).
+
+*Definition: Lines 1021, 1037 in extract_bio_atomic_clean.py: print('[OK] ...') instead of print('✓ ...')*
+
+*Category: `extraction`*
+
+#### 1775. BIO extraction v15: 50/52 complete S+P+O rows ✅ done
+
+Re-ran BIO extraction on 10-chunk test batch (seed=42) with all v15 fixes applied. Result: 50 of 52 examples have complete Subject+Predicate+Object BIO labels (up from 46 in v14). The 2 remaining incomplete rows (20, 29) are linguistically unresolvable: row 20 has expletive 'it' (expl deprel, not nsubj), row 29 is imperative with understood-you subject.
+
+*Definition: Command: python extraction/extract_bio_atomic_clean.py --chunks 10 --input checkpoints/chunks.msgpack --output data/bio_training_test10_v15.msgpack --seed 42*
+
+*Category: `training`*
+
 ---
 
 ## 📁 Key Files
@@ -23649,4 +23769,4 @@ MIT
 
 ---
 
-*Generated 2026-02-21 19:29 by `generate_readme.py`*
+*Generated 2026-03-08 16:14 by `generate_readme.py`*
