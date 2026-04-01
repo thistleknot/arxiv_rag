@@ -1,0 +1,14 @@
+artifact_uri: file:///C:/Users/user/arxiv_id_lists/mlruns/712272725990462903/57a35fd6e19446989181306e505d12d5/artifacts
+end_time: 1771758107921
+entry_point_name: ''
+experiment_id: '712272725990462903'
+lifecycle_stage: active
+run_id: 57a35fd6e19446989181306e505d12d5
+run_name: textgrad-opt-10iter
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1771757906239
+status: 4
+tags: []
+user_id: user

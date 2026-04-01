@@ -1,0 +1,44 @@
+== PIPELINE ARCHITECTURE ==
+
+This is a 3-layer academic paper retrieval pipeline (ArxivRetriever).
+
+Layer 1 — Sparse + Dense seeding
+  - BM25 (PostgreSQL tsvector + GIN index, table: layer1_bm25_sparse)
+  - Dense ANN (128-dim model2vec HNSW, table: layer1_embeddings_128d)
+  - Results merged with Reciprocal Rank Fusion (RRF, constant: rrf_k)
+  - Pool = top_k², seeds = prev_fibonacci(pool)
+
+Layer 2 — GIST branch expansion
+  - GIST BM25 path: seed embeddings (256d) → cosine coverage → expand via BM25
+  - GIST Dense path: seed centroid (256d) ANN on layer2_embeddings_256d
+  - Merged again with RRF; weighted by gist_lambda (relevance) vs 1-gist_lambda (diversity)
+
+Layer 3 — Cross-encoder re-ranking
+  - MS-MARCO MiniLM-L-6-v2 cross-encoder scores all candidates
+  - Final ranking: RRF of (L1 score, L2 GIST score, L3 CE score)
+  - Score thresholds applied: bm25_min_score, dense_min_similarity,
+    colbert_min_score, cross_encoder_min_score
+
+Evaluation uses RAGAS 3 metrics on academic paper QA pairs:
+  - context_precision, context_recall, faithfulness
+  (AnswerRelevancy excluded — Copilot proxy has no /v1/embeddings endpoint)
+
+OPTIMIZATION TASK:
+Adjust the == CURRENT CONFIG == values below to improve the mean of all 3 RAGAS metrics.
+- top_k: number of final results (integer, 3–20)
+- rrf_k: RRF constant (integer, 30–120); higher smooths rank differences
+- gist_lambda: float 0–1; 1.0 = pure relevance, 0.0 = pure diversity
+- bm25_min_score / dense_min_similarity / colbert_min_score / cross_encoder_min_score:
+  score cutoffs (float ≥ 0); higher = fewer but more precise results
+
+IMPORTANT: Only modify the numeric values in == CURRENT CONFIG ==.
+Do not change key names. Do not add new keys.
+
+== CURRENT CONFIG ==
+top_k: 3
+rrf_k: 60
+gist_lambda: 0.7000
+bm25_min_score: 0.0000
+dense_min_similarity: 0.0000
+colbert_min_score: 0.0000
+cross_encoder_min_score: 0.0000

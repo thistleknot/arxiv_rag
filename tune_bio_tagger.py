@@ -20,6 +20,7 @@ Hyperparameters to tune:
 - Threshold for predictions (0.1 to 0.5)
 """
 
+import gc
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader, WeightedRandomSampler
@@ -550,7 +551,7 @@ def evaluate(model, dataloader, device, threshold=0.3, return_detailed=False, ac
                            active_label_indices=active_label_indices, full_label_names=full_label_names)
 
 
-def train_epoch(model, dataloader, optimizer, device, o_weight=0.01, desc=""):
+def train_epoch(model, dataloader, optimizer, device, o_weight=0.01, label_weights=None, desc=""):
     """Train for one epoch"""
     model.train()
     
@@ -577,7 +578,7 @@ def train_epoch(model, dataloader, optimizer, device, o_weight=0.01, desc=""):
         combined_mask = pad_mask.float() * token_weights
         
         bce_loss = nn.functional.binary_cross_entropy_with_logits(
-            logits, labels, reduction='none'
+            logits, labels, pos_weight=label_weights, reduction='none'
         )
         weighted_loss = (bce_loss * combined_mask).sum() / combined_mask.sum()
         
@@ -654,6 +655,55 @@ def compute_boxcox_thresholds(label_counts: Dict[int, int],
             thresholds[label] = 0.0
     
     return thresholds
+
+
+def compute_label_pos_weights(examples: List[Dict], device,
+                             alpha: float = 1.0) -> 'torch.Tensor':
+    """
+    Compute per-class BCE pos_weight via inverse log-frequency of token counts.
+
+    Rare labels (B-SUBJ, I-PRED, B-OBJ) → high weight → model penalised more for
+    missing them → improves recall on under-represented classes.
+    Dominant label (I-OBJ) → low weight → loss signal reduced → prevents the model
+    predicting I-OBJ for every token.
+
+    Transform: count → log1p(count) → invert → normalise (mean=1)
+
+    Args:
+        examples: Training examples with 'labels' dict
+        device:   Torch device
+        alpha:    Exponent on inverse weights (1.0 = log1p inverse; 2.0 = stronger)
+
+    Returns:
+        pos_weight: float Tensor of shape [n_labels]
+    """
+    label_names  = list(next(iter(examples))['labels'].keys())
+    n_labels     = len(label_names)
+    token_counts = np.zeros(n_labels)
+    for ex in examples:
+        for idx, name in enumerate(label_names):
+            token_counts[idx] += sum(ex['labels'][name])
+
+    # Laplace floor at 1 prevents zero-count labels from producing +inf weights
+    # when the training sample (can be small during HPO) misses a class entirely.
+    token_counts = np.maximum(token_counts, 1)
+
+    # log1p compresses extremes (same as Box-Cox lambda→0); prevents a single
+    # class with 10x more tokens from swamping the gradient.
+    smooth = np.log1p(token_counts)
+
+    # Invert: rarest label → highest weight.
+    # Anchor at max so the rarest class gets relative weight=1.0 before scaling.
+    inv = smooth.max() / (smooth + 1e-9)
+    inv = inv ** alpha
+
+    # Normalise so mean=1 — keeps overall loss magnitude stable.
+    inv /= inv.mean()
+
+    # Cap to prevent a single absent label from dominating the loss even after floor.
+    inv = np.minimum(inv, 5.0)
+
+    return torch.tensor(inv, dtype=torch.float32, device=device)
 
 
 def greedy_select_by_label_ratio(examples: List[Dict], 
@@ -808,7 +858,7 @@ def objective(trial: Trial, train_examples: List[Dict], eval_examples: List[Dict
         lr = trial.suggest_float('learning_rate', 5e-6, 5e-5, log=True)
     
     dropout = trial.suggest_float('dropout', 0.0, 0.3)
-    o_weight = trial.suggest_float('o_weight', 0.001, 0.01, log=True)
+    o_weight = trial.suggest_float('o_weight', 0.001, 0.1, log=True)  # widened: label_pos_weights now handles intra-BIO imbalance
     weight_decay = trial.suggest_float('weight_decay', 0.0, 0.1)
     threshold = trial.suggest_float('threshold', 0.3, 0.6)
     
@@ -816,6 +866,10 @@ def objective(trial: Trial, train_examples: List[Dict], eval_examples: List[Dict
     batch_size = 8
     unfreeze_layers = trial.study.user_attrs.get('unfreeze_layers', 12)
     
+    # Free any residual CUDA memory from previous trial before allocating new model
+    gc.collect()
+    torch.cuda.empty_cache()
+
     # Create model with dynamic num_labels (5 or 6 depending on detection)
     model = BIOTaggerWithDropout(num_labels=num_labels, dropout_rate=dropout, unfreeze_layers=unfreeze_layers)
     model = model.to(device)
@@ -847,7 +901,10 @@ def objective(trial: Trial, train_examples: List[Dict], eval_examples: List[Dict
     
     # Compute Box-Cox thresholds (min=2, max=5)
     label_thresholds = compute_boxcox_thresholds(label_counts, min_target=2, max_target=5)
-    
+
+    # Per-class BCE pos_weight (inverse log-frequency of token counts in trial train set)
+    label_pos_weights = compute_label_pos_weights(train_examples, device)
+
     if trial.number == 0:  # Print resampling info once
         tqdm.write(f"\n  [RESAMPLING - Box-Cox] Class distribution: {label_counts}")
         tqdm.write(f"  [RESAMPLING - Box-Cox] Thresholds (percentages): {label_thresholds}")
@@ -888,7 +945,7 @@ def objective(trial: Trial, train_examples: List[Dict], eval_examples: List[Dict
         )
         
         # Train
-        loss = train_epoch(model, train_loader, optimizer, device, o_weight=o_weight, desc=f"T{trial.number} E{epoch}/{max_epochs}")
+        loss = train_epoch(model, train_loader, optimizer, device, o_weight=o_weight, label_weights=label_pos_weights, desc=f"T{trial.number} E{epoch}/{max_epochs}")
         
         # Evaluate
         eval_f1, per_class = evaluate(model, eval_loader, device, threshold=threshold, return_detailed=True,
@@ -917,7 +974,13 @@ def objective(trial: Trial, train_examples: List[Dict], eval_examples: List[Dict
         # Early stopping (only after warmup) - use hardcoded fast params for trials
         if epoch >= trial_warmup and no_improve_count > trial_patience:
             break
-    
+
+    # Free GPU memory before next trial
+    del model, optimizer, train_loader, eval_loader
+    del epoch_train_dataset, train_dataset, eval_dataset
+    gc.collect()
+    torch.cuda.empty_cache()
+
     return best_f1
 
 
@@ -1058,6 +1121,10 @@ def main():
     print(f"  Warmup epochs: {args.min_warmup}")
     print(f"  Patience after warmup: {args.patience}")
     
+    # Clear any GPU memory left by previous runs before starting trials
+    gc.collect()
+    torch.cuda.empty_cache()
+
     # Create study with median pruner
     study = optuna.create_study(
         direction='maximize',
@@ -1107,7 +1174,7 @@ def main():
             num_labels=num_active_labels
         ),
         n_trials=args.n_trials,
-        show_progress_bar=True
+        show_progress_bar=True,
     )
     
     print(f"\n[4/5] Best trial results:")
@@ -1133,37 +1200,17 @@ def main():
     
     print(f"\n[5/5] Training on full dataset with adaptive entity-based sampling...")
     
-    # Stratified split ensuring min 4 examples per BIO label
-    from collections import defaultdict
-    
-    label_to_examples = defaultdict(list)
-    for idx, ex in enumerate(all_examples):
-        labels_present = set()
-        for label_type_idx, token_labels in enumerate(ex['labels'].values()):
-            if sum(token_labels) > 0:
-                labels_present.add(label_type_idx)
-        for label_idx in labels_present:
-            label_to_examples[label_idx].append(idx)
-    
-    # Select eval examples: max(4, 20% per label)
-    min_per_label = 4
-    eval_indices = set()
+    # 90/10 split at example level (seed 42 for reproducibility)
     np.random.seed(42)
-    
-    print("  [Stratified Eval Split]")
-    for label_idx in range(6):
-        indices_for_label = list(label_to_examples[label_idx])
-        if len(indices_for_label) == 0:
-            print(f"    WARNING: Label {label_idx} has 0 examples")
-            continue
-        
-        eval_count = max(min_per_label, int(0.2 * len(indices_for_label)))
-        np.random.shuffle(indices_for_label)
-        eval_indices.update(indices_for_label[:eval_count])
-    
-    train_indices = set(range(len(all_examples))) - eval_indices
+    shuffled_indices = np.random.permutation(len(all_examples)).tolist()
+    eval_n = max(10, int(0.10 * len(all_examples)))
+    eval_indices = set(shuffled_indices[:eval_n])
+    train_indices = set(shuffled_indices[eval_n:])
+
     eval_examples = [all_examples[i] for i in sorted(eval_indices)]
     train_examples = [all_examples[i] for i in sorted(train_indices)]
+
+    print(f"  [90/10 split] Train: {len(train_examples)} | Eval: {len(eval_examples)}")
     
     # Use ALL training data per epoch (no subsampling for full training)
     full_samples_per_epoch = len(train_examples)
@@ -1232,7 +1279,20 @@ def main():
         batch_size=16,
         collate_fn=lambda b: collate_fn(b, tokenizer, None, validate=args.validate, active_label_indices=active_label_indices)
     )
-    
+
+    # Per-class BCE pos_weight (inverse log-frequency of training token counts)
+    print("\n  [Label pos_weights — inverse log-frequency of training token counts]")
+    label_names_ordered = list(train_examples[0]['labels'].keys())
+    _tmp_counts = np.zeros(len(label_names_ordered))
+    for _ex in train_examples:
+        for _i, _n in enumerate(label_names_ordered):
+            _tmp_counts[_i] += sum(_ex['labels'][_n])
+    for _i, _n in enumerate(label_names_ordered):
+        print(f"    {_n}: {int(_tmp_counts[_i])} tokens")
+    label_pos_weights = compute_label_pos_weights(train_examples, device)
+    for _i, _n in enumerate(label_names_ordered):
+        print(f"    {_n}: pos_weight={label_pos_weights[_i].item():.3f}")
+
     # Training loop - FULL TRAINING with generous patience and adaptive sampling
     best_f1 = 0.0
     no_improve_count = 0
@@ -1262,7 +1322,7 @@ def main():
         sampled_indices = list(sampler)
         
         # Train
-        loss = train_epoch(model, train_loader, optimizer, device, o_weight=best_params['o_weight'], desc=f"Final E{epoch}/{max_epochs}")
+        loss = train_epoch(model, train_loader, optimizer, device, o_weight=best_params['o_weight'], label_weights=label_pos_weights, desc=f"Final E{epoch}/{max_epochs}")
         eval_f1, per_class = evaluate(model, eval_loader, device, threshold=best_params['threshold'], return_detailed=True,
                                      active_label_indices=active_label_indices, full_label_names=full_label_names)
         

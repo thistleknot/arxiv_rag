@@ -1,0 +1,114 @@
+{
+  "run_name": "gpt4.1-layer2-run1",
+  "timestamp": "20260221_152933",
+  "model": "gpt-4.1",
+  "baseline_composite": 0.0,
+  "baseline_scores": {
+    "faithfulness": 0.0,
+    "context_precision": 0.0,
+    "context_recall": 0.0,
+    "composite": 0.0
+  },
+  "best_composite": 0.0,
+  "best_scores": {
+    "faithfulness": 0.0,
+    "context_precision": 0.0,
+    "context_recall": 0.0,
+    "composite": 0.0
+  },
+  "improvement": 0.0,
+  "best_iteration": 0,
+  "score_history": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+  ],
+  "scores_history": [
+    {
+      "faithfulness": 0.0,
+      "context_precision": 0.0,
+      "context_recall": 0.0,
+      "composite": 0.0
+    },
+    {
+      "faithfulness": 0.0,
+      "context_precision": 0.0,
+      "context_recall": 0.0,
+      "composite": 0.0
+    },
+    {
+      "faithfulness": 0.0,
+      "context_precision": 0.0,
+      "context_recall": 0.0,
+      "composite": 0.0
+    },
+    {
+      "faithfulness": 0.0,
+      "context_precision": 0.0,
+      "context_recall": 0.0,
+      "composite": 0.0
+    }
+  ],
+  "prompt_history": [
+    "You are configuring the 3-layer GIST retrieval pipeline to maximize RAGAS metrics.\n\nCurrent Configuration:\n```json\n{\n  \"rrf_k\": 60,\n  \"gist_lambda\": 0.70,\n  \"use_layer2_expansion\": false,\n  \"layer2_expansion_count\": null,\n  \"use_colbert\": true,\n  \"use_cross_encoder\": true,\n  \"top_k\": 13,\n  \"bm25_min_score\": 0.0,\n  \"dense_min_similarity\": 0.0,\n  \"rationale\": \"Default balanced configuration. Both reranking stages enabled for best precision. Layer 2 expansion disabled until triplet index is built. top_k=13 gives 169-document candidate pools (Fibonacci cascade: 13²=169, φ×169≈104 after GIST).\"\n}\n```\n",
+    "You are configuring the 3-layer GIST retrieval pipeline to maximize faithfulness and context precision, addressing low scores in these metrics. The following updated configuration balances increased candidate recall with stricter early filtering and expanded context diversity, as recommended by evaluation feedback:\n\n```json\n{\n  \"rrf_k\": 35,\n  \"gist_lambda\": 0.85,\n  \"top_k\": 21,\n  \"bm25_min_score\": 2.0,\n  \"use_layer2_expansion\": true,\n  \"colbert\": true,\n  \"cross_encoder\": true,\n  \"layer2\": \"ON\"\n}\n```\n\n**Rationale:**\n- **Increased `top_k` to 21** (from 13) to retrieve a broader pool of candidate documents, improving faithfulness and recall.\n- **Enabled `use_layer2_expansion` and set `layer2` to \"ON\"** to bring in triplet-expanded chunks, enriching context diversity and recall.\n- **Lowered `rrf_k` to 35** (from 60) to give more weight to top-ranked retrievals, improving context precision.\n- **Raised `bm25_min_score` to 2.0** for stricter filtering of irrelevant chunks, boosting context precision.\n- **Increased `gist_lambda` to 0.85** (from 0.70) to bias GIST fusion toward relevance, addressing faithfulness and context precision.\n- **Kept `colbert` and `cross_encoder` enabled** to maintain strong reranking and answer relevancy.\n\nThis configuration is designed to generate a more faithful, precise, and contextually rich candidate pool for subsequent reasoning layers (Fact, Premise, Syllogism). The new settings yield 441-document candidate pools at the first stage (21²=441, with φ×441≈272 after GIST), providing greater opportunity for relevant context to be surfaced and selected.",
+    "{\n  \"rrf_k\": 25,\n  \"gist_lambda\": 0.92,\n  \"bm25_min_score\": 0.15,\n  \"layer2\": true,\n  \"use_layer2_expansion\": true,\n  \"colbert\": true,\n  \"cross_encoder\": true,\n  \"top_k\": 28\n}\n\nRationale:\nThis configuration is designed to address low faithfulness and context precision by increasing the minimum BM25 score (bm25_min_score) to 0.15 and reducing rrf_k to 25, which prioritizes higher-precision, top-ranked results in the fusion and filters out less relevant chunks. To improve faithfulness and context recall, top_k has been raised to 28, allowing a broader retrieval of relevant chunks, and use_layer2_expansion is enabled to bring in contextually expanded triplet information. gist_lambda is increased to 0.92 to further emphasize relevance in GIST scoring. The pipeline continues to leverage ColBERT and cross-encoder reranking for high answer relevancy. This configuration aims for a precise, faithful, and contextually rich retrieval, maximizing the opportunity for high-quality relevant context to be surfaced and selected in the 3-layer GIST/Fact/Premise/Syllogism hybrid search system.",
+    "{\n  \"rrf_k\": 15,\n  \"gist_lambda\": 0.95,\n  \"bm25_min_score\": 0.25,\n  \"top_k\": 40,\n  \"use_colbert\": true,\n  \"use_cross_encoder\": true,\n  \"use_layer2_expansion\": true,\n  \"layer2\": \"ON\",\n  \"colbert\": \"ON\",\n  \"cross_encoder\": \"ON\"\n}\n/*\nRationale:\nTo address low faithfulness and context_precision, the configuration makes several key adjustments:\n- Reduced rrf_k (from 25 to 15) to allow top-ranked results to dominate fusion, improving context precision.\n- Increased bm25_min_score (from 0.15 to 0.25) to filter out less relevant chunks, further enhancing precision.\n- Increased top_k (from 28 to 40) to widen the pool for faithfulness and context recall.\n- Raised gist_lambda (from 0.92 to 0.95) to prioritize relevance in GIST scoring.\n- Enabled use_layer2_expansion to boost context recall by incorporating triplet-expanded chunks.\n- ColBERT and cross-encoder rerankers remain enabled to maintain answer relevancy and reranking quality.\nThese changes aim to surface results that are both more contextually precise and faithful, as required by the 3-layer GIST/Fact/Premise/Syllogism hybrid search system.\n*/"
+  ],
+  "config_history": [
+    {
+      "rrf_k": 60,
+      "gist_lambda": 0.7,
+      "use_layer2_expansion": false,
+      "layer2_expansion_count": null,
+      "use_colbert": true,
+      "use_cross_encoder": true,
+      "top_k": 13,
+      "bm25_min_score": 0.0,
+      "dense_min_similarity": 0.0
+    },
+    {
+      "rrf_k": 35,
+      "gist_lambda": 0.85,
+      "use_layer2_expansion": true,
+      "layer2_expansion_count": null,
+      "use_colbert": true,
+      "use_cross_encoder": true,
+      "top_k": 21,
+      "bm25_min_score": 2.0,
+      "dense_min_similarity": 0.0
+    },
+    {
+      "rrf_k": 25,
+      "gist_lambda": 0.92,
+      "use_layer2_expansion": true,
+      "layer2_expansion_count": null,
+      "use_colbert": true,
+      "use_cross_encoder": true,
+      "top_k": 28,
+      "bm25_min_score": 0.15,
+      "dense_min_similarity": 0.0
+    },
+    {
+      "rrf_k": 15,
+      "gist_lambda": 0.95,
+      "use_layer2_expansion": true,
+      "layer2_expansion_count": null,
+      "use_colbert": true,
+      "use_cross_encoder": true,
+      "top_k": 34,
+      "bm25_min_score": 0.25,
+      "dense_min_similarity": 0.0
+    }
+  ],
+  "best_prompt": "You are configuring the 3-layer GIST retrieval pipeline to maximize RAGAS metrics.\n\nCurrent Configuration:\n```json\n{\n  \"rrf_k\": 60,\n  \"gist_lambda\": 0.70,\n  \"use_layer2_expansion\": false,\n  \"layer2_expansion_count\": null,\n  \"use_colbert\": true,\n  \"use_cross_encoder\": true,\n  \"top_k\": 13,\n  \"bm25_min_score\": 0.0,\n  \"dense_min_similarity\": 0.0,\n  \"rationale\": \"Default balanced configuration. Both reranking stages enabled for best precision. Layer 2 expansion disabled until triplet index is built. top_k=13 gives 169-document candidate pools (Fibonacci cascade: 13²=169, φ×169≈104 after GIST).\"\n}\n```\n",
+  "baseline_prompt": "You are configuring the 3-layer GIST retrieval pipeline to maximize RAGAS metrics.\n\nCurrent Configuration:\n```json\n{\n  \"rrf_k\": 60,\n  \"gist_lambda\": 0.70,\n  \"use_layer2_expansion\": false,\n  \"layer2_expansion_count\": null,\n  \"use_colbert\": true,\n  \"use_cross_encoder\": true,\n  \"top_k\": 13,\n  \"bm25_min_score\": 0.0,\n  \"dense_min_similarity\": 0.0,\n  \"rationale\": \"Default balanced configuration. Both reranking stages enabled for best precision. Layer 2 expansion disabled until triplet index is built. top_k=13 gives 169-document candidate pools (Fibonacci cascade: 13²=169, φ×169≈104 after GIST).\"\n}\n```\n",
+  "n_iterations_run": 3,
+  "target_metrics": [
+    "faithfulness",
+    "context_precision",
+    "context_recall"
+  ],
+  "n_eval_questions": 10
+}

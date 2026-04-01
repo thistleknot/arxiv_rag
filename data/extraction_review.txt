@@ -1,0 +1,529 @@
+====================================================================================================
+TRIPLET EXTRACTION VALIDATION
+====================================================================================================
+
+Showing first 20 of 1477 examples
+Triplets are CAPITALIZED in the source sentence
+
+
+====================================================================================================
+Example 1
+====================================================================================================
+
+Original: These error types are not mutually exclusive; a single instance may exhibit multiple error types.
+
+Triplets found: 13
+
+  Triplet 1:
+    Subject:   a single instance
+    Predicate: may exhibit
+    Object:    These error types are not mutually exclusive
+    Highlighted: THESE ERROR TYPES ARE NOT MUTUALLY EXCLUSIVE; A SINGLE INSTANCE MAY EXHIBIT multiple error types.
+
+  Triplet 2:
+    Subject:   single instance
+    Predicate: may exhibit
+    Object:    multiple error types
+    Highlighted: These error types are not mutually exclusive; a SINGLE INSTANCE MAY EXHIBIT MULTIPLE ERROR TYPES.
+
+  Triplet 3:
+    Subject:   single instance
+    Predicate: may exhibit
+    Object:    multiple types
+    Highlighted: These error types are not mutually exclusive; a SINGLE INSTANCE MAY EXHIBIT multiple error types.
+
+  ... and 10 more triplets
+
+====================================================================================================
+Example 2
+====================================================================================================
+
+Original: Correctly solved instances show none of these errors.
+
+Triplets found: 5
+
+  Triplet 1:
+    Subject:   Correctly solved instances
+    Predicate: show none of
+    Object:    these errors
+    Highlighted: CORRECTLY SOLVED INSTANCES SHOW NONE OF THESE ERRORS.
+
+  Triplet 2:
+    Subject:   solved instances
+    Predicate: show none of
+    Object:    errors
+    Highlighted: Correctly SOLVED INSTANCES SHOW NONE OF these ERRORS.
+
+  Triplet 3:
+    Subject:   instances
+    Predicate: show none of
+    Object:    errors
+    Highlighted: Correctly solved INSTANCES SHOW NONE OF these ERRORS.
+
+  ... and 2 more triplets
+
+====================================================================================================
+Example 3
+====================================================================================================
+
+Original: GPT-4-0613's role in classifying examples into these categories is detailed in Appendix, Section 10.7, and its effectiveness is evidenced by the classifications in Table 13.
+
+Triplets found: 19
+
+  Triplet 1:
+    Subject:   GPT-4-0613's role in classifying examples into these categories
+    Predicate: is detailed in
+    Object:    Appendix, Section 10.7
+    Highlighted: GPT-4-0613'S ROLE IN CLASSIFYING EXAMPLES INTO THESE CATEGORIES IS DETAILED IN APPENDIX, SECTION 10.7, and its effectiveness is evidenced by the classifications in Table 13.
+
+  Triplet 2:
+    Subject:   GPT-4 0613's role in classifying examples into categories
+    Predicate: is detailed in
+    Object:    Appendix, Section 10.7
+    Highlighted: GPT-4-0613's role in classifying examples into these categories IS DETAILED IN APPENDIX, SECTION 10.7, and its effectiveness is evidenced by the classifications in Table 13.
+
+  Triplet 3:
+    Subject:   role
+    Predicate: classifying into
+    Object:    categories
+    Highlighted: GPT-4-0613's ROLE in classifying examples into these CATEGORIES is detailed in Appendix, Section 10.7, and its effectiveness is evidenced by the classifications in Table 13.
+
+  ... and 16 more triplets
+
+====================================================================================================
+Example 4
+====================================================================================================
+
+Original: To calculate the metrics, we first determine error rates for each error type and then derive success rates.
+
+Triplets found: 4
+
+  Triplet 1:
+    Subject:   we
+    Predicate: first determine error rates for
+    Object:    each error type
+    Highlighted: To calculate the metrics, WE FIRST DETERMINE ERROR RATES FOR EACH ERROR TYPE and then derive success rates.
+
+  Triplet 2:
+    Subject:   we
+    Predicate: first determine error for
+    Object:    each error type
+    Highlighted: To calculate the metrics, WE first determine error rates for EACH ERROR TYPE and then derive success rates.
+
+  Triplet 3:
+    Subject:   we
+    Predicate: first determine error for
+    Object:    each error
+    Highlighted: To calculate the metrics, WE first determine error rates for EACH ERROR type and then derive success rates.
+
+  ... and 1 more triplets
+
+====================================================================================================
+Example 5
+====================================================================================================
+
+Original: These rates indicate how often the model correctly applies main and secondary skills, as well as performs calculations, across various questions.
+
+Triplets found: 12
+
+  Triplet 1:
+    Subject:   These rates
+    Predicate: indicate
+    Object:    how often the model correctly applies main and secondary skills, as well as performs calculations, across various questions
+    Highlighted: THESE RATES INDICATE HOW OFTEN THE MODEL CORRECTLY APPLIES MAIN AND SECONDARY SKILLS, AS WELL AS PERFORMS CALCULATIONS, ACROSS VARIOUS QUESTIONS.
+
+  Triplet 2:
+    Subject:   the model
+    Predicate: often correctly applies
+    Object:    main and secondary skills,
+    Highlighted: These rates indicate how often THE MODEL correctly applies MAIN AND SECONDARY SKILLS, as well as performs calculations, across various questions.
+
+  Triplet 3:
+    Subject:   the model
+    Predicate: often correctly applies across
+    Object:    various questions
+    Highlighted: These rates indicate how often THE MODEL correctly applies main and secondary skills, as well as performs calculations, across VARIOUS QUESTIONS.
+
+  ... and 9 more triplets
+
+====================================================================================================
+Example 6
+====================================================================================================
+
+Original: We expect the skill-based in-context example selection to be useful for reducing main skill errors.
+
+Triplets found: 13
+
+  Triplet 1:
+    Subject:   We
+    Predicate: expect
+    Object:    the skill-based in-context example selection to be useful for reducing main skill errors
+    Highlighted: WE EXPECT THE SKILL-BASED IN-CONTEXT EXAMPLE SELECTION TO BE USEFUL FOR REDUCING MAIN SKILL ERRORS.
+
+  Triplet 2:
+    Subject:   We
+    Predicate: expect
+    Object:    in-context example selection to be useful for reducing main skill errors
+    Highlighted: WE EXPECT the skill-based IN-CONTEXT EXAMPLE SELECTION TO BE USEFUL FOR REDUCING MAIN SKILL ERRORS.
+
+  Triplet 3:
+    Subject:   We
+    Predicate: expect
+    Object:    in-context example to be useful for reducing main skill errors
+    Highlighted: WE EXPECT the skill-based in-context example selection to be useful for reducing main skill errors.
+
+  ... and 10 more triplets
+
+====================================================================================================
+Example 7
+====================================================================================================
+
+Original: Our hypothesis is supported by our findings, which show a higher SKILL SUCCESS RATE for this approach.
+
+Triplets found: 6
+
+  Triplet 1:
+    Subject:   which
+    Predicate: show SKILL SUCCESS RATE for
+    Object:    this approach
+    Highlighted: Our hypothesis is supported by our findings, WHICH show a higher SKILL SUCCESS RATE for THIS APPROACH.
+
+  Triplet 2:
+    Subject:   Our hypothesis
+    Predicate: is
+    Object:    supported
+    Highlighted: OUR HYPOTHESIS is SUPPORTED by our findings, which show a higher SKILL SUCCESS RATE for this approach.
+
+  Triplet 3:
+    Subject:   which
+    Predicate: show SKILL SUCCESS RATE for
+    Object:    approach
+    Highlighted: Our hypothesis is supported by our findings, WHICH show a higher SKILL SUCCESS RATE for this APPROACH.
+
+  ... and 3 more triplets
+
+====================================================================================================
+Example 8
+====================================================================================================
+
+Original: This suggests that the model more frequently uses the correct skill with the Skill-Based approach compared to the Topic-Based baseline.
+
+Triplets found: 6
+
+  Triplet 1:
+    Subject:   the model
+    Predicate: frequently uses skill with
+    Object:    the Skill-Based approach
+    Highlighted: This suggests that THE MODEL more frequently uses the correct skill with THE SKILL-BASED APPROACH compared to the Topic-Based baseline.
+
+  Triplet 2:
+    Subject:   This
+    Predicate: suggests
+    Object:    that the model more frequently uses the correct skill with the Skill-Based approach compared to the Topic-Based baseline
+    Highlighted: THIS SUGGESTS THAT THE MODEL MORE FREQUENTLY USES THE CORRECT SKILL WITH THE SKILL-BASED APPROACH COMPARED TO THE TOPIC-BASED BASELINE.
+
+  Triplet 3:
+    Subject:   the model
+    Predicate: frequently uses
+    Object:    the correct skill with the Skill-Based approach
+    Highlighted: This suggests that THE MODEL more FREQUENTLY USES THE CORRECT SKILL WITH THE SKILL-BASED APPROACH compared to the Topic-Based baseline.
+
+  ... and 3 more triplets
+
+====================================================================================================
+Example 9
+====================================================================================================
+
+Original: Additionally, the proposed approach also demonstrates effectiveness in reducing secondary skill errors and calculation errors, underscoring its overall superior performance.
+
+Triplets found: 3
+
+  Triplet 1:
+    Subject:   approach
+    Predicate: demonstrates
+    Object:    effectiveness reducing secondary skill errors and calculation errors,
+    Highlighted: Additionally, the proposed APPROACH also DEMONSTRATES effectiveness in reducing secondary skill errors and calculation errors, underscoring its overall superior performance.
+
+  Triplet 2:
+    Subject:   approach
+    Predicate: demonstrates
+    Object:    effectiveness reducing secondary errors and calculation errors
+    Highlighted: Additionally, the proposed APPROACH also DEMONSTRATES effectiveness in reducing secondary skill errors and calculation errors, underscoring its overall superior performance.
+
+  Triplet 3:
+    Subject:   approach
+    Predicate: demonstrates
+    Object:    effectiveness reducing secondary errors and calculation
+    Highlighted: Additionally, the proposed APPROACH also DEMONSTRATES effectiveness in reducing secondary skill errors and calculation errors, underscoring its overall superior performance.
+
+====================================================================================================
+Example 10
+====================================================================================================
+
+Original: We use two evaluation benchmarks: FRAMES
+
+Triplets found: 1
+
+  Triplet 1:
+    Subject:   We
+    Predicate: use
+    Object:    two evaluation benchmarks
+    Highlighted: WE USE TWO EVALUATION BENCHMARKS: FRAMES
+
+====================================================================================================
+Example 11
+====================================================================================================
+
+Original: Originally, SimpleQA is intended to test frontier-models on factuality without web-browsing, and FRAMES is intended to test factuality and retrieval of models on single to multi-hop queries where the ground truth Wikipedia articles are given.
+
+Triplets found: 7
+
+  Triplet 1:
+    Subject:   SimpleQA
+    Predicate: Originally is intended
+    Object:    to test frontier-models on factuality without web-browsing
+    Highlighted: Originally, SIMPLEQA is intended TO TEST FRONTIER-MODELS ON FACTUALITY WITHOUT WEB-BROWSING, and FRAMES is intended to test factuality and retrieval of models on single to multi-hop queries where the ground truth Wikipedia articles are given.
+
+  Triplet 2:
+    Subject:   SimpleQA
+    Predicate: to test
+    Object:    frontier-models on factuality
+    Highlighted: Originally, SIMPLEQA is intended TO TEST FRONTIER-MODELS ON FACTUALITY without web-browsing, and FRAMES is intended to test factuality and retrieval of models on single to multi-hop queries where the ground truth Wikipedia articles are given.
+
+  Triplet 3:
+    Subject:   FRAMES
+    Predicate: is intended
+    Object:    to test factuality and retrieval of models on single to multi-hop queries where the ground truth Wikipedia articles are given
+    Highlighted: Originally, SimpleQA IS INTENDED to test frontier-models on factuality without web-browsing, and FRAMES is intended TO TEST FACTUALITY AND RETRIEVAL OF MODELS ON SINGLE TO MULTI-HOP QUERIES WHERE THE GROUND TRUTH WIKIPEDIA ARTICLES ARE GIVEN.
+
+  ... and 4 more triplets
+
+====================================================================================================
+Example 12
+====================================================================================================
+
+Original: In our scenario, we use both of them to evaluate the accuracy of search AIs with access to the Internet.
+
+Triplets found: 13
+
+  Triplet 1:
+    Subject:   we
+    Predicate: use both of
+    Object:    them
+    Highlighted: In our scenario, WE USE BOTH OF THEM to evaluate the accuracy of search AIs with access to the Internet.
+
+  Triplet 2:
+    Subject:   we
+    Predicate: use
+    Object:    both of them to evaluate the accuracy of search AIs with access to the Internet
+    Highlighted: In our scenario, WE USE BOTH OF THEM TO EVALUATE THE ACCURACY OF SEARCH AIS WITH ACCESS TO THE INTERNET.
+
+  Triplet 3:
+    Subject:   both of them
+    Predicate: to evaluate
+    Object:    the accuracy of search AIs
+    Highlighted: In our scenario, we use BOTH OF THEM TO EVALUATE THE ACCURACY OF SEARCH AIS with access to the Internet.
+
+  ... and 10 more triplets
+
+====================================================================================================
+Example 13
+====================================================================================================
+
+Original: FRAMES (Factuality, Retrieval, And reasoning MEasurement Set) dataset introduced in [8] comprises 824 challenging multi-hop questions requiring integrating multiple sources from Wikipedia.
+
+Triplets found: 8
+
+  Triplet 1:
+    Subject:   FRAMES ( Factuality, Retrieval, And reasoning MEasurement Set) dataset introduced in [ 8
+    Predicate: comprises
+    Object:    824 challenging multi-hop questions requiring integrating multiple sources from Wikipedia
+    Highlighted: FRAMES (Factuality, Retrieval, And reasoning MEasurement Set) dataset introduced in [8] COMPRISES 824 CHALLENGING MULTI-HOP QUESTIONS REQUIRING INTEGRATING MULTIPLE SOURCES FROM WIKIPEDIA.
+
+  Triplet 2:
+    Subject:   dataset
+    Predicate: introduced in
+    Object:    [
+    Highlighted: FRAMES (Factuality, Retrieval, And reasoning MEasurement Set) DATASET INTRODUCED IN [8] comprises 824 challenging multi-hop questions requiring integrating multiple sources from Wikipedia.
+
+  Triplet 3:
+    Subject:   FRAMES Factuality, Retrieval, And
+    Predicate: comprises
+    Object:    824 challenging multi-hop questions requiring integrating multiple sources from Wikipedia
+    Highlighted: FRAMES (Factuality, Retrieval, And reasoning MEasurement Set) dataset introduced in [8] COMPRISES 824 CHALLENGING MULTI-HOP QUESTIONS REQUIRING INTEGRATING MULTIPLE SOURCES FROM WIKIPEDIA.
+
+  ... and 5 more triplets
+
+====================================================================================================
+Example 14
+====================================================================================================
+
+Original: The best single-query search approach reported in [8] achieves a score of 47.4% with Gemini-Pro1.5-0514 (5/14/2024 release) when using 4 retrieved documents from a single query that have the Figure 5: The histogram of how many searches are run by the CodeAct-based ODS-v2 reveals that it chooses to use less number of web searches on SimpleQA, which is relatively easier, compared to FRAMES, which is much more complex.
+
+Triplets found: 75
+
+  Triplet 1:
+    Subject:   The best single-query search approach reported in [ 8
+    Predicate: achieves score of
+    Object:    47.4%
+    Highlighted: The best single-query search approach reported in [8] achieves a score of 47.4% with Gemini-Pro1.5-0514 (5/14/2024 release) when using 4 retrieved documents from a single query that have the Figure 5: The histogram of how many searches are run by the CodeAct-based ODS-v2 reveals that it chooses to use less number of web searches on SimpleQA, which is relatively easier, compared to FRAMES, which is much more complex.
+
+  Triplet 2:
+    Subject:   The best single-query search approach reported in [ 8
+    Predicate: achieves score with
+    Object:    Gemini-Pro1.5-0514 ( 5/14/2024 release)
+    Highlighted: The best single-query search approach reported in [8] achieves a score of 47.4% with Gemini-Pro1.5-0514 (5/14/2024 release) when using 4 retrieved documents from a single query that have the Figure 5: The histogram of how many searches are run by the CodeAct-based ODS-v2 reveals that it chooses to use less number of web searches on SimpleQA, which is relatively easier, compared to FRAMES, which is much more complex.
+
+  Triplet 3:
+    Subject:   that
+    Predicate: have
+    Object:    the Figure 5
+    Highlighted: The best single-query search approach reported in [8] achieves a score of 47.4% with Gemini-Pro1.5-0514 (5/14/2024 release) when using 4 retrieved documents from a single query THAT HAVE THE FIGURE 5: The histogram of how many searches are run by the CodeAct-based ODS-v2 reveals that it chooses to use less number of web searches on SimpleQA, which is relatively easier, compared to FRAMES, which is much more complex.
+
+  ... and 72 more triplets
+
+====================================================================================================
+Example 15
+====================================================================================================
+
+Original: the example below demonstrates the path generated by the model between the concepts 'silk' and 'energy-intensive'.
+
+Triplets found: 1
+
+  Triplet 1:
+    Subject:   the example below
+    Predicate: demonstrates
+    Object:    the path generated by the model between the concepts ' silk ' and ' energy-intensive '
+    Highlighted: THE EXAMPLE BELOW DEMONSTRATES the path generated by the model between the concepts 'silk' and 'energy-intensive'.
+
+====================================================================================================
+Example 16
+====================================================================================================
+
+Original: Figure 8 shows additional knowledge graphs derived from random sampling for randomly chosen concepts to provide additional examples.
+
+Triplets found: 14
+
+  Triplet 1:
+    Subject:   Figure 8
+    Predicate: shows
+    Object:    additional knowledge graphs derived from random sampling for randomly chosen concepts to provide additional examples
+    Highlighted: FIGURE 8 SHOWS ADDITIONAL KNOWLEDGE GRAPHS DERIVED FROM RANDOM SAMPLING FOR RANDOMLY CHOSEN CONCEPTS TO PROVIDE ADDITIONAL EXAMPLES.
+
+  Triplet 2:
+    Subject:   graphs
+    Predicate: derived from
+    Object:    random sampling for randomly chosen concepts
+    Highlighted: Figure 8 shows additional knowledge GRAPHS DERIVED FROM RANDOM SAMPLING FOR RANDOMLY CHOSEN CONCEPTS to provide additional examples.
+
+  Triplet 3:
+    Subject:   Figure 8
+    Predicate: shows
+    Object:    knowledge graphs derived from random sampling for randomly chosen concepts to provide additional examples
+    Highlighted: FIGURE 8 SHOWS additional KNOWLEDGE GRAPHS DERIVED FROM RANDOM SAMPLING FOR RANDOMLY CHOSEN CONCEPTS TO PROVIDE ADDITIONAL EXAMPLES.
+
+  ... and 11 more triplets
+
+====================================================================================================
+Example 17
+====================================================================================================
+
+Original: We refer the reader to Figure S1 for a visualization of how path sampling can be conducted between two predetermined nodes, or randomly selected pairs of nodes.
+
+Triplets found: 28
+
+  Triplet 1:
+    Subject:   We
+    Predicate: refer
+    Object:    the reader
+    Highlighted: WE REFER THE READER to Figure S1 for a visualization of how path sampling can be conducted between two predetermined nodes, or randomly selected pairs of nodes.
+
+  Triplet 2:
+    Subject:   path sampling
+    Predicate: how can be conducted between
+    Object:    two predetermined nodes, or randomly selected pairs of nodes
+    Highlighted: We refer the reader to Figure S1 for a visualization of how PATH SAMPLING can be conducted between TWO PREDETERMINED NODES, OR RANDOMLY SELECTED PAIRS OF NODES.
+
+  Triplet 3:
+    Subject:   We
+    Predicate: refer to
+    Object:    Figure S1
+    Highlighted: WE refer the reader to FIGURE S1 for a visualization of how path sampling can be conducted between two predetermined nodes, or randomly selected pairs of nodes.
+
+  ... and 25 more triplets
+
+====================================================================================================
+Example 18
+====================================================================================================
+
+Original: silk -&gt; provides -&gt; biocompatibility -&gt; possess -&gt; biological materials -&gt; has -&gt; multifunctionality -&gt; include -&gt; self-cleaning -&gt; include -&gt; multifunctionality -&gt; broad applicability in biomaterial design -&gt; silk -&gt; possess -&gt; biopolymers -&gt; possess -&gt; silk -&gt; is -&gt; fibroin -&gt; is -&gt; silk -&gt; broad applicability in biomaterial design -&gt; multifunctionality -&gt; include -&gt; structural coloration -&gt; exhibited by -&gt; insects -&gt; are -&gt; energy-intensive
+
+Triplets found: 2
+
+  Triplet 1:
+    Subject:   silk -&gt;
+    Predicate: provides
+    Object:    -&gt;
+    Highlighted: SILK -&GT; PROVIDES -&gt; biocompatibility -&gt; possess -&gt; biological materials -&gt; has -&gt; multifunctionality -&gt; include -&gt; self-cleaning -&gt; include -&gt; multifunctionality -&gt; broad applicability in biomaterial design -&gt; silk -&gt; possess -&gt; biopolymers -&gt; possess -&gt; silk -&gt; is -&gt; fibroin -&gt; is -&gt; silk -&gt; broad applicability in biomaterial design -&gt; multifunctionality -&gt; include -&gt; structural coloration -&gt; exhibited by -&gt; insects -&gt; are -&gt; energy-intensive
+
+  Triplet 2:
+    Subject:   silk -&gt
+    Predicate: provides
+    Object:    -&gt; biocompatibility -&gt; possess -&gt; biological materials -&gt
+    Highlighted: SILK -&GT; PROVIDES -&GT; BIOCOMPATIBILITY -&GT; POSSESS -&GT; BIOLOGICAL MATERIALS -&GT; has -&gt; multifunctionality -&gt; include -&gt; self-cleaning -&gt; include -&gt; multifunctionality -&gt; broad applicability in biomaterial design -&gt; silk -&gt; possess -&gt; biopolymers -&gt; possess -&gt; silk -&gt; is -&gt; fibroin -&gt; is -&gt; silk -&gt; broad applicability in biomaterial design -&gt; multifunctionality -&gt; include -&gt; structural coloration -&gt; exhibited by -&gt; insects -&gt; are -&gt; energy-intensive
+
+====================================================================================================
+Example 19
+====================================================================================================
+
+Original: To ensure the quality of the dataset, we use the 10-core setting, i.e., retaining users and items with at least ten interactions.
+
+Triplets found: 11
+
+  Triplet 1:
+    Subject:   we
+    Predicate: use
+    Object:    the 10-core setting, i.e., retaining users and items with at least ten interactions
+    Highlighted: To ensure the quality of the dataset, WE USE THE 10-CORE SETTING, I.E., RETAINING USERS AND ITEMS WITH AT LEAST TEN INTERACTIONS.
+
+  Triplet 2:
+    Subject:   setting
+    Predicate: retaining with
+    Object:    at least ten interactions
+    Highlighted: To ensure the quality of the dataset, we use the 10-core SETTING, i.e., retaining users and items with AT LEAST TEN INTERACTIONS.
+
+  Triplet 3:
+    Subject:   we
+    Predicate: use
+    Object:    10-core setting, i.e., retaining users and items with at least ten interactions
+    Highlighted: To ensure the quality of the dataset, WE USE the 10-CORE SETTING, I.E., RETAINING USERS AND ITEMS WITH AT LEAST TEN INTERACTIONS.
+
+  ... and 8 more triplets
+
+====================================================================================================
+Example 20
+====================================================================================================
+
+Original: We defined three experimental configurations based on dataset size: - � LLM2CLIP -3M: This configuration uses only the CC-3M dataset, serving as our lightweight setting.
+
+Triplets found: 12
+
+  Triplet 1:
+    Subject:   We
+    Predicate: defined
+    Object:    three experimental configurations based on dataset size � LLM2CLIP -3 M:
+    Highlighted: WE DEFINED three experimental configurations based on dataset size: - � LLM2CLIP -3M: This configuration uses only the CC-3M dataset, serving as our lightweight setting.
+
+  Triplet 2:
+    Subject:   This configuration
+    Predicate: uses
+    Object:    only the CC-3 M dataset
+    Highlighted: We defined three experimental configurations based on dataset size: - � LLM2CLIP -3M: THIS CONFIGURATION USES only the CC-3M dataset, serving as our lightweight setting.
+
+  Triplet 3:
+    Subject:   configurations
+    Predicate: based on
+    Object:    dataset size
+    Highlighted: We defined three experimental CONFIGURATIONS BASED ON DATASET SIZE: - � LLM2CLIP -3M: This configuration uses only the CC-3M dataset, serving as our lightweight setting.
+
+  ... and 9 more triplets

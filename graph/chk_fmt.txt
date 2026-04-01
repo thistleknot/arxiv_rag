@@ -1,0 +1,6 @@
+﻿Records: 45000
+Keys: ['doc_id', 'paper_id', 'section_idx', 'chunk_idx', 'triplets']
+Triplets in record[0]: 6
+Triplet keys: ['subject', 'predicate', 'object', 'arity', 'relation_type']
+Sample: {'subject': 'we', 'predicate': 'propose', 'object': 'two novel model architectures', 'arity': 'binary', 'relation_type': 'predicate'}
+Total triplets: 378473

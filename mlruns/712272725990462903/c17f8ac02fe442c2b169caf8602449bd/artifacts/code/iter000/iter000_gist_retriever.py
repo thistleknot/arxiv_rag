@@ -1,0 +1,2776 @@
+"""
+GIST Retriever: Greedy Information Selection with Topic Diversity
+
+=============================================================================
+ARCHITECTURE OVERVIEW
+=============================================================================
+
+This module implements a retrieval pipeline based on the GIST principle:
+select documents that maximize query relevance while minimizing redundancy.
+
+The key insight is the FEATURE SELECTION ANALOGY:
+  - Documents = features (predictors)
+  - Query similarity = response variable y
+  - Doc-doc similarity = feature correlation matrix X'X
+
+Goal: Select k documents that:
+  1. Correlate with query (UTILITY: query relevance)
+  2. Are not collinear with each other (COVERAGE: diversity)
+
+=============================================================================
+PIPELINE FLOW
+=============================================================================
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│  RETRIEVAL (Parallel, Independent Pools)                                │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  BM25 Pool (top_k²)                    Embedding Pool (top_k²)          │
+│       │                                      │                          │
+│       ▼                                      ▼                          │
+│  ┌─────────────────┐                  ┌─────────────────┐              │
+│  │ Coverage Matrix │                  │ Coverage Matrix │              │
+│  │ BM25(doc_i, doc_j)                │ cosine(doc_i, doc_j)           │
+│  │ for all i,j in pool               │ for all i,j in pool            │
+│  │ (excludes query)                  │ (excludes query)               │
+│  └────────┬────────┘                  └────────┬────────┘              │
+│           │                                    │                        │
+│  ┌────────▼────────┐                  ┌────────▼────────┐              │
+│  │ Utility Vector  │                  │ Utility Vector  │              │
+│  │ BM25(doc, query)│                  │ cosine(doc, query)            │
+│  │ = response term │                  │ = response term │              │
+│  └────────┬────────┘                  └────────┬────────┘              │
+│           │                                    │                        │
+│  ┌────────▼────────┐                  ┌────────▼────────┐              │
+│  │ GIST Selection  │                  │ GIST Selection  │              │
+│  │ Iterative greedy│                  │ Iterative greedy│              │
+│  │ max utility     │                  │ max utility     │              │
+│  │ min collinearity│                  │ min collinearity│              │
+│  └────────┬────────┘                  └────────┬────────┘              │
+│           │                                    │                        │
+│           └──────────────┬─────────────────────┘                        │
+│                          ▼                                              │
+│                 ┌────────────────┐                                      │
+│                 │  RRF Fusion    │                                      │
+│                 │  Merge ranks   │                                      │
+│                 │  (≤ φ·top_k²)  │                                      │
+│                 └───────┬────────┘                                      │
+│                         ▼                                               │
+│                 ┌────────────────┐                                      │
+│                 │ Late Interact. │ ColBERT MaxSim                       │
+│                 │ Token-level    │                                      │
+│                 └───────┬────────┘                                      │
+│                         ▼                                               │
+│                 ┌────────────────┐                                      │
+│                 │ Cross-Encoder  │ MS-MARCO                             │
+│                 │ Joint encoding │                                      │
+│                 └───────┬────────┘                                      │
+│                         ▼                                               │
+│                      top_k                                              │
+└─────────────────────────────────────────────────────────────────────────┘
+
+=============================================================================
+GIST SELECTION ALGORITHM (Feature Selection Analogy)
+=============================================================================
+
+The GIST selection step is analogous to forward stepwise feature selection
+with VIF (Variance Inflation Factor) control:
+
+  Input:
+    - Coverage matrix C: n×n doc-doc similarities (X'X analog)
+    - Utility vector u: n×1 doc-query similarities (X'y analog)
+    - k: number to select
+
+  Algorithm:
+    S = {}  # selected set
+    for i in 1..k:
+        for each candidate doc d not in S:
+            utility = u[d]                           # correlation with query
+            collinearity = max(C[d, s] for s in S)   # max correlation with selected
+            score[d] = utility - collinearity        # partial correlation proxy
+        
+        best = argmax(score)
+        S = S ∪ {best}
+    
+    return S
+
+This is equivalent to MMR (Maximal Marginal Relevance) but framed through
+the lens of multicollinearity control in regression.
+
+=============================================================================
+FIBONACCI CASCADE
+=============================================================================
+
+The pipeline uses Fibonacci numbers for stage sizing:
+  - Retrieval: top_k² (broad recall)
+  - GIST selection: φ·top_k² where φ ≈ 0.618 (one Fib lower)
+  - ColBERT: top_k
+  - Cross-encoder: Fib lower than top_k
+
+Example for top_k=21:
+  - Retrieve: 441 (21²)
+  - GIST: 377 (Fib below 441)
+  - ColBERT: 21
+  - Cross-encoder: 13 (Fib below 21)
+
+=============================================================================
+USAGE
+=============================================================================
+
+Subclass GISTRetriever and implement the abstract methods for your backend:
+
+    class MyRetriever(GISTRetriever):
+        def _retrieve_bm25(self, query, limit): ...
+        def _retrieve_dense(self, query, limit): ...
+        def _get_bm25_scores(self, doc_ids, query): ...
+        def _get_dense_embeddings(self, doc_ids): ...
+        def _get_query_embedding(self, query): ...
+
+Then use:
+
+    retriever = MyRetriever(config)
+    results = retriever.search("my query", top_k=21)
+
+=============================================================================
+"""
+
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+from typing import List, Dict, Tuple, Optional, Set, Any
+from collections import defaultdict
+import numpy as np
+
+
+# =============================================================================
+# Configuration
+# =============================================================================
+
+@dataclass
+class GISTConfig:
+    """
+    Configuration for GIST retrieval pipeline.
+    
+    Attributes:
+        rrf_k: RRF fusion parameter (default 60)
+        gist_lambda: Balance between utility and coverage in GIST selection.
+                     Higher = more weight on utility (relevance).
+                     Lower = more weight on coverage (diversity).
+                     Default 0.7 favors relevance slightly.
+        use_colbert: Enable ColBERT late interaction reranking
+        use_cross_encoder: Enable cross-encoder final reranking
+        colbert_model: ColBERT model name
+        cross_encoder_model: Cross-encoder model name
+        colbert_batch_size: Batch size for ColBERT scoring
+        cross_encoder_batch_size: Batch size for cross-encoder scoring
+        fibonacci_sequence: Fibonacci numbers for cascade sizing
+        
+    Doc-Doc Matrix Diversity:
+        use_doc_doc_diversity: Enable dual-GIST with ColBERT and Cross-Encoder
+                               doc-doc matrices, then RRF fuse both selections
+    
+    Layer 2 Query Expansion:
+        use_layer2_expansion: Enable 3-layer architecture (L1→L2→L3)
+        layer2_triplet_path: Path to enriched triplet corpus
+        layer2_chunk_to_triplets_path: Chunk→triplet mapping
+        layer2_triplet_to_chunks_path: Triplet→chunk mapping
+        layer2_qwen3_embeddings_path: Qwen3 256d chunk embeddings
+        layer2_expansion_count: Number of expansion chunks to add (default: top_k²)
+    """
+    rrf_k: int = 60
+    gist_lambda: float = 0.7
+    use_colbert: bool = True
+    use_cross_encoder: bool = True
+    use_hnsw_diversity: bool = False  # LEGACY: MMR-based diversity
+    use_doc_doc_diversity: bool = True  # NEW: Full doc-doc matrices + RRF fusion
+    
+    # UNIFIED RELEVANCE FILTERING: Applied at every pipeline stage
+    # Positive-only filters drastically reduce search space
+    bm25_min_score: float = 0.0         # BM25 must be positive (lexical match)
+    dense_min_similarity: float = 0.0   # Cosine similarity must be positive (semantic match)
+    colbert_min_score: float = 0.0      # ColBERT MaxSim must be positive (token alignment)
+    cross_encoder_min_score: float = 0.0  # CE must be positive (holistic relevance)
+    
+    colbert_model: str = "bert-base-uncased"
+    cross_encoder_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    colbert_batch_size: int = 8
+    cross_encoder_batch_size: int = 8
+    # HNSW diversity parameters (LEGACY - MMR-based)
+    hnsw_mmr_lambda: float = 0.7      # 70% relevance, 30% diversity
+    hnsw_k_neighbors: int = 20         # k-NN for sparse similarity matrix
+    hnsw_n_diverse: int = 15          # Output diverse subset size
+    # Doc-Doc Matrix: Uses gist_lambda for both GIST selections, rrf_k for fusion
+    fibonacci_sequence: List[int] = field(default_factory=lambda: [
+        1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987, 1597
+    ])
+    
+    # LAYER 2 QUERY EXPANSION (Graph BM25 + Qwen3 weighted centroid)
+    use_layer2_expansion: bool = True
+    layer2_triplet_path: str = "triplet_checkpoints_full/stage4_lemmatized.msgpack"
+    layer2_chunk_to_triplets_path: str = "checkpoints/chunk_to_triplets.msgpack"
+    layer2_triplet_to_chunks_path: str = "checkpoints/triplet_to_chunks.msgpack"
+    layer2_triplet_bm25_path: str = "checkpoints/triplet_bm25_index.msgpack"
+    layer2_qwen3_embeddings_path: str = "checkpoints/chunk_embeddings_qwen3.msgpack"
+    layer2_expansion_count: Optional[int] = None  # Default: top_k² (e.g., 144 for top_k=13)
+
+
+@dataclass
+class RetrievedDoc:
+    """
+    Represents a retrieved document with all scoring metadata.
+    
+    Attributes:
+        doc_id: Unique document identifier
+        content: Document text content
+        metadata: Additional metadata (paper_id, section_idx, etc.)
+        bm25_score: BM25 relevance score (if from BM25 pool)
+        dense_score: Dense embedding similarity (if from dense pool)
+        bm25_rank: Rank in BM25 pool (1-indexed)
+        dense_rank: Rank in dense pool (1-indexed)
+        gist_rank: Rank after GIST selection (1-indexed)
+        rrf_score: Score after RRF fusion
+        colbert_score: ColBERT late interaction score
+        cross_encoder_score: Cross-encoder score
+        final_score: Final ranking score
+    """
+    doc_id: str
+    content: str
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    bm25_score: Optional[float] = None
+    dense_score: Optional[float] = None
+    bm25_rank: Optional[int] = None
+    dense_rank: Optional[int] = None
+    gist_rank: Optional[int] = None
+    rrf_score: Optional[float] = None
+    colbert_score: Optional[float] = None
+    cross_encoder_score: Optional[float] = None
+    final_score: Optional[float] = None
+
+
+# =============================================================================
+# GIST Selection Algorithm
+# =============================================================================
+
+def gist_select(
+    coverage_matrix: np.ndarray,
+    utility_vector: np.ndarray,
+    k: int,
+    lambda_param: float = 0.7
+) -> List[int]:
+    """
+    GIST: Greedy selection balancing utility (relevance) and coverage (diversity).
+    
+    This implements forward stepwise selection with collinearity control,
+    analogous to feature selection with VIF constraints.
+    
+    Formula: score(d) = λ * corr(d, y) - (1-λ) * mean_corr(d, S)
+    
+    Where:
+        - corr(d, y) = doc-query similarity (normalized to [0,1])
+        - mean_corr(d, S) = mean pairwise correlation with already-selected docs
+        - λ = tradeoff parameter (higher = favor utility)
+    
+    Framed as the feature-selection analogy:
+        y = query vector    (response)
+        X = doc matrix      (predictors)
+    Select subset of X that maximises correlation with y (utility)
+    while minimising intra-set collinearity (diversity).
+    Mean collinearity is the average off-diagonal of the selected
+    correlation sub-matrix, an unbiased estimate of VIF pressure.
+    
+    Args:
+        coverage_matrix: n×n pairwise doc-doc correlation/similarity matrix.
+                         Should be symmetric with diagonal = 1.
+                         Does NOT include query — purely doc-to-doc (X'X analog).
+        utility_vector: n-dim vector of doc-query correlations/similarities.
+                        Represents corr(x_i, y) for each doc i.
+                        Higher = more relevant to query (X'y analog).
+        k: Number of documents to select.
+        lambda_param: Tradeoff between utility and diversity.
+                      Range [0, 1]. Default 0.7.
+                      - 1.0 = pure utility (no diversity)
+                      - 0.0 = pure diversity (ignore relevance)
+                      - 0.7 = slight preference for relevance
+    
+    Returns:
+        List of selected indices in selection order.
+        First element is most relevant, subsequent elements balance
+        relevance with diversity from already-selected.
+    
+    Complexity: O(k * n) where n = number of candidates
+    
+    Example:
+        >>> coverage = cosine_similarity(doc_embeddings)  # n×n
+        >>> utility = cosine_similarity(doc_embeddings, query_embedding).flatten()  # n
+        >>> selected = gist_select(coverage, utility, k=10, lambda_param=0.7)
+        >>> diverse_docs = [docs[i] for i in selected]
+    """
+    n = len(utility_vector)
+    
+    if k >= n:
+        # Select all, sorted by utility
+        return list(np.argsort(utility_vector)[::-1])
+    
+    if k <= 0:
+        return []
+    
+    # Normalize utility to [0, 1] for consistent weighting
+    u_min, u_max = utility_vector.min(), utility_vector.max()
+    if u_max > u_min:
+        utility_norm = (utility_vector - u_min) / (u_max - u_min)
+    else:
+        utility_norm = np.ones(n)  # All equal utility
+    
+    selected_indices = []
+    remaining = set(range(n))
+    
+    # Track running sum of similarities to the selected set (for mean penalty)
+    # sum_sim[i] / n_selected = mean collinearity of candidate i with selected S
+    sum_sim_to_selected = np.zeros(n)
+    n_selected = 0
+    
+    for iteration in range(k):
+        best_idx = None
+        best_score = float('-inf')
+        
+        for idx in remaining:
+            # Utility: correlation with query (normalized)
+            utility = utility_norm[idx]
+            
+            # Collinearity penalty: mean correlation with already-selected docs
+            # = mean off-diagonal entry of correlation sub-matrix (X'X analog)
+            collinearity = (sum_sim_to_selected[idx] / n_selected
+                            if n_selected > 0 else 0.0)
+            
+            # score = λ * corr(x_i, y) - (1-λ) * mean_corr(x_i, S)
+            score = lambda_param * utility - (1 - lambda_param) * collinearity
+            
+            if score > best_score:
+                best_score = score
+                best_idx = idx
+        
+        if best_idx is None:
+            break  # No valid candidates remaining
+        
+        # Add best to selected set
+        selected_indices.append(best_idx)
+        remaining.remove(best_idx)
+        n_selected += 1
+        
+        # Accumulate similarity from newly selected into each remaining candidate's sum
+        for idx in remaining:
+            sum_sim_to_selected[idx] += coverage_matrix[idx, best_idx]
+    
+    return selected_indices
+
+
+def compute_rrf_score(
+    ranks: List[Optional[int]],
+    k: int = 60
+) -> float:
+    """
+    Compute Reciprocal Rank Fusion score from multiple rank lists.
+    
+    RRF(d) = Σ 1 / (k + rank_i(d))
+    
+    Args:
+        ranks: List of ranks from different retrieval methods.
+               None if doc not present in that method's results.
+        k: RRF parameter (default 60, per original paper)
+    
+    Returns:
+        RRF score (higher = better)
+    """
+    score = 0.0
+    for rank in ranks:
+        if rank is not None:
+            score += 1.0 / (k + rank)
+    return score
+
+
+def get_fibonacci_lower(n: int, fib_sequence: List[int]) -> int:
+    """
+    Get the largest Fibonacci number strictly less than n.
+    
+    Args:
+        n: Upper bound
+        fib_sequence: List of Fibonacci numbers
+    
+    Returns:
+        Largest Fibonacci number < n, or n if none found
+    """
+    candidates = [f for f in fib_sequence if f < n]
+    return candidates[-1] if candidates else n
+
+
+def get_fibonacci_upper(n: int, fib_sequence: List[int]) -> int:
+    """
+    Get the smallest Fibonacci number greater than or equal to n.
+    
+    Args:
+        n: Lower bound
+        fib_sequence: List of Fibonacci numbers
+    
+    Returns:
+        Smallest Fibonacci number >= n, or n if none found
+    """
+    candidates = [f for f in fib_sequence if f >= n]
+    return candidates[0] if candidates else n
+
+
+def de_overlap_strings(strings: List[str]) -> List[str]:
+    """
+    Remove overlapping suffixes from consecutive strings.
+    
+    When chunks are created with overlap, this function removes the duplicate
+    content by detecting where the end of one string matches the beginning of the next.
+    
+    Args:
+        strings: List of text chunks (ordered)
+    
+    Returns:
+        List of de-overlapped chunks
+    
+    Example:
+        >>> chunks = ['abcdefg', 'defghij', 'hijklmn']
+        >>> de_overlap_strings(chunks)
+        ['abcd', 'efgh', 'ijklmn']
+    """
+    if len(strings) <= 1:
+        return strings
+    
+    def find_overlap(s1: str, s2: str) -> str:
+        """Find the longest suffix of s1 that matches a prefix of s2."""
+        max_len = min(len(s1), len(s2))
+        for i in range(max_len, 0, -1):
+            if s1[-i:] == s2[:i]:
+                return s1[-i:]
+        return ""
+    
+    result = []
+    for i in range(len(strings) - 1):
+        s1, s2 = strings[i], strings[i + 1]
+        overlap = find_overlap(s1, s2)
+        if overlap:
+            s1 = s1[:-len(overlap)]
+        result.append(s1)
+    
+    # Add the last string as is
+    result.append(strings[-1])
+    return result
+
+
+# =============================================================================
+# Reranker Components
+# =============================================================================
+
+class ColBERTScorer:
+    """
+    ColBERT Late Interaction Scorer.
+    
+    Computes token-level MaxSim: Score(Q,D) = Σᵢ maxⱼ sim(qᵢ, dⱼ)
+    
+    Each query token finds its best-matching document token,
+    then scores are summed. This captures fine-grained semantic matching.
+    """
+    
+    def __init__(self, model_name: str = "bert-base-uncased", batch_size: int = 8):
+        self.model_name = model_name
+        self.batch_size = batch_size
+        self.available = False
+        self.model = None
+        self.tokenizer = None
+        self.linear = None
+        self.device = None
+        self.dim = 128
+        
+        self._initialize()
+    
+    def _initialize(self) -> None:
+        """Load BERT model and projection layer."""
+        try:
+            import torch
+            from transformers import AutoTokenizer, AutoModel
+            
+            self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
+            
+            print(f"Loading ColBERT ({self.model_name}) on {self.device}...")
+            self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+            self.model = AutoModel.from_pretrained(self.model_name)
+            
+            hidden_size = self.model.config.hidden_size
+            self.linear = torch.nn.Linear(hidden_size, self.dim, bias=False)
+            torch.nn.init.xavier_uniform_(self.linear.weight)
+            
+            self.model = self.model.to(self.device)
+            self.model.eval()
+            self.linear = self.linear.to(self.device)
+            
+            self.available = True
+            print(f"ColBERT initialized.")
+            
+        except ImportError as e:
+            print(f"ColBERT unavailable (missing dependencies): {e}")
+            self.available = False
+        except Exception as e:
+            print(f"ColBERT initialization failed: {e}")
+            self.available = False
+    
+    def _encode(self, texts: List[str], max_length: int, is_query: bool = False):
+        """Encode texts to token embeddings."""
+        import torch
+        
+        # Add marker tokens
+        if is_query:
+            texts = [f"[Q] {t}" for t in texts]
+        else:
+            texts = [f"[D] {t}" for t in texts]
+        
+        encoded = self.tokenizer(
+            texts,
+            padding="max_length",
+            truncation=True,
+            max_length=max_length,
+            return_tensors="pt"
+        )
+        
+        input_ids = encoded["input_ids"].to(self.device)
+        attention_mask = encoded["attention_mask"].to(self.device)
+        
+        with torch.no_grad():
+            outputs = self.model(input_ids=input_ids, attention_mask=attention_mask)
+            embeddings = outputs.last_hidden_state
+        
+        # Project to lower dimension
+        embeddings = self.linear(embeddings)
+        
+        # L2 normalize
+        embeddings = torch.nn.functional.normalize(embeddings, p=2, dim=-1)
+        
+        # Mask padding
+        mask_expanded = attention_mask.unsqueeze(-1).expand(embeddings.size())
+        embeddings = embeddings * mask_expanded.float()
+        
+        return embeddings, attention_mask
+    
+    def score(self, query: str, documents: List[str]) -> np.ndarray:
+        """
+        Score documents against query using ColBERT MaxSim.
+        
+        Args:
+            query: Query text
+            documents: List of document texts
+        
+        Returns:
+            Array of scores (higher = more relevant)
+        """
+        if not self.available:
+            return np.zeros(len(documents))
+        
+        if not documents:
+            return np.array([])
+        
+        import torch
+        
+        try:
+            # Encode query (once)
+            query_emb, query_mask = self._encode([query], max_length=32, is_query=True)
+            
+            all_scores = []
+            
+            # Batch encode documents
+            for i in range(0, len(documents), self.batch_size):
+                batch = documents[i:i + self.batch_size]
+                doc_embs, doc_masks = self._encode(batch, max_length=512, is_query=False)
+                
+                # MaxSim: for each query token, find max similarity to any doc token
+                n_docs = doc_embs.size(0)
+                query_expanded = query_emb.expand(n_docs, -1, -1)
+                
+                # Similarity matrix: (n_docs, query_len, doc_len)
+                sim_matrix = torch.bmm(query_expanded, doc_embs.transpose(1, 2))
+                
+                # Mask padding in documents
+                doc_mask_expanded = doc_masks.unsqueeze(1).expand(-1, query_emb.size(1), -1)
+                sim_matrix = sim_matrix.masked_fill(~doc_mask_expanded.bool(), float('-inf'))
+                
+                # Max over document tokens
+                max_sim_per_query_token, _ = sim_matrix.max(dim=-1)
+                
+                # Mask padding in query
+                query_mask_expanded = query_mask.expand(n_docs, -1)
+                max_sim_per_query_token = max_sim_per_query_token.masked_fill(
+                    ~query_mask_expanded.bool(), 0.0
+                )
+                
+                # Sum over query tokens
+                batch_scores = max_sim_per_query_token.sum(dim=-1)
+                all_scores.append(batch_scores.detach().cpu().numpy())
+            
+            return np.concatenate(all_scores)
+            
+        except Exception as e:
+            print(f"ColBERT scoring failed: {e}")
+            return np.zeros(len(documents))
+
+
+class CrossEncoderScorer:
+    """
+    Cross-Encoder Reranker using MS MARCO model.
+    
+    Encodes query+document pairs jointly for fine-grained relevance scoring.
+    More expensive but more accurate than bi-encoders.
+    """
+    
+    def __init__(self, model_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2", batch_size: int = 8):
+        self.model_name = model_name
+        self.batch_size = batch_size
+        self.available = False
+        self.model = None
+        self.device = None
+        
+        self._initialize()
+    
+    def _initialize(self) -> None:
+        """Load cross-encoder model."""
+        try:
+            import torch
+            from sentence_transformers import CrossEncoder
+            
+            self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
+            
+            print(f"Loading Cross-Encoder ({self.model_name}) on {self.device}...")
+            self.model = CrossEncoder(self.model_name, max_length=512, device=self.device)
+            
+            self.available = True
+            print(f"Cross-Encoder initialized.")
+            
+        except ImportError as e:
+            print(f"Cross-Encoder unavailable (missing dependencies): {e}")
+            self.available = False
+        except Exception as e:
+            print(f"Cross-Encoder initialization failed: {e}")
+            self.available = False
+    
+    def score(self, query: str, documents: List[str]) -> np.ndarray:
+        """
+        Score query-document pairs with cross-encoder.
+        
+        Args:
+            query: Query text
+            documents: List of document texts
+        
+        Returns:
+            Array of scores (higher = more relevant)
+        """
+        if not self.available:
+            return np.zeros(len(documents))
+        
+        if not documents:
+            return np.array([])
+        
+        try:
+            pairs = [[query, doc] for doc in documents]
+            scores = self.model.predict(pairs, batch_size=self.batch_size, show_progress_bar=False)
+            return scores
+            
+        except Exception as e:
+            print(f"Cross-Encoder scoring failed: {e}")
+            return np.zeros(len(documents))
+
+
+# =============================================================================
+# HNSW Diversity Control (MMR)
+# =============================================================================
+
+class HNSWDiversity:
+    """
+    HNSW-based Maximal Marginal Relevance for diversity control.
+    
+    Operates BETWEEN ColBERT and Cross-Encoder stages:
+      - Input: ColBERT scores (relevance to query)
+      - Process: Build HNSW index on averaged embeddings
+      - Output: Diverse subset via greedy MMR selection
+    
+    Key Insight:
+      ColBERT uses token embeddings for query-doc relevance.
+      HNSW uses averaged embeddings for doc-doc similarity.
+      These are orthogonal concerns at different pipeline stages.
+    """
+    
+    def __init__(self, lambda_param: float = 0.7, k_neighbors: int = 20):
+        """
+        Initialize HNSW diversity controller.
+        
+        Args:
+            lambda_param: Balance relevance (high) vs diversity (low). Default 0.7.
+            k_neighbors: k-NN neighbors for sparse similarity matrix.
+        """
+        self.lambda_param = lambda_param
+        self.k_neighbors = k_neighbors
+        self.available = self._check_faiss()
+    
+    def _check_faiss(self) -> bool:
+        """Check if FAISS is available."""
+        try:
+            import faiss
+            return True
+        except ImportError:
+            print("FAISS not available. HNSW diversity disabled.")
+            return False
+    
+    def apply_mmr(
+        self,
+        texts: List[str],
+        relevance_scores: np.ndarray,
+        n_diverse: int,
+        embeddings: Optional[np.ndarray] = None
+    ) -> Tuple[List[int], List[float]]:
+        """
+        Apply MMR diversity selection with HNSW k-NN.
+        
+        Args:
+            texts: Document texts (for embedding if not provided)
+            relevance_scores: ColBERT scores [n_docs]
+            n_diverse: Number of diverse documents to select
+            embeddings: Pre-computed averaged embeddings [n_docs, dim] (optional)
+        
+        Returns:
+            Tuple of (selected_indices, mmr_scores)
+        """
+        if not self.available:
+            # Fallback: return top-k by relevance
+            top_indices = np.argsort(relevance_scores)[::-1][:n_diverse]
+            return list(top_indices), list(relevance_scores[top_indices])
+        
+        import faiss
+        from scipy.sparse import lil_matrix
+        
+        n_docs = len(texts)
+        if n_docs <= n_diverse:
+            return list(range(n_docs)), list(relevance_scores)
+        
+        # Compute averaged embeddings if not provided
+        if embeddings is None:
+            embeddings = self._compute_averaged_embeddings(texts)
+        
+        # Build HNSW index
+        dim = embeddings.shape[1]
+        index = faiss.IndexHNSWFlat(dim, 16)  # M=16 connections
+        index.hnsw.efConstruction = 64
+        index.hnsw.efSearch = 32
+        index.add(embeddings.astype('float32'))
+        
+        # Get k-NN sparse similarity matrix
+        k = min(self.k_neighbors, n_docs - 1)
+        D, I = index.search(embeddings.astype('float32'), k + 1)  # +1 to exclude self
+        
+        # Build sparse matrix (exclude self-similarity)
+        similarity_matrix = lil_matrix((n_docs, n_docs))
+        for i in range(n_docs):
+            for j_idx in range(1, len(I[i])):  # Skip index 0 (self)
+                j = I[i][j_idx]
+                if j < n_docs:
+                    # Convert L2 distance to cosine similarity proxy
+                    sim = 1.0 / (1.0 + D[i][j_idx])
+                    similarity_matrix[i, j] = sim
+        
+        similarity_matrix = similarity_matrix.tocsr()
+        
+        # Greedy MMR selection
+        selected_indices = []
+        selected_mask = np.zeros(n_docs, dtype=bool)
+        
+        # Normalize relevance scores to [0, 1]
+        rel_norm = relevance_scores / (np.max(relevance_scores) + 1e-8)
+        
+        for _ in range(n_diverse):
+            best_score = -np.inf
+            best_idx = -1
+            
+            for i in range(n_docs):
+                if selected_mask[i]:
+                    continue
+                
+                # Relevance component
+                relevance = rel_norm[i]
+                
+                # Diversity component: max similarity to already selected
+                if selected_indices:
+                    # Get similarities to selected documents
+                    max_sim = 0.0
+                    for sel_idx in selected_indices:
+                        sim = similarity_matrix[i, sel_idx]
+                        max_sim = max(max_sim, sim)
+                    diversity_penalty = max_sim
+                else:
+                    diversity_penalty = 0.0
+                
+                # MMR score
+                mmr_score = self.lambda_param * relevance - (1 - self.lambda_param) * diversity_penalty
+                
+                if mmr_score > best_score:
+                    best_score = mmr_score
+                    best_idx = i
+            
+            if best_idx >= 0:
+                selected_indices.append(best_idx)
+                selected_mask[best_idx] = True
+        
+        # Compute final MMR scores for selected
+        mmr_scores = [rel_norm[i] for i in selected_indices]
+        
+        return selected_indices, mmr_scores
+    
+    def _compute_averaged_embeddings(self, texts: List[str]) -> np.ndarray:
+        """
+        Compute averaged sentence embeddings.
+        
+        Uses a lightweight embedding model (e.g., sentence-transformers).
+        For production, cache these embeddings in the database.
+        
+        Args:
+            texts: Document texts
+        
+        Returns:
+            Array of shape [n_docs, dim]
+        """
+        try:
+            from sentence_transformers import SentenceTransformer
+            
+            # Use a fast model for averaged embeddings
+            model = SentenceTransformer('all-MiniLM-L6-v2')
+            embeddings = model.encode(texts, show_progress_bar=False, convert_to_numpy=True)
+            return embeddings
+            
+        except ImportError:
+            # Fallback: random embeddings (FOR TESTING ONLY)
+            print("Warning: sentence-transformers not available. Using random embeddings.")
+            return np.random.randn(len(texts), 384).astype('float32')
+        except Exception as e:
+            print(f"Error computing averaged embeddings: {e}")
+            return np.random.randn(len(texts), 384).astype('float32')
+
+
+# =============================================================================
+# Doc-Doc Matrix Diversity (ColBERT + Cross-Encoder + RRF)
+# =============================================================================
+
+class DocDocMatrixDiversity:
+    """
+    GIST selection on doc-doc similarity matrices using BOTH ColBERT and Cross-Encoder.
+    
+    Architecture:
+        Papers (n=21)
+            │
+            ├──────────────────────────────────────────┐
+            │                                          │
+            ▼                                          ▼
+        ColBERT GIST                           Cross-Encoder GIST
+        ┌─────────────────┐                   ┌─────────────────┐
+        │ coverage: doc-doc│                   │ coverage: doc-doc│
+        │ utility: query-doc│                  │ utility: query-doc│
+        │ → GIST select    │                   │ → GIST select    │
+        └────────┬────────┘                   └────────┬────────┘
+                 │                                      │
+                 └──────────────┬───────────────────────┘
+                                │
+                                ▼
+                          RRF Fusion
+                                │
+                                ▼
+                          Final top_k
+    
+    This uses the EXISTING gist_select() function with:
+    - coverage_matrix = doc-doc similarity (n×n)
+    - utility_vector = query-doc relevance scores (n×1)
+    - lambda = gist_lambda from config
+    """
+    
+    def __init__(
+        self,
+        colbert_scorer: 'ColBERTScorer',
+        cross_encoder_scorer: 'CrossEncoderScorer',
+        gist_lambda: float = 0.7,
+        rrf_k: int = 60,
+        colbert_min_score: float = 0.0
+    ):
+        self.colbert_scorer = colbert_scorer
+        self.cross_encoder_scorer = cross_encoder_scorer
+        self.gist_lambda = gist_lambda
+        self.rrf_k = rrf_k
+        self.colbert_min_score = colbert_min_score
+    
+    def compute_colbert_doc_doc_matrix(self, texts: List[str]) -> np.ndarray:
+        """Compute n×n ColBERT similarity matrix (each doc as query)."""
+        n = len(texts)
+        matrix = np.zeros((n, n), dtype=np.float32)
+        
+        if not self.colbert_scorer.available:
+            return matrix
+        
+        print(f"      Computing ColBERT doc-doc matrix ({n}×{n})...")
+        for i in range(n):
+            scores = self.colbert_scorer.score(texts[i], texts)
+            matrix[i, :] = scores
+        
+        return matrix
+    
+    def compute_cross_encoder_doc_doc_matrix(self, texts: List[str]) -> np.ndarray:
+        """Compute n×n Cross-Encoder similarity matrix."""
+        n = len(texts)
+        matrix = np.zeros((n, n), dtype=np.float32)
+        
+        if not self.cross_encoder_scorer.available:
+            return matrix
+        
+        print(f"      Computing Cross-Encoder doc-doc matrix ({n}×{n})...")
+        for i in range(n):
+            scores = self.cross_encoder_scorer.score(texts[i], texts)
+            matrix[i, :] = scores
+        
+        return matrix
+    
+    def rerank_with_gist(
+        self,
+        query: str,
+        papers: List['RetrievedPaper'],
+        final_k: int,
+        ce_min_score: float = 0.0
+    ) -> List['RetrievedPaper']:
+        """
+        Run GIST on both ColBERT and Cross-Encoder doc-doc matrices, then RRF fuse.
+        
+        Applies Cross-Encoder filtering before computing diversity matrices.
+        
+        Args:
+            query: User query
+            papers: Papers with ColBERT scores from step 7 (already filtered)
+            final_k: Number to return
+            ce_min_score: Minimum CE score (default 0.0 = positive correlation only)
+        
+        Returns:
+            Top-k papers ranked by RRF fusion of both GIST selections
+        """
+        n = len(papers)
+        if n == 0:
+            return papers
+        if n <= final_k:
+            return papers
+        
+        # JOINT COLBERT+CE FILTER: Score with CE, then filter both at once
+        # Compute CE scores
+        texts = [p.full_text for p in papers]
+        ce_scores = self.cross_encoder_scorer.score(query, texts)
+        
+        # Cache CE scores on papers
+        for paper, ce_score in zip(papers, ce_scores):
+            paper.cross_encoder_score = float(ce_score)
+        
+        # Show CE score distribution BEFORE filtering
+        import numpy as np
+        from scipy.stats import median_abs_deviation
+        
+        colbert_array = np.array([p.colbert_score for p in papers])
+        ce_array = np.array([p.cross_encoder_score for p in papers])
+        
+        print(f"      [CE Score Distribution] min={ce_array.min():.2f}, max={ce_array.max():.2f}, mean={ce_array.mean():.2f}, median={np.median(ce_array):.2f}")
+        print(f"      [Score Breakdown] Papers with CE > 0: {(ce_array > 0).sum()}/{len(papers)}")
+        
+        # Compute MAD-based dynamic thresholds (more lenient when distribution is skewed)
+        colbert_mad = median_abs_deviation(colbert_array, scale='normal')
+        ce_mad = median_abs_deviation(ce_array, scale='normal')
+        
+        colbert_median = np.median(colbert_array)
+        ce_median = np.median(ce_array)
+        
+        # Dynamic lower bounds: median - (MAD * 2) [removes extreme outliers only]
+        colbert_dynamic = colbert_median - (colbert_mad * 2)
+        ce_dynamic = ce_median - (ce_mad * 2)
+        
+        # Effective thresholds: use MINIMUM (more lenient) of fixed vs dynamic
+        colbert_effective = min(self.colbert_min_score, colbert_dynamic)
+        ce_effective = min(ce_min_score, ce_dynamic)
+        
+        print(f"      [Adaptive Thresholds]")
+        print(f"        ColBERT: fixed={self.colbert_min_score:.2f}, MAD-based={colbert_dynamic:.2f} → effective={colbert_effective:.2f}")
+        print(f"        CE: fixed={ce_min_score:.2f}, MAD-based={ce_dynamic:.2f} → effective={ce_effective:.2f}")
+        
+        # Filter: ColBERT > effective_threshold AND CE > effective_threshold
+        original_count = len(papers)
+        papers_filtered = [
+            p for p in papers 
+            if p.colbert_score > colbert_effective and p.cross_encoder_score > ce_effective
+        ]
+        
+        # Show what got filtered out
+        filtered_out = [p for p in papers if p not in papers_filtered]
+        if filtered_out:
+            print(f"      [Filtered Out {len(filtered_out)} papers]:")
+            for p in sorted(filtered_out, key=lambda x: x.cross_encoder_score, reverse=True)[:5]:
+                print(f"        {p.paper_id}: ColBERT={p.colbert_score:.2f}, CE={p.cross_encoder_score:.2f}")
+        
+        papers = papers_filtered
+        n = len(papers)
+        
+        print(f"      [Joint Filter] {original_count} -> {n} papers (ColBERT > {colbert_effective:.2f} AND CE > {ce_effective:.2f})")
+        
+        if n == 0:
+            print(f"      WARNING: No papers meet CE threshold {ce_min_score}")
+            return []
+        
+        if n <= final_k:
+            print(f"      Filtered set already <= final_k, returning all {n} papers")
+            return papers
+        
+        texts = [p.full_text for p in papers]
+        
+        # === ColBERT GIST ===
+        print(f"      [1/4] ColBERT doc-doc matrix...")
+        colbert_coverage = self.compute_colbert_doc_doc_matrix(texts)
+        colbert_utility = np.array([p.colbert_score or 0.0 for p in papers])
+        
+        print(f"      [2/4] ColBERT GIST selection...")
+        colbert_indices = gist_select(
+            coverage_matrix=colbert_coverage,
+            utility_vector=colbert_utility,
+            k=final_k,
+            lambda_param=self.gist_lambda
+        )
+        
+        # === Cross-Encoder GIST ===
+        print(f"      [3/4] Cross-Encoder doc-doc matrix + query-doc scores...")
+        ce_coverage = self.compute_cross_encoder_doc_doc_matrix(texts)
+        
+        # Use cached CE scores if available (from CE filter), otherwise compute
+        if hasattr(papers[0], 'cross_encoder_score'):
+            ce_utility = np.array([p.cross_encoder_score for p in papers])
+        else:
+            ce_utility = self.cross_encoder_scorer.score(query, texts)
+            # Store CE scores
+            for i, paper in enumerate(papers):
+                paper.cross_encoder_score = float(ce_utility[i])
+        
+        print(f"      [4/4] Cross-Encoder GIST selection...")
+        ce_indices = gist_select(
+            coverage_matrix=ce_coverage,
+            utility_vector=ce_utility,
+            k=final_k,
+            lambda_param=self.gist_lambda
+        )
+        
+        # === RRF Fusion ===
+        # Convert indices to ranks
+        colbert_ranks = {idx: rank + 1 for rank, idx in enumerate(colbert_indices)}
+        ce_ranks = {idx: rank + 1 for rank, idx in enumerate(ce_indices)}
+        
+        # RRF score for all papers
+        rrf_scores = {}
+        all_indices = set(colbert_indices) | set(ce_indices)
+        
+        for idx in range(n):
+            score = 0.0
+            if idx in colbert_ranks:
+                score += 1.0 / (self.rrf_k + colbert_ranks[idx])
+            if idx in ce_ranks:
+                score += 1.0 / (self.rrf_k + ce_ranks[idx])
+            rrf_scores[idx] = score
+        
+        # Sort by RRF score
+        sorted_indices = sorted(range(n), key=lambda i: rrf_scores[i], reverse=True)
+        
+        # Update papers with final scores
+        for idx in sorted_indices[:final_k]:
+            papers[idx].metadata['colbert_gist_rank'] = colbert_ranks.get(idx, n+1)
+            papers[idx].metadata['ce_gist_rank'] = ce_ranks.get(idx, n+1)
+            papers[idx].metadata['rrf_score'] = rrf_scores[idx]
+            papers[idx].final_score = rrf_scores[idx]
+        
+        result = [papers[i] for i in sorted_indices[:final_k]]
+        
+        print(f"      Results (top 5):")
+        for i, p in enumerate(result[:5]):
+            print(f"        [{i+1}] {p.paper_id}: "
+                  f"CB_GIST=#{p.metadata.get('colbert_gist_rank', 'N/A')}, "
+                  f"CE_GIST=#{p.metadata.get('ce_gist_rank', 'N/A')}, "
+                  f"RRF={p.final_score:.4f}")
+        
+        return result
+
+
+# =============================================================================
+# Grouped Result Container
+# =============================================================================
+
+@dataclass
+class RetrievedGroup:
+    """
+    Represents a grouped retrieval result (e.g., full section or full quote).
+    
+    Contains all chunks belonging to this group, reconstructed full text,
+    and scoring metadata.
+    
+    Attributes:
+        group_id: Unique group identifier (e.g., "paper_id:section_idx" or "quote_id")
+        group_key: Tuple of grouping field values
+        full_text: Reconstructed full text from all chunks
+        chunks: List of RetrievedDoc chunks belonging to this group
+        rrf_score: Aggregated RRF score from chunks
+        colbert_score: ColBERT score on full_text
+        cross_encoder_score: Cross-encoder score on full_text
+        final_score: Final ranking score
+        metadata: Additional metadata
+    """
+    group_id: str
+    group_key: Tuple
+    full_text: str
+    chunks: List[RetrievedDoc] = field(default_factory=list)
+    rrf_score: Optional[float] = None
+    colbert_score: Optional[float] = None
+    cross_encoder_score: Optional[float] = None
+    final_score: Optional[float] = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class RetrievedPaper:
+    """
+    Represents a paper with all its sections.
+    
+    Attributes:
+        paper_id: Paper identifier
+        sections: List of RetrievedGroup sections belonging to this paper
+        full_text: Concatenated text from all sections
+        rrf_score: Aggregated RRF score from all sections
+        colbert_score: Max ColBERT score across sections
+        cross_encoder_score: Cross-encoder score on full paper text
+        final_score: Final ranking score
+        metadata: Additional metadata
+    """
+    paper_id: str
+    sections: List[RetrievedGroup] = field(default_factory=list)
+    full_text: str = ""
+    rrf_score: Optional[float] = None
+    colbert_score: Optional[float] = None
+    cross_encoder_score: Optional[float] = None
+    final_score: Optional[float] = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+# =============================================================================
+# Abstract GIST Retriever
+# =============================================================================
+
+class GISTRetriever(ABC):
+    """
+    Abstract base class for GIST retrieval with grouping support.
+    
+    Implements the full GIST pipeline:
+        1. Parallel retrieval (BM25 + dense) at CHUNK level
+        2. GIST selection on each pool (iterative greedy with collinearity control)
+        3. RRF fusion of chunks
+        4. GROUP chunks by parent (section, quote, etc.)
+        5. RECONSTRUCT full text for each group
+        6. ColBERT late interaction reranking on FULL TEXT
+        7. Cross-encoder final reranking on FULL TEXT
+    
+    Subclasses must implement:
+        - Backend methods: _retrieve_bm25, _retrieve_dense, etc.
+        - Grouping methods: _get_group_key, _fetch_all_chunks_for_group
+    """
+    
+    def __init__(self, config: Optional[GISTConfig] = None):
+        self.config = config or GISTConfig()
+        
+        # Lazy-load rerankers
+        self._colbert_scorer = None
+        self._cross_encoder_scorer = None
+        
+        # Layer 2 expansion data (loaded lazily)
+        self._layer2_data_loaded = False
+        self._triplet_tokens = None
+        self._triplet_to_chunks = None
+        self._chunk_to_triplets = None
+        self._qwen3_embeddings = None
+        self._graph_bm25 = None
+        self._doc_id_to_idx = None  # Mapping from doc_id (str) → chunk index (int)
+    
+    @property
+    def colbert_scorer(self) -> ColBERTScorer:
+        """Lazy-load ColBERT scorer."""
+        if self._colbert_scorer is None:
+            self._colbert_scorer = ColBERTScorer(
+                model_name=self.config.colbert_model,
+                batch_size=self.config.colbert_batch_size
+            )
+        return self._colbert_scorer
+    
+    @property
+    def cross_encoder_scorer(self) -> CrossEncoderScorer:
+        """Lazy-load cross-encoder scorer."""
+        if self._cross_encoder_scorer is None:
+            self._cross_encoder_scorer = CrossEncoderScorer(
+                model_name=self.config.cross_encoder_model,
+                batch_size=self.config.cross_encoder_batch_size
+            )
+        return self._cross_encoder_scorer
+    
+    # =========================================================================
+    # Layer 2 Data Loading (Lazy)
+    # =========================================================================
+    
+    def _load_layer2_data(self):
+        """
+        Lazy-load Layer 2 expansion data from msgpack files:
+          - Triplet BM25 index (tokenized triplets + BM25Okapi)
+          - Triplet↔chunk mappings
+          - Qwen3 256d chunk embeddings
+        """
+        if self._layer2_data_loaded:
+            return
+        
+        import msgpack
+        from pathlib import Path
+        
+        print("  Loading Layer 2 expansion data...")
+        
+        # --- Triplet BM25 index ---
+        bm25_path = Path(self.config.layer2_triplet_bm25_path)
+        if bm25_path.exists():
+            from rank_bm25 import BM25Okapi
+            with open(bm25_path, 'rb') as f:
+                bm25_data = msgpack.load(f, raw=False)
+            self._triplet_tokens = bm25_data.get('triplet_tokens', [])
+            self._graph_bm25 = BM25Okapi(self._triplet_tokens) if self._triplet_tokens else None
+            print(f"    ✓ Triplet BM25: {len(self._triplet_tokens)} triplets")
+        else:
+            print(f"    ⚠ Triplet BM25 not found: {bm25_path}")
+            self._triplet_tokens = []
+            self._graph_bm25 = None
+        
+        # --- Triplet → chunk mapping ---
+        t2c_path = Path(self.config.layer2_triplet_to_chunks_path)
+        if t2c_path.exists():
+            with open(t2c_path, 'rb') as f:
+                self._triplet_to_chunks = msgpack.load(f, raw=False)
+            print(f"    ✓ Triplet→chunk mapping: {len(self._triplet_to_chunks)} entries")
+        else:
+            print(f"    ⚠ Triplet→chunk mapping not found: {t2c_path}")
+            self._triplet_to_chunks = {}
+        
+        # --- Chunk → triplet mapping ---
+        c2t_path = Path(self.config.layer2_chunk_to_triplets_path)
+        if c2t_path.exists():
+            with open(c2t_path, 'rb') as f:
+                self._chunk_to_triplets = msgpack.load(f, raw=False)
+            print(f"    ✓ Chunk→triplet mapping: {len(self._chunk_to_triplets)} entries")
+        else:
+            print(f"    ⚠ Chunk→triplet mapping not found: {c2t_path}")
+            self._chunk_to_triplets = {}
+        
+        # --- Qwen3 256d embeddings ---
+        qwen3_path = Path(self.config.layer2_qwen3_embeddings_path)
+        if qwen3_path.exists():
+            with open(qwen3_path, 'rb') as f:
+                data = msgpack.load(f, raw=False)
+            self._qwen3_embeddings = np.array(data['embeddings'], dtype=np.float32)
+            print(f"    ✓ Qwen3 embeddings: {self._qwen3_embeddings.shape}")
+        else:
+            print(f"    ⚠ Qwen3 embeddings not found: {qwen3_path}")
+            self._qwen3_embeddings = None
+        
+        self._layer2_data_loaded = True
+        print("  Layer 2 data loaded.")
+    
+    # =========================================================================
+    # Layer 2 Query Expansion (ECDF-Weighted Dual Expansion)
+    # =========================================================================
+    
+    @staticmethod
+    def _midpoint_ecdf_weights(scores: np.ndarray) -> np.ndarray:
+        """
+        Midpoint empirical CDF weights (Hazen plotting position).
+        
+        For each score: weight = (count_≤ + count_<) / (2n)
+        Guarantees no weight is exactly 0.0 or 1.0.
+        
+        Args:
+            scores: 1D array of raw scores (e.g., BM25 scores from Layer 1)
+        
+        Returns:
+            1D array of weights in (0, 1), same length as scores
+        """
+        n = len(scores)
+        if n <= 1:
+            return np.ones(n, dtype=np.float64)
+        
+        weights = np.empty(n, dtype=np.float64)
+        for i, val in enumerate(scores):
+            count_leq = np.sum(scores <= val)
+            count_lt = np.sum(scores < val)
+            weights[i] = (count_leq + count_lt) / (2.0 * n)
+        
+        return weights
+    
+    def _expand_via_graph_bm25(
+        self, 
+        seed_chunks: List[str],  # doc_ids from Layer 1
+        seed_scores: List[float],
+        top_k: int
+    ) -> List[RetrievedDoc]:
+        """
+        Graph expansion via BM25 over triplet corpus with GIST diversity selection.
+        
+        Args:
+            seed_chunks: doc_ids from Layer 1 (seeds)
+            seed_scores: Raw scores from Layer 1 (parallel to seed_chunks)
+            top_k: Number of NEW chunks to retrieve
+        
+        Returns:
+            List of RetrievedDoc with diversity-selected expansion chunks
+        """
+        if not self._layer2_data_loaded:
+            self._load_layer2_data()
+        
+        if not self.config.use_layer2_expansion or not self._graph_bm25:
+            return []
+        
+        from collections import Counter
+        from sklearn.metrics.pairwise import cosine_similarity
+        
+        # Build doc_id → index mapping if needed
+        if self._doc_id_to_idx is None:
+            # Try to get all doc_ids from backend
+            all_docs = self._get_all_doc_ids() if hasattr(self, '_get_all_doc_ids') else []
+            if all_docs:
+                self._doc_id_to_idx = {doc_id: i for i, doc_id in enumerate(all_docs)}
+        
+        # 0. Compute ECDF weights for seeds
+        ecdf_w = self._midpoint_ecdf_weights(np.array(seed_scores, dtype=np.float64))
+        
+        # 1. Build TF vector per seed from pre-tokenized triplet index
+        seed_tfs = []
+        valid_weights = []
+        seed_indices = []
+        
+        for idx, doc_id in enumerate(seed_chunks):
+            if self._doc_id_to_idx and doc_id in self._doc_id_to_idx:
+                cid = self._doc_id_to_idx[doc_id]
+                seed_indices.append(cid)
+            else:
+                # Fallback: Try to extract chunk index from doc_id format
+                try:
+                    parts = doc_id.split('_')
+                    if len(parts) >= 4:
+                        # Format: arxiv_id_sX_cY
+                        chunk_idx = int(parts[3][1:])  # Extract Y from cY
+                        seed_indices.append(chunk_idx)
+                except:
+                    continue
+            
+            if seed_indices and seed_indices[-1] < len(self._triplet_tokens):
+                tf = Counter(self._triplet_tokens[seed_indices[-1]])
+                if tf:
+                    seed_tfs.append(tf)
+                    valid_weights.append(ecdf_w[idx])
+        
+        if not seed_tfs:
+            return []
+        
+        # 2. ECDF-weighted mean TF profile
+        vocab = sorted(set().union(*seed_tfs))
+        vocab_idx = {term: i for i, term in enumerate(vocab)}
+        
+        tf_matrix = np.zeros((len(seed_tfs), len(vocab)), dtype=np.float64)
+        for i, tf in enumerate(seed_tfs):
+            for term, count in tf.items():
+                tf_matrix[i, vocab_idx[term]] = count
+        
+        w = np.array(valid_weights, dtype=np.float64)
+        weighted_tf = np.average(tf_matrix, axis=0, weights=w)
+        
+        # 3. Convert weighted TF profile to query tokens
+        query_tokens = []
+        for j, term in enumerate(vocab):
+            count = int(round(weighted_tf[j]))
+            if count >= 1:
+                query_tokens.extend([term] * count)
+        
+        # 4. BM25 search over triplet corpus
+        scores = self._graph_bm25.get_scores(query_tokens)
+        top_indices = np.argsort(scores)[::-1][:top_k*2]  # Oversample 2×
+        
+        # 5. Map triplets → chunks (aggregate max score)
+        chunk_scores = {}
+        for tidx in top_indices:
+            score = scores[tidx]
+            
+            # Get chunks containing this triplet
+            for doc_id_dup in self._triplet_to_chunks.get(str(tidx), []):
+                # Clean duplicated format: 1301_3781_s0_c0_s0_c0 → 1301_3781_s0_c0
+                parts = doc_id_dup.split('_')
+                if len(parts) >= 6:
+                    doc_id = '_'.join(parts[:4])
+                else:
+                    doc_id = doc_id_dup
+                
+                chunk_scores[doc_id] = max(chunk_scores.get(doc_id, 0), score)
+        
+        # 6. Exclude seed chunks
+        seed_set = set(seed_chunks)
+        chunk_scores = {doc_id: s for doc_id, s in chunk_scores.items() if doc_id not in seed_set}
+        
+        if not chunk_scores:
+            return []
+        
+        # 7. GIST select (Qwen3 coverage if available, else BM25 coverage)
+        chunk_ids = list(chunk_scores.keys())
+        raw_scores = np.array([chunk_scores[cid] for cid in chunk_ids])
+        
+        # Build coverage matrix
+        if self._qwen3_embeddings is not None and self._doc_id_to_idx:
+            # Qwen3 coverage
+            indices = [self._doc_id_to_idx.get(cid, -1) for cid in chunk_ids]
+            valid_indices = [i for i in indices if i >= 0 and i < len(self._qwen3_embeddings)]
+            if valid_indices:
+                candidate_embeddings = self._qwen3_embeddings[valid_indices]
+                coverage_matrix = cosine_similarity(candidate_embeddings)
+            else:
+                coverage_matrix = np.eye(len(chunk_ids))
+        else:
+            # Fallback: identity matrix (no coverage filtering)
+            coverage_matrix = np.eye(len(chunk_ids))
+        
+        # GIST selection
+        n_select = min(top_k, len(chunk_ids))
+        selected_indices = gist_select(coverage_matrix, raw_scores, k=n_select, lambda_param=self.config.gist_lambda)
+        
+        # 8. Create RetrievedDoc objects
+        results = []
+        for i in selected_indices:
+            doc_id = chunk_ids[i]
+            content = ""  # Content will be fetched later if needed
+            results.append(RetrievedDoc(
+                doc_id=doc_id,
+                content=content,
+                metadata={'source': 'layer2_graph_bm25'},
+                bm25_score=raw_scores[i],
+                gist_rank=len(results) + 1
+            ))
+        
+        return results
+    
+    def _expand_via_qwen3(
+        self, 
+        seed_chunks: List[str],  # doc_ids from Layer 1
+        seed_scores: List[float],
+        top_k: int
+    ) -> List[RetrievedDoc]:
+        """
+        Qwen3 expansion via co-occurrence similarity with GIST diversity selection.
+        
+        Args:
+            seed_chunks: doc_ids from Layer 1 (seeds)
+            seed_scores: Raw scores from Layer 1 (parallel to seed_chunks)
+            top_k: Number of NEW chunks to retrieve
+        
+        Returns:
+            List of RetrievedDoc with diversity-selected expansion chunks
+        """
+        if not self._layer2_data_loaded:
+            self._load_layer2_data()
+        
+        if not self.config.use_layer2_expansion or self._qwen3_embeddings is None:
+            return []
+        
+        from sklearn.metrics.pairwise import cosine_similarity
+        
+        # Build doc_id → index mapping if needed
+        if self._doc_id_to_idx is None:
+            all_docs = self._get_all_doc_ids() if hasattr(self, '_get_all_doc_ids') else []
+            if all_docs:
+                self._doc_id_to_idx = {doc_id: i for i, doc_id in enumerate(all_docs)}
+        
+        # 1. Get seed embeddings
+        seed_indices = []
+        for doc_id in seed_chunks:
+            if self._doc_id_to_idx and doc_id in self._doc_id_to_idx:
+                idx = self._doc_id_to_idx[doc_id]
+                if idx < len(self._qwen3_embeddings):
+                    seed_indices.append(idx)
+        
+        if not seed_indices:
+            return []
+        
+        seed_embeddings = self._qwen3_embeddings[seed_indices]
+        
+        # 2. ECDF-weighted mean pooling
+        ecdf_w = self._midpoint_ecdf_weights(np.array(seed_scores, dtype=np.float64))[:len(seed_indices)]
+        query_embedding = np.average(seed_embeddings, axis=0, weights=ecdf_w).reshape(1, -1)
+        
+        # 3. Cosine similarity with ALL chunks
+        similarities = cosine_similarity(query_embedding, self._qwen3_embeddings)[0]
+        
+        # 4. Exclude seed chunks
+        seed_set = set(seed_chunks)
+        candidates = []
+        
+        if self._doc_id_to_idx:
+            # Reverse mapping: index → doc_id
+            idx_to_doc = {idx: doc_id for doc_id, idx in self._doc_id_to_idx.items()}
+            for idx, sim in enumerate(similarities):
+                if idx in idx_to_doc and idx_to_doc[idx] not in seed_set:
+                    candidates.append((idx_to_doc[idx], sim))
+        
+        if not candidates:
+            return []
+        
+        # 5. Top candidates (oversample 2×)
+        candidates.sort(key=lambda x: x[1], reverse=True)
+        top_candidates = candidates[:top_k*2]
+        
+        # 6. GIST select
+        chunk_ids = [doc_id for doc_id, _ in top_candidates]
+        raw_scores = np.array([sim for _, sim in top_candidates])
+        
+        # Coverage: Qwen3 pairwise similarity
+        indices = [self._doc_id_to_idx[cid] for cid in chunk_ids]
+        candidate_embeddings = self._qwen3_embeddings[indices]
+        coverage_matrix = cosine_similarity(candidate_embeddings)
+        
+        # GIST selection
+        n_select = min(top_k, len(chunk_ids))
+        selected_indices = gist_select(coverage_matrix, raw_scores, k=n_select, lambda_param=self.config.gist_lambda)
+        
+        # 7. Create RetrievedDoc objects
+        results = []
+        for i in selected_indices:
+            doc_id = chunk_ids[i]
+            results.append(RetrievedDoc(
+                doc_id=doc_id,
+                content="",  # Content fetched later
+                metadata={'source': 'layer2_qwen3'},
+                dense_score=raw_scores[i],
+                gist_rank=len(results) + 1
+            ))
+        
+        return results
+    
+    def _rrf_merge_layer2(
+        self,
+        graph_results: List[RetrievedDoc],
+        qwen3_results: List[RetrievedDoc],
+        top_k: int,
+        k: int = 60
+    ) -> List[RetrievedDoc]:
+        """
+        RRF merge over Layer 2 expansion paths.
+        
+        Args:
+            graph_results: GIST-selected from graph BM25
+            qwen3_results: GIST-selected from Qwen3
+            top_k: Number of results to return
+            k: RRF constant (default 60)
+        
+        Returns:
+            Merged results sorted by RRF score
+        """
+        rrf_scores = {}
+        doc_map = {}  # doc_id → RetrievedDoc
+        
+        # Graph contributions
+        for rank, doc in enumerate(graph_results, start=1):
+            rrf_scores[doc.doc_id] = rrf_scores.get(doc.doc_id, 0.0) + 1.0 / (k + rank)
+            if doc.doc_id not in doc_map:
+                doc_map[doc.doc_id] = doc
+        
+        # Qwen3 contributions
+        for rank, doc in enumerate(qwen3_results, start=1):
+            rrf_scores[doc.doc_id] = rrf_scores.get(doc.doc_id, 0.0) + 1.0 / (k + rank)
+            if doc.doc_id not in doc_map:
+                doc_map[doc.doc_id] = doc
+        
+        # Sort by RRF score
+        sorted_ids = sorted(rrf_scores.keys(), key=lambda x: rrf_scores[x], reverse=True)
+        
+        # Build merged result list
+        merged = []
+        for doc_id in sorted_ids[:top_k]:
+            doc = doc_map[doc_id]
+            doc.rrf_score = rrf_scores[doc_id]
+            merged.append(doc)
+        
+        return merged
+    
+    # =========================================================================
+    # Abstract Methods (Backend-Specific)
+    # =========================================================================
+    
+    @abstractmethod
+    def _retrieve_bm25(self, query: str, limit: int) -> List[RetrievedDoc]:
+        """
+        Retrieve top documents from BM25 index.
+        
+        Args:
+            query: Query text
+            limit: Maximum number to retrieve
+        
+        Returns:
+            List of RetrievedDoc with bm25_score and bm25_rank populated
+        """
+        pass
+    
+    @abstractmethod
+    def _retrieve_dense(self, query: str, limit: int) -> List[RetrievedDoc]:
+        """
+        Retrieve top documents from dense (embedding) index.
+        
+        Args:
+            query: Query text
+            limit: Maximum number to retrieve
+        
+        Returns:
+            List of RetrievedDoc with dense_score and dense_rank populated
+        """
+        pass
+    
+    @abstractmethod
+    def _get_bm25_doc_doc_scores(self, doc_ids: List[str]) -> np.ndarray:
+        """
+        Compute pairwise BM25 similarity matrix for given documents.
+        
+        This is the coverage matrix for the BM25 pool (X'X analog).
+        Should NOT include query - purely doc-to-doc similarity.
+        
+        Args:
+            doc_ids: List of document IDs
+        
+        Returns:
+            n×n symmetric similarity matrix, diagonal = 1
+        """
+        pass
+    
+    @abstractmethod
+    def _get_dense_embeddings(self, doc_ids: List[str]) -> np.ndarray:
+        """
+        Get dense embeddings for given documents.
+        
+        Args:
+            doc_ids: List of document IDs
+        
+        Returns:
+            n×d embedding matrix
+        """
+        pass
+    
+    @abstractmethod
+    def _get_query_embedding(self, query: str) -> np.ndarray:
+        """
+        Get dense embedding for query.
+        
+        Args:
+            query: Query text
+        
+        Returns:
+            1×d embedding vector
+        """
+        pass
+    
+    @abstractmethod
+    def _get_bm25_query_scores(self, doc_ids: List[str], query: str) -> np.ndarray:
+        """
+        Get BM25 scores for documents against query.
+        
+        This is the utility vector for the BM25 pool (X'y analog).
+        
+        Args:
+            doc_ids: List of document IDs
+            query: Query text
+        
+        Returns:
+            n-dim array of BM25 scores
+        """
+        pass
+    
+    @abstractmethod
+    def _get_group_key(self, doc: RetrievedDoc) -> Tuple:
+        """
+        Extract grouping key from a retrieved chunk.
+        
+        For arxiv: (paper_id, section_idx)
+        For quotes: (quote_id,)
+        
+        Args:
+            doc: Retrieved chunk
+        
+        Returns:
+            Tuple of grouping field values
+        """
+        pass
+    
+    @abstractmethod
+    def _fetch_all_chunks_for_group(self, group_key: Tuple) -> List[RetrievedDoc]:
+        """
+        Fetch ALL chunks belonging to a group (for reconstruction).
+        
+        Args:
+            group_key: Tuple from _get_group_key
+        
+        Returns:
+            List of all chunks for this group, ordered by chunk_idx
+        """
+        pass
+    
+    @abstractmethod
+    def _group_key_to_id(self, group_key: Tuple) -> str:
+        """
+        Convert group key tuple to string identifier.
+        
+        For arxiv: "paper_id:section_idx"
+        For quotes: "quote_id"
+        
+        Args:
+            group_key: Tuple from _get_group_key
+        
+        Returns:
+            String identifier for the group
+        """
+        pass
+    
+    # =========================================================================
+    # GIST Pipeline
+    # =========================================================================
+    
+    def search(
+        self,
+        query: str,
+        top_k: int = 21,
+        return_chunks: bool = False
+    ) -> List[RetrievedPaper]:
+        """
+        Execute full GIST retrieval pipeline with paper-level grouping.
+        
+        Pipeline:
+            1. Retrieve top_k² CHUNKS from BM25 and dense indexes
+            2. GIST selection on each pool (chunk-level)
+            3. RRF fusion (chunk-level)
+            4. GROUP chunks into SECTIONS
+            5. GROUP sections into PAPERS
+            6. Select sections from top (top_k × φ) papers for ColBERT
+            7. ColBERT rerank on section full text (21 papers)
+            7.5. HNSW diversity control via MMR (optional, 21 → 15 papers)
+            8. Cross-encoder rerank papers (13 papers)
+            9. Return top_k PAPERS
+        
+        Args:
+            query: Query text
+            top_k: Number of PAPERS to return
+            return_chunks: If True, include chunk details in results
+        
+        Returns:
+            List of RetrievedPaper sorted by final_score (descending)
+        """
+        fib = self.config.fibonacci_sequence
+        
+        # Fibonacci cascade sizing
+        retrieval_limit = top_k * top_k  # Broad recall (chunks)
+        gist_limit = get_fibonacci_lower(retrieval_limit, fib)  # Post-GIST (chunks)
+        # Layer 2 finishes at gist_limit (prev_fib of top_k²) — sections use same count
+        section_limit = gist_limit  # Sections grouped from gist_limit chunks (not another phi step down)
+        
+        # For paper-level cascade
+        paper_pool_size = top_k  # Papers to consider for ColBERT
+        colbert_papers = top_k  # ColBERT operates on sections from top_k papers
+        final_papers = top_k  # Walk-down produces exactly top_k papers (not φ_lower)
+        
+        print(f"GIST Pipeline: retrieve {retrieval_limit} chunks -> GIST {gist_limit} -> sections {section_limit} -> papers {paper_pool_size} -> ColBERT {colbert_papers} papers -> Final {final_papers} papers")
+        
+        # Step 1: Retrieve BM25 chunks (unfiltered)
+        print(f"  [1/8] Retrieving {retrieval_limit} chunks from BM25...")
+        bm25_pool = self._retrieve_bm25(query, retrieval_limit)
+        print(f"        Retrieved {len(bm25_pool)} chunks")
+        
+        # Step 2: Retrieve Dense chunks (unfiltered)
+        print(f"  [2/8] Retrieving {retrieval_limit} chunks from dense...")
+        dense_pool = self._retrieve_dense(query, retrieval_limit)
+        print(f"        Retrieved {len(dense_pool)} chunks")
+        
+        # Step 2.5: Joint BM25+Dense filtering (optional)
+        # Skip filtering if thresholds are -inf (ECDF-RRF default)
+        # Apply MAD * 2 adaptive thresholds if None
+        if self.config.bm25_min_score > -float('inf') or self.config.dense_min_similarity > -float('inf'):
+            print(f"  [2.5/8] Applying joint BM25+Dense filtering...")
+            bm25_before = len(bm25_pool)
+            dense_before = len(dense_pool)
+            
+            # Compute MAD * 2 thresholds if None (adaptive filtering)
+            bm25_threshold = self.config.bm25_min_score
+            if bm25_threshold is None and len(bm25_pool) > 0:
+                bm25_scores = [d.bm25_score for d in bm25_pool if d.bm25_score is not None]
+                if bm25_scores:
+                    median = np.median(bm25_scores)
+                    mad = np.median([abs(s - median) for s in bm25_scores])
+                    bm25_threshold = median - (2 * mad)
+                else:
+                    bm25_threshold = 0.0
+            
+            dense_threshold = self.config.dense_min_similarity
+            if dense_threshold is None and len(dense_pool) > 0:
+                dense_scores = [d.dense_score for d in dense_pool if d.dense_score is not None]
+                if dense_scores:
+                    median = np.median(dense_scores)
+                    mad = np.median([abs(s - median) for s in dense_scores])
+                    dense_threshold = median - (2 * mad)
+                else:
+                    dense_threshold = 0.0
+            
+            # Apply filtering
+            bm25_pool = [d for d in bm25_pool if d.bm25_score > bm25_threshold]
+            dense_pool = [d for d in dense_pool if d.dense_score > dense_threshold]
+            print(f"        [Joint Filter] BM25: {bm25_before} -> {len(bm25_pool)} (score > {bm25_threshold:.4f})")
+            print(f"        [Joint Filter] Dense: {dense_before} -> {len(dense_pool)} (sim > {dense_threshold:.4f})")
+            
+            if len(bm25_pool) == 0 and len(dense_pool) == 0:
+                print(f"        WARNING: No chunks passed joint filtering")
+                return []
+        else:
+            print(f"  [2.5/8] Joint filtering skipped (disabled for ECDF-RRF)")
+        
+        # Step 3: GIST selection on filtered BM25 pool
+        print(f"  [3/8] GIST selection on filtered BM25 pool...")
+        bm25_selected = self._gist_select_pool(
+            pool=bm25_pool,
+            query=query,
+            k=gist_limit // 2,
+            pool_type='bm25'
+        )
+        print(f"        Selected {len(bm25_selected)} chunks from BM25")
+        
+        # Step 4: GIST selection on filtered dense pool
+        print(f"  [4/8] GIST selection on filtered dense pool...")
+        dense_selected = self._gist_select_pool(
+            pool=dense_pool,
+            query=query,
+            k=gist_limit // 2,
+            pool_type='dense'
+        )
+        print(f"        Selected {len(dense_selected)} chunks from dense")
+        
+        # Step 5: RRF fusion (chunks)
+        print(f"  [5/8] RRF fusion...")
+        fused_chunks = self._rrf_fusion(bm25_selected, dense_selected)
+        print(f"        Fused: {len(fused_chunks)} unique chunks")
+        
+        # Step 5.5: Layer 2 Query Expansion via Graph BM25 + Qwen3
+        if self.config.use_layer2_expansion:
+            print(f"  [5.5/8] Layer 2 query expansion...")
+            
+            # Extract seeds from Layer 1 RRF results
+            seed_ids = [doc.doc_id for doc in fused_chunks]
+            seed_scores = [doc.rrf_score if doc.rrf_score is not None else 0.0 for doc in fused_chunks]
+            
+            # Compute expansion count (default: top_k²)
+            expansion_count = self.config.layer2_expansion_count
+            if expansion_count is None:
+                expansion_count = top_k ** 2
+            
+            # Dual expansion paths using ECDF-weighted strategies
+            print(f"        Path A: Graph BM25 expansion (ECDF-weighted TF, target: {expansion_count})...")
+            graph_expansion = self._expand_via_graph_bm25(seed_ids, seed_scores, expansion_count)
+            
+            print(f"        Path B: Dense embedding expansion (ECDF-weighted centroid, target: {expansion_count})...")
+            qwen3_expansion = self._expand_via_qwen3(seed_ids, seed_scores, expansion_count)
+            
+            # RRF merge both paths
+            print(f"        Merging expansion paths via RRF...")
+            layer2_chunks = self._rrf_merge_layer2(graph_expansion, qwen3_expansion, expansion_count)
+            
+            # Exclude Layer 1 seeds (Layer 2 adds to L1, no duplicates)
+            seed_set = set(seed_ids)
+            layer2_filtered = [doc for doc in layer2_chunks if doc.doc_id not in seed_set]
+            
+            # Concatenate Layer 1 + Layer 2
+            fused_chunks = fused_chunks + layer2_filtered
+            print(f"        Layer 2 expansion: +{len(layer2_filtered)} chunks (total: {len(fused_chunks)})")
+        else:
+            print(f"  [5.5/8] Layer 2 expansion disabled")
+        
+        # Step 6: Group chunks into sections
+        print(f"  [6/8] Grouping chunks into sections...")
+        sections = self._group_and_reconstruct(fused_chunks, limit=section_limit)
+        print(f"        Created {len(sections)} sections")
+        
+        # Step 7: Group sections into papers and select top papers
+        print(f"  [7/8] Grouping sections into papers...")
+        papers = self._group_sections_into_papers(sections, paper_pool_size)
+        print(f"        Created {len(papers)} papers from top scoring papers")
+        
+        # Step 8: ColBERT rerank sections within selected papers
+        if self.config.use_colbert and len(papers) > 0:
+            print(f"  [8/9] ColBERT reranking sections from {len(papers)} papers...")
+            papers = self._colbert_rerank_papers(query, papers)
+        else:
+            print(f"  [8/9] ColBERT skipped")
+        
+        # Step 8.5: Walk-down section selection (replaces doc-doc diversity)
+        print(f"  [8.5/9] Walk-down: GIST+RRF on sections -> collect {top_k} papers...")
+        papers = self._walkdown_section_selection(query, papers, top_k)
+        
+        # Ensure we don't exceed requested top_k
+        results = papers[:top_k]
+        
+        # Set final scores
+        for paper in results:
+            if paper.final_score is None:
+                paper.final_score = paper.rrf_score
+        
+        # Optionally strip chunks to reduce memory
+        if not return_chunks:
+            for paper in results:
+                for section in paper.sections:
+                    section.chunks = []
+        
+        print(f"  Returning {len(results)} papers")
+        return results
+    
+    def _gist_select_pool(
+        self,
+        pool: List[RetrievedDoc],
+        query: str,
+        k: int,
+        pool_type: str  # 'bm25' or 'dense'
+    ) -> List[RetrievedDoc]:
+        """
+        Apply GIST selection to a single retrieval pool.
+        
+        Args:
+            pool: Retrieved documents from one method
+            query: Query text
+            k: Number to select
+            pool_type: 'bm25' or 'dense' (determines how to compute matrices)
+        
+        Returns:
+            Selected documents with gist_rank populated
+        """
+        if len(pool) <= k:
+            for rank, doc in enumerate(pool, 1):
+                doc.gist_rank = rank
+            return pool
+        
+        doc_ids = [doc.doc_id for doc in pool]
+        
+        # Build coverage matrix (doc-doc similarity)
+        if pool_type == 'bm25':
+            coverage_matrix = self._get_bm25_doc_doc_scores(doc_ids)
+            utility_vector = self._get_bm25_query_scores(doc_ids, query)
+        else:  # dense
+            embeddings = self._get_dense_embeddings(doc_ids)
+            query_emb = self._get_query_embedding(query)
+            
+            from sklearn.metrics.pairwise import cosine_similarity
+            coverage_matrix = cosine_similarity(embeddings)
+            utility_vector = cosine_similarity(embeddings, query_emb.reshape(1, -1)).flatten()
+        
+        # GIST selection
+        selected_indices = gist_select(
+            coverage_matrix=coverage_matrix,
+            utility_vector=utility_vector,
+            k=k,
+            lambda_param=self.config.gist_lambda
+        )
+        
+        # Build result list with GIST ranks
+        selected = []
+        for rank, idx in enumerate(selected_indices, 1):
+            doc = pool[idx]
+            doc.gist_rank = rank
+            selected.append(doc)
+        
+        return selected
+    
+    def _rrf_fusion(
+        self,
+        bm25_selected: List[RetrievedDoc],
+        dense_selected: List[RetrievedDoc]
+    ) -> List[RetrievedDoc]:
+        """
+        Fuse two GIST-selected pools using Reciprocal Rank Fusion.
+        """
+        bm25_by_id = {doc.doc_id: doc for doc in bm25_selected}
+        dense_by_id = {doc.doc_id: doc for doc in dense_selected}
+        
+        all_ids = set(bm25_by_id.keys()) | set(dense_by_id.keys())
+        
+        fused = []
+        for doc_id in all_ids:
+            bm25_doc = bm25_by_id.get(doc_id)
+            dense_doc = dense_by_id.get(doc_id)
+            
+            doc = bm25_doc or dense_doc
+            
+            if bm25_doc:
+                doc.bm25_score = bm25_doc.bm25_score
+                doc.bm25_rank = bm25_doc.bm25_rank
+            if dense_doc:
+                doc.dense_score = dense_doc.dense_score
+                doc.dense_rank = dense_doc.dense_rank
+            
+            ranks = [
+                bm25_doc.gist_rank if bm25_doc else None,
+                dense_doc.gist_rank if dense_doc else None
+            ]
+            doc.rrf_score = compute_rrf_score(ranks, k=self.config.rrf_k)
+            
+            fused.append(doc)
+        
+        fused.sort(key=lambda d: d.rrf_score, reverse=True)
+        return fused
+    
+    def _group_and_reconstruct(
+        self,
+        chunks: List[RetrievedDoc],
+        limit: int
+    ) -> List[RetrievedGroup]:
+        """
+        Group chunks by parent and reconstruct full text.
+        
+        Args:
+            chunks: RRF-fused chunks
+            limit: Maximum number of groups to process
+        
+        Returns:
+            List of RetrievedGroup with full_text populated
+        """
+        # Group chunks by key
+        groups_dict = defaultdict(lambda: {'chunks': [], 'rrf_sum': 0.0})
+        
+        for chunk in chunks:
+            key = self._get_group_key(chunk)
+            groups_dict[key]['chunks'].append(chunk)
+            groups_dict[key]['rrf_sum'] += chunk.rrf_score or 0.0
+        
+        # Sort groups by aggregated RRF score
+        sorted_keys = sorted(
+            groups_dict.keys(),
+            key=lambda k: groups_dict[k]['rrf_sum'],
+            reverse=True
+        )[:limit]
+        
+        # Reconstruct full text for top groups
+        groups = []
+        for key in sorted_keys:
+            matched_chunks = groups_dict[key]['chunks']
+            
+            # Fetch ALL chunks for this group (section or quote)
+            all_chunks = self._fetch_all_chunks_for_group(key)
+            all_chunks.sort(key=lambda c: c.metadata.get('chunk_idx', 0))
+            
+            # Reconstruct full text with overlap removal
+            chunk_texts = [c.content for c in all_chunks]
+            de_overlapped = de_overlap_strings(chunk_texts)
+            full_text = "".join(de_overlapped)  # No separator - overlaps already removed
+            
+            group = RetrievedGroup(
+                group_id=self._group_key_to_id(key),
+                group_key=key,
+                full_text=full_text,
+                chunks=matched_chunks,
+                rrf_score=groups_dict[key]['rrf_sum'],
+                metadata={
+                    'num_chunks': len(all_chunks),
+                    'num_matched': len(matched_chunks)
+                }
+            )
+            groups.append(group)
+        
+        return groups
+    
+    def _group_sections_into_papers(
+        self,
+        sections: List[RetrievedGroup],
+        max_papers: int
+    ) -> List[RetrievedPaper]:
+        """
+        Group sections by paper and select top papers.
+        
+        Args:
+            sections: List of section groups
+            max_papers: Maximum number of papers to include
+        
+        Returns:
+            List of RetrievedPaper with sections grouped by paper_id
+        """
+        # Group sections by paper_id (first element of group_key)
+        papers_dict = defaultdict(lambda: {'sections': [], 'rrf_sum': 0.0})
+        
+        for section in sections:
+            # Extract paper_id from group_key (paper_id, section_idx)
+            paper_id = section.group_key[0]
+            papers_dict[paper_id]['sections'].append(section)
+            papers_dict[paper_id]['rrf_sum'] += section.rrf_score or 0.0
+        
+        # Sort papers by aggregated RRF score
+        sorted_paper_ids = sorted(
+            papers_dict.keys(),
+            key=lambda p: papers_dict[p]['rrf_sum'],
+            reverse=True
+        )[:max_papers]
+        
+        # Build RetrievedPaper objects
+        papers = []
+        for paper_id in sorted_paper_ids:
+            sections_list = papers_dict[paper_id]['sections']
+            sections_list.sort(key=lambda s: s.group_key[1])  # Sort by section_idx
+            
+            # Concatenate all section text
+            full_text = "\n\n".join([s.full_text for s in sections_list])
+            
+            paper = RetrievedPaper(
+                paper_id=paper_id,
+                sections=sections_list,
+                full_text=full_text,
+                rrf_score=papers_dict[paper_id]['rrf_sum'],
+                metadata={
+                    'num_sections': len(sections_list)
+                }
+            )
+            papers.append(paper)
+        
+        return papers
+    
+    def _colbert_rerank_groups(
+        self,
+        query: str,
+        groups: List[RetrievedGroup],
+        limit: int
+    ) -> List[RetrievedGroup]:
+        """Rerank groups using ColBERT on full_text."""
+        if not self.colbert_scorer.available:
+            print("        ColBERT unavailable, skipping...")
+            return groups[:limit]
+        
+        texts = [g.full_text for g in groups]
+        scores = self.colbert_scorer.score(query, texts)
+        
+        for group, score in zip(groups, scores):
+            group.colbert_score = float(score)
+        
+        groups.sort(key=lambda g: g.colbert_score, reverse=True)
+        return groups[:limit]
+    
+    def _cross_encoder_rerank_groups(
+        self,
+        query: str,
+        groups: List[RetrievedGroup],
+        limit: int
+    ) -> List[RetrievedGroup]:
+        """Rerank groups using cross-encoder on full_text."""
+        if not self.cross_encoder_scorer.available:
+            print("        Cross-Encoder unavailable, skipping...")
+            return groups[:limit]
+        
+        texts = [g.full_text for g in groups]
+        scores = self.cross_encoder_scorer.score(query, texts)
+        
+        for group, score in zip(groups, scores):
+            group.cross_encoder_score = float(score)
+            group.final_score = float(score)
+        
+        groups.sort(key=lambda g: g.cross_encoder_score, reverse=True)
+        return groups[:limit]
+    
+    def _colbert_rerank_papers(
+        self,
+        query: str,
+        papers: List[RetrievedPaper]
+    ) -> List[RetrievedPaper]:
+        """Rerank papers by reranking their sections with ColBERT."""
+        if not self.colbert_scorer.available:
+            print("        ColBERT unavailable, skipping...")
+            return papers
+        
+        # Rerank all sections across all papers
+        all_sections = []
+        for paper in papers:
+            all_sections.extend(paper.sections)
+        
+        texts = [s.full_text for s in all_sections]
+        scores = self.colbert_scorer.score(query, texts)
+        
+        for section, score in zip(all_sections, scores):
+            section.colbert_score = float(score)
+        
+        # Update paper scores: max ColBERT score across sections
+        for paper in papers:
+            if paper.sections:
+                paper.colbert_score = max(s.colbert_score for s in paper.sections if s.colbert_score is not None)
+        
+        # Sort papers by max section score (NO FILTERING - will filter jointly with CE)
+        papers.sort(key=lambda p: p.colbert_score or 0.0, reverse=True)
+        return papers
+    
+    def _apply_hnsw_diversity_to_papers(
+        self,
+        query: str,
+        papers: List[RetrievedPaper]
+    ) -> List[RetrievedPaper]:
+        """
+        Apply HNSW diversity control to papers BETWEEN ColBERT and Cross-Encoder.
+        
+        This stage:
+          1. Uses ColBERT scores as relevance scores (already computed)
+          2. Computes averaged embeddings from paper full_text
+          3. Applies MMR to select diverse subset
+          4. Returns filtered papers for cross-encoder reranking
+        
+        Args:
+            query: User query (unused, diversity is relevance-agnostic)
+            papers: Papers with ColBERT scores
+        
+        Returns:
+            Diverse subset of papers (size = config.hnsw_n_diverse)
+        """
+        if not self.config.use_hnsw_diversity:
+            return papers
+        
+        print(f"      Applying HNSW diversity (λ={self.config.hnsw_mmr_lambda}, "
+              f"k={self.config.hnsw_k_neighbors}, n={self.config.hnsw_n_diverse})...")
+        
+        # Initialize diversity selector
+        hnsw_selector = HNSWDiversity(
+            lambda_param=self.config.hnsw_mmr_lambda,
+            k_neighbors=self.config.hnsw_k_neighbors
+        )
+        
+        # Extract texts and relevance scores
+        texts = [p.full_text for p in papers]
+        relevance_scores = np.array([p.colbert_score or 0.0 for p in papers])
+        
+        # Apply MMR
+        selected_indices, mmr_scores = hnsw_selector.apply_mmr(
+            texts=texts,
+            relevance_scores=relevance_scores,
+            n_diverse=min(self.config.hnsw_n_diverse, len(papers))
+        )
+        
+        # Filter papers
+        diverse_papers = [papers[i] for i in selected_indices]
+        
+        # Store MMR scores
+        for paper, mmr_score in zip(diverse_papers, mmr_scores):
+            paper.metadata['hnsw_mmr_score'] = mmr_score
+        
+        print(f"      -> Reduced {len(papers)} papers to {len(diverse_papers)} diverse papers")
+        
+        return diverse_papers
+    
+    def _walkdown_section_selection(
+        self,
+        query: str,
+        papers: List[RetrievedPaper],
+        top_k: int
+    ) -> List[RetrievedPaper]:
+        """
+        Walk-down algorithm for Layer 3: two parallel GIST selections on sections,
+        RRF fuse, then walk-down to produce exactly top_k papers.
+        
+        Algorithm (matches Layer 1/2 pattern: parallel GIST + RRF):
+            1. ColBERT path: section-section matrix → GIST select
+            2. CE path: section-section matrix → GIST select
+            3. RRF fuse both GIST orderings
+            4. Walk down fused ranking collecting papers until top_k+1
+            5. Set floor = (top_k+1)th paper's section score
+            6. Keep sections >= floor from first top_k papers
+            7. Rebuild papers from surviving sections
+        
+        Args:
+            query: User query
+            papers: Papers with sections (ColBERT scores already on sections from step 8)
+            top_k: Number of papers to return
+        
+        Returns:
+            Exactly top_k papers with their qualifying sections
+        """
+        # Collect all sections across all papers
+        all_sections = []
+        section_to_paper = {}
+        for paper in papers:
+            for section in paper.sections:
+                all_sections.append(section)
+                section_to_paper[id(section)] = paper.paper_id
+        
+        if not all_sections:
+            return papers[:top_k]
+        
+        n = len(all_sections)
+        texts = [s.full_text for s in all_sections]
+        
+        # --- Score sections with Cross-Encoder (ColBERT already done in step 8) ---
+        if self.cross_encoder_scorer.available:
+            print(f"      [L3-1] Scoring {n} sections with Cross-Encoder...")
+            ce_scores = self.cross_encoder_scorer.score(query, texts)
+            for section, score in zip(all_sections, ce_scores):
+                section.cross_encoder_score = float(score)
+        else:
+            print(f"      [L3-1] Cross-Encoder unavailable, using ColBERT only")
+            for section in all_sections:
+                if section.cross_encoder_score is None:
+                    section.cross_encoder_score = 0.0
+        
+        # --- ColBERT GIST path ---
+        print(f"      [L3-2] ColBERT section-section matrix ({n}x{n})...")
+        colbert_coverage = np.zeros((n, n), dtype=np.float32)
+        if self.colbert_scorer.available:
+            for i in range(n):
+                scores = self.colbert_scorer.score(texts[i], texts)
+                colbert_coverage[i, :] = scores
+        
+        colbert_utility = np.array([s.colbert_score or 0.0 for s in all_sections], dtype=np.float32)
+        
+        print(f"      [L3-3] ColBERT GIST selection (λ={self.config.gist_lambda})...")
+        colbert_gist_indices = gist_select(
+            coverage_matrix=colbert_coverage,
+            utility_vector=colbert_utility,
+            k=n,  # GIST reorders all; walk-down does the reduction
+            lambda_param=self.config.gist_lambda
+        )
+        
+        # --- Cross-Encoder GIST path ---
+        print(f"      [L3-4] Cross-Encoder section-section matrix ({n}x{n})...")
+        ce_coverage = np.zeros((n, n), dtype=np.float32)
+        if self.cross_encoder_scorer.available:
+            for i in range(n):
+                scores = self.cross_encoder_scorer.score(texts[i], texts)
+                ce_coverage[i, :] = scores
+        
+        ce_utility = np.array([s.cross_encoder_score or 0.0 for s in all_sections], dtype=np.float32)
+        
+        print(f"      [L3-5] Cross-Encoder GIST selection (λ={self.config.gist_lambda})...")
+        ce_gist_indices = gist_select(
+            coverage_matrix=ce_coverage,
+            utility_vector=ce_utility,
+            k=n,
+            lambda_param=self.config.gist_lambda
+        )
+        
+        # --- RRF fuse both GIST orderings ---
+        print(f"      [L3-6] RRF fusion of ColBERT GIST + CE GIST rankings...")
+        # Convert GIST orderings to ranks
+        cb_gist_rank = [0] * n
+        for rank, idx in enumerate(colbert_gist_indices, 1):
+            cb_gist_rank[idx] = rank
+        
+        ce_gist_rank = [0] * n
+        for rank, idx in enumerate(ce_gist_indices, 1):
+            ce_gist_rank[idx] = rank
+        
+        rrf_k = self.config.rrf_k
+        section_rrf_scores = []
+        for i in range(n):
+            rrf = 1.0 / (rrf_k + cb_gist_rank[i]) + 1.0 / (rrf_k + ce_gist_rank[i])
+            section_rrf_scores.append(rrf)
+            all_sections[i].metadata['layer3_rrf'] = rrf
+            all_sections[i].metadata['cb_gist_rank'] = cb_gist_rank[i]
+            all_sections[i].metadata['ce_gist_rank'] = ce_gist_rank[i]
+        
+        # --- Walk down sorted sections ---
+        sorted_indices = sorted(range(n), key=lambda i: section_rrf_scores[i], reverse=True)
+        
+        seen_papers = []  # ordered list of distinct paper_ids
+        floor_score = None
+        
+        for idx in sorted_indices:
+            paper_id = section_to_paper[id(all_sections[idx])]
+            if paper_id not in seen_papers:
+                seen_papers.append(paper_id)
+                if len(seen_papers) == top_k + 1:
+                    floor_score = section_rrf_scores[idx]
+                    break
+        
+        # If we didn't even reach top_k+1 papers, keep everything
+        if floor_score is None:
+            selected_papers = set(seen_papers[:top_k])
+            floor_score = 0.0
+        else:
+            selected_papers = set(seen_papers[:top_k])
+        
+        print(f"      Walk-down: {n} sections, {len(seen_papers)} distinct papers, floor={floor_score:.6f}")
+        
+        # --- Collect surviving sections ---
+        paper_sections = defaultdict(list)
+        for i, section in enumerate(all_sections):
+            pid = section_to_paper[id(section)]
+            if pid in selected_papers and section_rrf_scores[i] >= floor_score:
+                paper_sections[pid].append(section)
+        
+        # --- Rebuild papers ---
+        result_papers = []
+        # Preserve order from walk-down (first seen = highest scoring)
+        for paper_id in seen_papers:
+            if paper_id not in selected_papers:
+                continue
+            sections = paper_sections.get(paper_id, [])
+            if not sections:
+                continue
+            sections.sort(key=lambda s: s.group_key[1])  # sort by section_idx
+            
+            full_text = "\n\n".join(s.full_text for s in sections)
+            
+            # Paper score = max section RRF
+            max_rrf = max(s.metadata.get('layer3_rrf', 0.0) for s in sections)
+            
+            paper = RetrievedPaper(
+                paper_id=paper_id,
+                sections=sections,
+                full_text=full_text,
+                rrf_score=max_rrf,
+                final_score=max_rrf,
+                metadata={'num_sections': len(sections), 'floor_score': floor_score}
+            )
+            result_papers.append(paper)
+        
+        top5 = result_papers[:5]
+        for i, p in enumerate(top5, 1):
+            print(f"        [{i}] {p.paper_id}: {len(p.sections)} sections, rrf={p.final_score:.4f}")
+        
+        print(f"      -> {len(result_papers)} papers with {sum(len(p.sections) for p in result_papers)} sections (floor={floor_score:.6f})")
+        
+        return result_papers
+    
+    def _apply_doc_doc_diversity_to_papers(
+        self,
+        query: str,
+        papers: List[RetrievedPaper],
+        final_k: int
+    ) -> List[RetrievedPaper]:
+        """
+        Apply FULL doc-doc matrix diversity using BOTH ColBERT AND Cross-Encoder.
+        
+        This is the NEW expensive but accurate approach that:
+          1. Uses ColBERT scores from step 7 as query-doc relevance
+          2. Computes n×n ColBERT doc-doc similarity matrix
+          3. Computes n×n Cross-Encoder doc-doc similarity matrix
+          4. Derives diversity scores from both matrices
+          5. RRF fuses: ColBERT relevance + CE relevance + diversity
+          6. Returns top-k papers by fused score
+        
+        Architecture:
+            Papers (n=21)
+                │
+                ▼
+            ┌────────────────────────────────────────────────────┐
+            │ PARALLEL SCORING (n×n matrices)                    │
+            ├───────────────┬───────────────┬───────────────────┤
+            │ ColBERT       │ Cross-Encoder │ Diversity         │
+            │ doc-doc n×n   │ doc-doc n×n   │ from both         │
+            └───────────────┴───────────────┴───────────────────┘
+                │                 │                   │
+                ▼                 ▼                   ▼
+            RRF Fusion (4 signals: 2 relevance + 2 diversity)
+                │
+                ▼
+            Final top_k=13
+        
+        Args:
+            query: User query for cross-encoder relevance scores
+            papers: Papers with ColBERT scores from step 7
+            final_k: Number of papers to return
+        
+        Returns:
+            Top-k papers ranked by RRF fusion of all signals
+        """
+        if not self.config.use_doc_doc_diversity:
+            return papers[:final_k]
+        
+        print(f"      Doc-Doc GIST (ColBERT + CE) -> RRF (n={len(papers)}, "
+              f"gist_lambda={self.config.gist_lambda})...")
+        
+        # Initialize the doc-doc matrix GIST scorer
+        doc_doc_scorer = DocDocMatrixDiversity(
+            colbert_scorer=self.colbert_scorer,
+            cross_encoder_scorer=self.cross_encoder_scorer,
+            gist_lambda=self.config.gist_lambda,
+            rrf_k=self.config.rrf_k,
+            colbert_min_score=self.config.colbert_min_score
+        )
+        
+        # Run GIST on both doc-doc matrices, then RRF fuse
+        diverse_papers = doc_doc_scorer.rerank_with_gist(
+            query=query,
+            papers=papers,
+            final_k=final_k,
+            ce_min_score=self.config.cross_encoder_min_score
+        )
+        
+        print(f"      -> Returned {len(diverse_papers)} papers with RRF-fused scores")
+        
+        return diverse_papers
+    
+    def _cross_encoder_rerank_papers(
+        self,
+        query: str,
+        papers: List[RetrievedPaper],
+        limit: int
+    ) -> List[RetrievedPaper]:
+        """Rerank papers using cross-encoder on full paper text."""
+        if not self.cross_encoder_scorer.available:
+            print("        Cross-Encoder unavailable, skipping...")
+            return papers[:limit]
+        
+        # Score full paper text (concatenated sections)
+        texts = [p.full_text for p in papers]
+        scores = self.cross_encoder_scorer.score(query, texts)
+        
+        for paper, score in zip(papers, scores):
+            paper.cross_encoder_score = float(score)
+            paper.final_score = float(score)
+        
+        papers.sort(key=lambda p: p.cross_encoder_score, reverse=True)
+        return papers[:limit]
+    
+    # =========================================================================
+    # Backward Compatibility: Chunk-Level Search
+    # =========================================================================
+    
+    def search_chunks(
+        self,
+        query: str,
+        top_k: int = 21
+    ) -> List[RetrievedDoc]:
+        """
+        Search at chunk level (no grouping/reconstruction).
+        
+        For cases where you want raw chunk results without grouping.
+        ColBERT and cross-encoder operate on individual chunks.
+        """
+        fib = self.config.fibonacci_sequence
+        
+        retrieval_limit = top_k * top_k
+        gist_limit = get_fibonacci_lower(retrieval_limit, fib)
+        colbert_limit = top_k
+        final_limit = get_fibonacci_lower(top_k, fib)
+        
+        # Retrieve
+        bm25_pool = self._retrieve_bm25(query, retrieval_limit)
+        dense_pool = self._retrieve_dense(query, retrieval_limit)
+        
+        # GIST select
+        bm25_selected = self._gist_select_pool(bm25_pool, query, gist_limit // 2, 'bm25')
+        dense_selected = self._gist_select_pool(dense_pool, query, gist_limit // 2, 'dense')
+        
+        # Fuse
+        fused = self._rrf_fusion(bm25_selected, dense_selected)
+        
+        # ColBERT on chunks
+        if self.config.use_colbert and len(fused) > colbert_limit:
+            fused = self._colbert_rerank_chunks(query, fused, colbert_limit)
+        
+        # Cross-encoder on chunks
+        if self.config.use_cross_encoder and len(fused) > final_limit:
+            fused = self._cross_encoder_rerank_chunks(query, fused, final_limit)
+        
+        results = fused[:top_k]
+        for doc in results:
+            if doc.final_score is None:
+                doc.final_score = doc.rrf_score
+        
+        return results
+    
+    def _colbert_rerank_chunks(
+        self,
+        query: str,
+        docs: List[RetrievedDoc],
+        limit: int
+    ) -> List[RetrievedDoc]:
+        """Rerank chunks using ColBERT."""
+        if not self.colbert_scorer.available:
+            return docs[:limit]
+        
+        contents = [doc.content for doc in docs]
+        scores = self.colbert_scorer.score(query, contents)
+        
+        for doc, score in zip(docs, scores):
+            doc.colbert_score = float(score)
+        
+        docs.sort(key=lambda d: d.colbert_score, reverse=True)
+        return docs[:limit]
+    
+    def _cross_encoder_rerank_chunks(
+        self,
+        query: str,
+        docs: List[RetrievedDoc],
+        limit: int
+    ) -> List[RetrievedDoc]:
+        """Rerank chunks using cross-encoder."""
+        if not self.cross_encoder_scorer.available:
+            return docs[:limit]
+        
+        contents = [doc.content for doc in docs]
+        scores = self.cross_encoder_scorer.score(query, contents)
+        
+        for doc, score in zip(docs, scores):
+            doc.cross_encoder_score = float(score)
+            doc.final_score = float(score)
+        
+        docs.sort(key=lambda d: d.cross_encoder_score, reverse=True)
+        return docs[:limit]
+
+
+# =============================================================================
+# Utility Functions
+# =============================================================================
+
+def format_results_markdown(results: List[RetrievedDoc]) -> str:
+    """
+    Format chunk-level retrieval results as markdown.
+    
+    Args:
+        results: List of RetrievedDoc from search_chunks()
+    
+    Returns:
+        Markdown-formatted string
+    """
+    lines = ["# Retrieval Results\n"]
+    
+    for i, doc in enumerate(results, 1):
+        lines.append(f"## {i}. {doc.doc_id}\n")
+        
+        # Scores
+        scores = []
+        if doc.bm25_score is not None:
+            scores.append(f"BM25: {doc.bm25_score:.4f}")
+        if doc.dense_score is not None:
+            scores.append(f"Dense: {doc.dense_score:.4f}")
+        if doc.rrf_score is not None:
+            scores.append(f"RRF: {doc.rrf_score:.4f}")
+        if doc.colbert_score is not None:
+            scores.append(f"ColBERT: {doc.colbert_score:.4f}")
+        if doc.cross_encoder_score is not None:
+            scores.append(f"CrossEnc: {doc.cross_encoder_score:.4f}")
+        if doc.final_score is not None:
+            scores.append(f"**Final: {doc.final_score:.4f}**")
+        
+        lines.append(f"**Scores:** {' | '.join(scores)}\n")
+        
+        # Metadata
+        if doc.metadata:
+            meta_str = ", ".join([f"{k}={v}" for k, v in doc.metadata.items()])
+            lines.append(f"**Metadata:** {meta_str}\n")
+        
+        # Content preview
+        preview = doc.content[:500] + "..." if len(doc.content) > 500 else doc.content
+        lines.append(f"**Content:**\n{preview}\n")
+        
+        lines.append("---\n")
+    
+    return "\n".join(lines)
+
+
+def format_groups_markdown(groups: List[RetrievedGroup], include_full_text: bool = False) -> str:
+    """
+    Format group-level retrieval results as markdown.
+    
+    Args:
+        groups: List of RetrievedGroup from search()
+        include_full_text: If True, include full reconstructed text
+    
+    Returns:
+        Markdown-formatted string
+    """
+    lines = ["# Retrieval Results (Grouped)\n"]
+    
+    for i, group in enumerate(groups, 1):
+        lines.append(f"## {i}. {group.group_id}\n")
+        
+        # Scores
+        scores = []
+        if group.rrf_score is not None:
+            scores.append(f"RRF: {group.rrf_score:.4f}")
+        if group.colbert_score is not None:
+            scores.append(f"ColBERT: {group.colbert_score:.4f}")
+        if group.cross_encoder_score is not None:
+            scores.append(f"CrossEnc: {group.cross_encoder_score:.4f}")
+        if group.final_score is not None:
+            scores.append(f"**Final: {group.final_score:.4f}**")
+        
+        lines.append(f"**Scores:** {' | '.join(scores)}\n")
+        
+        # Metadata
+        if group.metadata:
+            meta_str = ", ".join([f"{k}={v}" for k, v in group.metadata.items()])
+            lines.append(f"**Metadata:** {meta_str}\n")
+        
+        # Content
+        if include_full_text:
+            lines.append(f"### Full Text\n\n{group.full_text}\n")
+        else:
+            preview = group.full_text[:500] + "..." if len(group.full_text) > 500 else group.full_text
+            lines.append(f"**Preview:**\n{preview}\n")
+        
+        lines.append("---\n")
+    
+    return "\n".join(lines)
+
+
+def format_papers_markdown(papers: List[RetrievedPaper], include_sections: bool = True) -> str:
+    """
+    Format paper-level retrieval results as markdown.
+    
+    Title = paper_id. Sections sorted by section_idx. Full text.
+    """
+    lines = ["# Retrieval Results (Papers)\n"]
+    
+    for i, paper in enumerate(papers, 1):
+        lines.append(f"## {i}. {paper.paper_id}\n")
+        
+        # Scores
+        scores = []
+        if paper.rrf_score is not None:
+            scores.append(f"RRF: {paper.rrf_score:.4f}")
+        if paper.colbert_score is not None:
+            scores.append(f"ColBERT: {paper.colbert_score:.4f}")
+        if paper.cross_encoder_score is not None:
+            scores.append(f"CrossEnc: {paper.cross_encoder_score:.4f}")
+        if paper.final_score is not None:
+            scores.append(f"**Final: {paper.final_score:.4f}**")
+        
+        lines.append(f"**Scores:** {' | '.join(scores)}\n")
+        
+        # Sections with FULL TEXT, sorted by section_idx
+        if include_sections and paper.sections:
+            def get_section_idx(section):
+                if ':s' in section.group_id:
+                    try:
+                        return int(section.group_id.split(':s')[-1])
+                    except ValueError:
+                        return 999999
+                return 999999
+            
+            sorted_sections = sorted(paper.sections, key=get_section_idx)
+            
+            section_indices = []
+            for section in sorted_sections:
+                if ':s' in section.group_id:
+                    section_indices.append(section.group_id.split(':s')[-1])
+            
+            lines.append(f"\n**Sections ({len(sorted_sections)}):** [{', '.join(section_indices)}]\n")
+            
+            for section in sorted_sections:
+                section_idx = "?"
+                if ':s' in section.group_id:
+                    section_idx = section.group_id.split(':s')[-1]
+                
+                section_scores = []
+                if section.rrf_score is not None:
+                    section_scores.append(f"RRF: {section.rrf_score:.4f}")
+                if section.colbert_score is not None:
+                    section_scores.append(f"ColBERT: {section.colbert_score:.4f}")
+                if section.cross_encoder_score is not None:
+                    section_scores.append(f"CE: {section.cross_encoder_score:.4f}")
+                
+                score_str = f" | {' | '.join(section_scores)}" if section_scores else ""
+                lines.append(f"\n### Section {section_idx}{score_str}\n")
+                lines.append(f"{section.full_text}\n")
+        
+        lines.append("\n---\n")
+    
+    return "\n".join(lines)

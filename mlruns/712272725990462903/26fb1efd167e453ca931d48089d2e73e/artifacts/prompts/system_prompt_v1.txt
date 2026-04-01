@@ -1,0 +1,10 @@
+== PIPELINE ARCHITECTURE ==
+
+This is a 3-layer academic paper retrieval (...) CURRENT CONFIG ==
+top_k: 12
+rrf_k: 100
+gist_lambda: 0.8500
+bm25_min_score: 0.1000
+dense_min_similarity: 0.3000
+colbert_min_score: 0.1500
+cross_encoder_min_score: 0.2500

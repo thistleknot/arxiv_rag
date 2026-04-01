@@ -1,0 +1,6 @@
+== PIPELINE ARCHITECTURE AND CODE WALKTHROUGH ==
+
+This is the full (...) |  gist_lambda: 0.65
+  all min_score / min_similarity: 1.25
+  top_k: 12
+  rrf_k: 60

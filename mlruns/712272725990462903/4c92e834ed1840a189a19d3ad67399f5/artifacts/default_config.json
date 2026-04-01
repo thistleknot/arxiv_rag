@@ -1,0 +1,9 @@
+{
+  "top_k": 5,
+  "rrf_k": 60,
+  "gist_lambda": 0.7,
+  "bm25_min_score": 0.0,
+  "dense_min_similarity": 0.0,
+  "colbert_min_score": 0.0,
+  "cross_encoder_min_score": 0.0
+}

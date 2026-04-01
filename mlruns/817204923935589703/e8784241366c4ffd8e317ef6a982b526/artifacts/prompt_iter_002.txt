@@ -1,0 +1,13 @@
+{
+  "rrf_k": 25,
+  "gist_lambda": 0.92,
+  "bm25_min_score": 0.15,
+  "layer2": true,
+  "use_layer2_expansion": true,
+  "colbert": true,
+  "cross_encoder": true,
+  "top_k": 28
+}
+
+Rationale:
+This configuration is designed to address low faithfulness and context precision by increasing the minimum BM25 score (bm25_min_score) to 0.15 and reducing rrf_k to 25, which prioritizes higher-precision, top-ranked results in the fusion and filters out less relevant chunks. To improve faithfulness and context recall, top_k has been raised to 28, allowing a broader retrieval of relevant chunks, and use_layer2_expansion is enabled to bring in contextually expanded triplet information. gist_lambda is increased to 0.92 to further emphasize relevance in GIST scoring. The pipeline continues to leverage ColBERT and cross-encoder reranking for high answer relevancy. This configuration aims for a precise, faithful, and contextually rich retrieval, maximizing the opportunity for high-quality relevant context to be surfaced and selected in the 3-layer GIST/Fact/Premise/Syllogism hybrid search system.

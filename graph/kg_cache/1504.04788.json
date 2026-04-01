@@ -1,0 +1,46 @@
+{
+ "entities": [
+  {
+   "name": "HashedNets",
+   "type": "Method"
+  },
+  {
+   "name": "Neural Networks",
+   "type": "Model/Architecture"
+  },
+  {
+   "name": "Storage Requirements",
+   "type": "Metric"
+  },
+  {
+   "name": "Generalization Performance",
+   "type": "Metric"
+  },
+  {
+   "name": "Mobile Devices",
+   "type": "Application Domain"
+  }
+ ],
+ "relations": [
+  {
+   "source": "HashedNets",
+   "target": "Neural Networks",
+   "relation_type": "applied_to"
+  },
+  {
+   "source": "HashedNets",
+   "target": "Storage Requirements",
+   "relation_type": "reduces"
+  },
+  {
+   "source": "HashedNets",
+   "target": "Generalization Performance",
+   "relation_type": "preserves"
+  },
+  {
+   "source": "HashedNets",
+   "target": "Mobile Devices",
+   "relation_type": "suitable_for"
+  }
+ ]
+}

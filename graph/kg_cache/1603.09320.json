@@ -1,0 +1,78 @@
+{
+ "entities": [
+  {
+   "name": "Proposed solution",
+   "type": "Method"
+  },
+  {
+   "name": "Graph-based Architecture",
+   "type": "Architecture"
+  },
+  {
+   "name": "Search structures",
+   "type": "Data Structure"
+  },
+  {
+   "name": "Heuristic",
+   "type": "Algorithm"
+  },
+  {
+   "name": "Proximity graph neighbors",
+   "type": "Concept"
+  },
+  {
+   "name": "Performance evaluation",
+   "type": "Metric"
+  },
+  {
+   "name": "General metric space search index",
+   "type": "Model"
+  },
+  {
+   "name": "Previous opensource state-of-the-art vector-only approaches",
+   "type": "Competitors"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Proposed solution",
+   "target": "Graph-based Architecture",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Proposed solution",
+   "target": "Search structures",
+   "relation_type": "avoids"
+  },
+  {
+   "source": "Proposed solution",
+   "target": "Logarithmic complexity scaling",
+   "relation_type": "allows"
+  },
+  {
+   "source": "Heuristic",
+   "target": "Proximity graph neighbors",
+   "relation_type": "selects"
+  },
+  {
+   "source": "Heuristic",
+   "target": "Performance evaluation",
+   "relation_type": "increases"
+  },
+  {
+   "source": "Heuristic",
+   "target": "High recall",
+   "relation_type": "at high recall"
+  },
+  {
+   "source": "Heuristic",
+   "target": "Performance evaluation",
+   "relation_type": "improves in case of highly clustered data"
+  },
+  {
+   "source": "General metric space search index",
+   "target": "Previous opensource state-of-the-art vector-only approaches",
+   "relation_type": "outperforms"
+  }
+ ]
+}

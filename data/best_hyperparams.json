@@ -1,0 +1,14 @@
+{
+  "params": {
+    "optimizer": "AdamW",
+    "learning_rate": 4.566215760214577e-05,
+    "dropout": 0.2981745902984929,
+    "o_weight": 0.009926305200212789,
+    "weight_decay": 0.09916935653169595,
+    "threshold": 0.4999098180996075
+  },
+  "best_f1": 0.4115339877334998,
+  "trial_number": 0,
+  "n_trials_run": 21,
+  "unfreeze_layers": 12
+}

@@ -1,0 +1,24 @@
+You are configuring the 3-layer GIST retrieval pipeline to maximize faithfulness and context precision, addressing low scores in these metrics. The following updated configuration balances increased candidate recall with stricter early filtering and expanded context diversity, as recommended by evaluation feedback:
+
+```json
+{
+  "rrf_k": 35,
+  "gist_lambda": 0.85,
+  "top_k": 21,
+  "bm25_min_score": 2.0,
+  "use_layer2_expansion": true,
+  "colbert": true,
+  "cross_encoder": true,
+  "layer2": "ON"
+}
+```
+
+**Rationale:**
+- **Increased `top_k` to 21** (from 13) to retrieve a broader pool of candidate documents, improving faithfulness and recall.
+- **Enabled `use_layer2_expansion` and set `layer2` to "ON"** to bring in triplet-expanded chunks, enriching context diversity and recall.
+- **Lowered `rrf_k` to 35** (from 60) to give more weight to top-ranked retrievals, improving context precision.
+- **Raised `bm25_min_score` to 2.0** for stricter filtering of irrelevant chunks, boosting context precision.
+- **Increased `gist_lambda` to 0.85** (from 0.70) to bias GIST fusion toward relevance, addressing faithfulness and context precision.
+- **Kept `colbert` and `cross_encoder` enabled** to maintain strong reranking and answer relevancy.
+
+This configuration is designed to generate a more faithful, precise, and contextually rich candidate pool for subsequent reasoning layers (Fact, Premise, Syllogism). The new settings yield 441-document candidate pools at the first stage (21²=441, with φ×441≈272 after GIST), providing greater opportunity for relevant context to be surfaced and selected.

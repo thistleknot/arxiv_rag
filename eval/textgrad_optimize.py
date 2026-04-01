@@ -345,7 +345,37 @@ def make_retriever(config: dict) -> ArxivRetriever:
     return ArxivRetriever(cfg)
 
 
-# ── QA generation from live retrieval ────────────────────────────────────────
+# ── QA pair loading from pre-generated dataset ──────────────────────────────
+
+def load_qa_pairs(qa_data_path: str) -> tuple[list, list]:
+    """
+    Load pre-generated QA pairs from JSON file (output of generate_qa_pairs.py).
+    
+    Returns:
+        (train_pairs, test_pairs) — each is a list of dicts with keys:
+        {"question", "answer", "section_text", "paper_id", "section_idx", "chunk_ids"}
+    """
+    if not os.path.exists(qa_data_path):
+        raise FileNotFoundError(
+            f"QA data file not found: {qa_data_path}\n"
+            f"Run: python eval/generate_qa_pairs.py"
+        )
+    
+    with open(qa_data_path, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+    
+    train = data.get('train', [])
+    test = data.get('test', [])
+    
+    if not train:
+        raise ValueError(f"No training QA pairs found in {qa_data_path}")
+    
+    return train, test
+
+
+# ── [DEPRECATED] QA generation from live retrieval ──────────────────────────
+# This function is kept for reference but should not be used.
+# Use generate_qa_pairs.py to pre-generate QA datasets instead.
 
 _QA_GEN_PROMPT = (
     "Below are passages retrieved from academic papers on the topic: \"{topic}\"\n\n"
@@ -562,7 +592,8 @@ def main(
     train_batch_size: int = 10,
     eval_top_k: int = 5,
     seed: int = 42,
-    n_qa_per_query: int = 3,
+    n_qa_per_query: int = 3,  # DEPRECATED: use --qa-data instead
+    qa_data_path: Optional[str] = None,
 ) -> None:
     random.seed(seed)
 
@@ -579,29 +610,15 @@ def main(
 
     _wait_for_postgres()  # guard against slow docker container init
 
-    print(f"\n  Building initial retriever (top_k={eval_top_k})...")
-    init_retriever = make_retriever(current_config)
-
+    # Load QA pairs from pre-generated dataset
+    if qa_data_path is None:
+        qa_data_path = os.path.join(os.path.dirname(__file__), "data", "qa_pairs.json")
+    
+    print(f"\n  Loading QA pairs from {qa_data_path}...")
+    train_pairs, test_pairs = load_qa_pairs(qa_data_path)
     print(
-        f"\n  Generating live QA pairs "
-        f"({len(TOPIC_QUERIES)} queries x {n_qa_per_query} QA each)..."
-    )
-    all_qa = generate_qa_from_retrieval(
-        init_retriever,
-        n_qa_per_query=n_qa_per_query,
-        top_k=eval_top_k,
-        verbose=True,
-    )
-    if not all_qa:
-        raise RuntimeError("No QA pairs generated -- check retriever and LLM proxy.")
-
-    random.shuffle(all_qa)
-    split = int(0.7 * len(all_qa))
-    train_pairs = all_qa[:split]
-    test_pairs = all_qa[split:]
-    print(
-        f"  QA pairs: {len(all_qa)} total  "
-        f"| train={len(train_pairs)}  test={len(test_pairs)}"
+        f"  QA pairs loaded: train={len(train_pairs)}  test={len(test_pairs)}  "
+        f"total={len(train_pairs) + len(test_pairs)}"
     )
 
     prompt_text = build_system_prompt(current_config)
@@ -758,9 +775,24 @@ if __name__ == "__main__":
     parser.add_argument("--train-batch-size", type=int, default=10)
     parser.add_argument("--top-k",            type=int, default=5)
     parser.add_argument("--seed",             type=int, default=42)
-    parser.add_argument("--n-qa-per-query",   type=int, default=3,
-                        help="QA pairs to generate per topic query at startup")
+    parser.add_argument(
+        "--qa-data",
+        type=str,
+        default=None,
+        help="Path to pre-generated QA pairs JSON (from generate_qa_pairs.py). "
+             "Default: eval/data/qa_pairs.json"
+    )
+    parser.add_argument(
+        "--n-qa-per-query",
+        type=int,
+        default=3,
+        help="[DEPRECATED] Use --qa-data to load pre-generated QA pairs instead"
+    )
     args = parser.parse_args()
+
+    if args.qa_data is None:
+        print("\n⚠️  WARNING: No --qa-data specified. Using default: eval/data/qa_pairs.json")
+        print("    To generate: python eval/generate_qa_pairs.py\n")
 
     main(
         n_iterations=args.n_iterations,
@@ -768,4 +800,5 @@ if __name__ == "__main__":
         eval_top_k=args.top_k,
         seed=args.seed,
         n_qa_per_query=args.n_qa_per_query,
+        qa_data_path=args.qa_data,
     )

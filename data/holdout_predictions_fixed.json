@@ -1,0 +1,7452 @@
+[
+  {
+    "tokens": [
+      "to",
+      "address",
+      "these",
+      "challenges",
+      ",",
+      "recent",
+      "approaches",
+      "have",
+      "proposed",
+      "text",
+      "-",
+      "attributed",
+      "graph",
+      "representation",
+      "learning",
+      ",",
+      "which",
+      "combines",
+      "g",
+      "##nn",
+      "##s",
+      "with",
+      "pl",
+      "##ms",
+      "and",
+      "ll",
+      "##ms",
+      "into",
+      "unified",
+      "framework",
+      "##s",
+      "for",
+      "learning",
+      "document",
+      "em",
+      "##bed",
+      "##ding",
+      "##s",
+      "that",
+      "preserve",
+      "both",
+      "context",
+      "##ual",
+      "##ized",
+      "textual",
+      "semantics",
+      "and",
+      "graph",
+      "connectivity",
+      "."
+    ],
+    "predicted_labels": [
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "B-SUBJ",
+      "I-SUBJ",
+      "O",
+      "B-PRED",
+      "B-OBJ",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "O",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "O",
+      "O",
+      "O",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "O",
+      "O",
+      "B-OBJ",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "B-OBJ",
+      "O",
+      "B-OBJ",
+      "O",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "O"
+    ],
+    "predicted_entities": {
+      "SUBJ": [
+        "recent",
+        "approaches"
+      ],
+      "PRED": [
+        "proposed"
+      ],
+      "OBJ": [
+        "text",
+        "attributed",
+        "graph",
+        "representation",
+        "learning",
+        "combines",
+        "g",
+        "##nn ##s",
+        "pl ##ms",
+        "unified",
+        "framework",
+        "learning",
+        "preserve",
+        "context",
+        "textual",
+        "semantics",
+        "graph",
+        "connectivity"
+      ]
+    },
+    "ground_truth": [
+      {
+        "subject": "recent",
+        "predicate": "proposed",
+        "object": "text"
+      },
+      {
+        "subject": "recent",
+        "predicate": "proposed",
+        "object": "attributed"
+      },
+      {
+        "subject": "recent",
+        "predicate": "proposed",
+        "object": "graph"
+      },
+      {
+        "subject": "recent",
+        "predicate": "proposed",
+        "object": "representation"
+      },
+      {
+        "subject": "recent",
+        "predicate": "proposed",
+        "object": "learning"
+      },
+      {
+        "subject": "recent",
+        "predicate": "proposed",
+        "object": "combines"
+      },
+      {
+        "subject": "recent",
+        "predicate": "proposed",
+        "object": "gn"
+      },
+      {
+        "subject": "recent",
+        "predicate": "proposed",
+        "object": "ns"
+      },
+      {
+        "subject": "recent",
+        "predicate": "proposed",
+        "object": "plm"
+      },
+      {
+        "subject": "approaches",
+        "predicate": "proposed",
+        "object": "text"
+      },
+      {
+        "subject": "approaches",
+        "predicate": "proposed",
+        "object": "attributed"
+      },
+      {
+        "subject": "approaches",
+        "predicate": "proposed",
+        "object": "graph"
+      },
+      {
+        "subject": "approaches",
+        "predicate": "proposed",
+        "object": "representation"
+      },
+      {
+        "subject": "approaches",
+        "predicate": "proposed",
+        "object": "learning"
+      },
+      {
+        "subject": "approaches",
+        "predicate": "proposed",
+        "object": "combines"
+      },
+      {
+        "subject": "approaches",
+        "predicate": "proposed",
+        "object": "gn"
+      },
+      {
+        "subject": "approaches",
+        "predicate": "proposed",
+        "object": "ns"
+      },
+      {
+        "subject": "approaches",
+        "predicate": "proposed",
+        "object": "plm"
+      }
+    ]
+  },
+  {
+    "tokens": [
+      "this",
+      "search",
+      "-",
+      "com",
+      "##press",
+      "-",
+      "document",
+      "loop",
+      "sim",
+      "##pl",
+      "##ifies",
+      "the",
+      "structure",
+      "of",
+      "program",
+      "solutions",
+      "(",
+      "a",
+      "vs",
+      ".",
+      "d",
+      ")",
+      ",",
+      "making",
+      "it",
+      "easier",
+      "to",
+      "solve",
+      "more",
+      "complex",
+      "tasks",
+      "on",
+      "future",
+      "iteration",
+      "##s",
+      "."
+    ],
+    "predicted_labels": [
+      "O",
+      "B-SUBJ",
+      "O",
+      "B-SUBJ",
+      "I-SUBJ",
+      "O",
+      "B-SUBJ",
+      "I-SUBJ",
+      "I-PRED",
+      "I-PRED",
+      "I-PRED",
+      "O",
+      "B-OBJ",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O"
+    ],
+    "predicted_entities": {
+      "SUBJ": [
+        "search",
+        "com ##press",
+        "document",
+        "loop"
+      ],
+      "PRED": [
+        "sim ##pl ##ifies"
+      ],
+      "OBJ": [
+        "structure",
+        "program",
+        "solutions"
+      ]
+    },
+    "ground_truth": [
+      {
+        "subject": "search",
+        "predicate": "simplifies",
+        "object": "structure"
+      },
+      {
+        "subject": "search",
+        "predicate": "simplifies",
+        "object": "program"
+      },
+      {
+        "subject": "search",
+        "predicate": "simplifies",
+        "object": "solutions"
+      },
+      {
+        "subject": "compress",
+        "predicate": "simplifies",
+        "object": "structure"
+      },
+      {
+        "subject": "compress",
+        "predicate": "simplifies",
+        "object": "program"
+      },
+      {
+        "subject": "compress",
+        "predicate": "simplifies",
+        "object": "solutions"
+      },
+      {
+        "subject": "document",
+        "predicate": "simplifies",
+        "object": "structure"
+      },
+      {
+        "subject": "document",
+        "predicate": "simplifies",
+        "object": "program"
+      },
+      {
+        "subject": "document",
+        "predicate": "simplifies",
+        "object": "solutions"
+      },
+      {
+        "subject": "loop",
+        "predicate": "simplifies",
+        "object": "structure"
+      },
+      {
+        "subject": "loop",
+        "predicate": "simplifies",
+        "object": "program"
+      },
+      {
+        "subject": "loop",
+        "predicate": "simplifies",
+        "object": "solutions"
+      }
+    ]
+  },
+  {
+    "tokens": [
+      "bert",
+      "(",
+      "devlin",
+      "et",
+      "al",
+      ".",
+      ",",
+      "2019",
+      ")",
+      "introduced",
+      "masked",
+      "language",
+      "modelling",
+      ",",
+      "which",
+      "allows",
+      "pre",
+      "-",
+      "training",
+      "to",
+      "learn",
+      "interactions",
+      "between",
+      "left",
+      "and",
+      "right",
+      "context",
+      "words",
+      "."
+    ],
+    "predicted_labels": [
+      "B-SUBJ",
+      "O",
+      "B-SUBJ",
+      "I-SUBJ",
+      "I-SUBJ",
+      "O",
+      "O",
+      "B-SUBJ",
+      "O",
+      "B-PRED",
+      "B-OBJ",
+      "I-OBJ",
+      "B-SUBJ",
+      "O",
+      "O",
+      "B-SUBJ",
+      "B-OBJ",
+      "O",
+      "B-OBJ",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "B-SUBJ",
+      "B-OBJ",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "O"
+    ],
+    "predicted_entities": {
+      "SUBJ": [
+        "bert",
+        "devlin",
+        "et",
+        "al",
+        "2019",
+        "modelling",
+        "allows",
+        "between"
+      ],
+      "PRED": [
+        "introduced"
+      ],
+      "OBJ": [
+        "masked",
+        "language",
+        "pre",
+        "training",
+        "learn",
+        "interactions",
+        "left",
+        "right",
+        "context",
+        "words"
+      ]
+    },
+    "ground_truth": [
+      {
+        "subject": "bert",
+        "predicate": "introduced",
+        "object": "masked"
+      },
+      {
+        "subject": "bert",
+        "predicate": "introduced",
+        "object": "language"
+      },
+      {
+        "subject": "bert",
+        "predicate": "introduced",
+        "object": "modelling"
+      },
+      {
+        "subject": "bert",
+        "predicate": "introduced",
+        "object": "allows"
+      },
+      {
+        "subject": "bert",
+        "predicate": "introduced",
+        "object": "pre"
+      },
+      {
+        "subject": "bert",
+        "predicate": "introduced",
+        "object": "training"
+      },
+      {
+        "subject": "bert",
+        "predicate": "introduced",
+        "object": "learn"
+      },
+      {
+        "subject": "bert",
+        "predicate": "introduced",
+        "object": "interactions"
+      },
+      {
+        "subject": "bert",
+        "predicate": "introduced",
+        "object": "left"
+      },
+      {
+        "subject": "bert",
+        "predicate": "introduced",
+        "object": "right"
+      },
+      {
+        "subject": "bert",
+        "predicate": "introduced",
+        "object": "context"
+      },
+      {
+        "subject": "bert",
+        "predicate": "introduced",
+        "object": "words"
+      },
+      {
+        "subject": "dev",
+        "predicate": "introduced",
+        "object": "masked"
+      },
+      {
+        "subject": "dev",
+        "predicate": "introduced",
+        "object": "language"
+      },
+      {
+        "subject": "dev",
+        "predicate": "introduced",
+        "object": "modelling"
+      },
+      {
+        "subject": "dev",
+        "predicate": "introduced",
+        "object": "allows"
+      },
+      {
+        "subject": "dev",
+        "predicate": "introduced",
+        "object": "pre"
+      },
+      {
+        "subject": "dev",
+        "predicate": "introduced",
+        "object": "training"
+      },
+      {
+        "subject": "dev",
+        "predicate": "introduced",
+        "object": "learn"
+      },
+      {
+        "subject": "dev",
+        "predicate": "introduced",
+        "object": "interactions"
+      },
+      {
+        "subject": "dev",
+        "predicate": "introduced",
+        "object": "left"
+      },
+      {
+        "subject": "dev",
+        "predicate": "introduced",
+        "object": "right"
+      },
+      {
+        "subject": "dev",
+        "predicate": "introduced",
+        "object": "context"
+      },
+      {
+        "subject": "dev",
+        "predicate": "introduced",
+        "object": "words"
+      },
+      {
+        "subject": "lin",
+        "predicate": "introduced",
+        "object": "masked"
+      },
+      {
+        "subject": "lin",
+        "predicate": "introduced",
+        "object": "language"
+      },
+      {
+        "subject": "lin",
+        "predicate": "introduced",
+        "object": "modelling"
+      },
+      {
+        "subject": "lin",
+        "predicate": "introduced",
+        "object": "allows"
+      },
+      {
+        "subject": "lin",
+        "predicate": "introduced",
+        "object": "pre"
+      },
+      {
+        "subject": "lin",
+        "predicate": "introduced",
+        "object": "training"
+      },
+      {
+        "subject": "lin",
+        "predicate": "introduced",
+        "object": "learn"
+      },
+      {
+        "subject": "lin",
+        "predicate": "introduced",
+        "object": "interactions"
+      },
+      {
+        "subject": "lin",
+        "predicate": "introduced",
+        "object": "left"
+      },
+      {
+        "subject": "lin",
+        "predicate": "introduced",
+        "object": "right"
+      },
+      {
+        "subject": "lin",
+        "predicate": "introduced",
+        "object": "context"
+      },
+      {
+        "subject": "lin",
+        "predicate": "introduced",
+        "object": "words"
+      },
+      {
+        "subject": "et",
+        "predicate": "introduced",
+        "object": "masked"
+      },
+      {
+        "subject": "et",
+        "predicate": "introduced",
+        "object": "language"
+      },
+      {
+        "subject": "et",
+        "predicate": "introduced",
+        "object": "modelling"
+      },
+      {
+        "subject": "et",
+        "predicate": "introduced",
+        "object": "allows"
+      },
+      {
+        "subject": "et",
+        "predicate": "introduced",
+        "object": "pre"
+      },
+      {
+        "subject": "et",
+        "predicate": "introduced",
+        "object": "training"
+      },
+      {
+        "subject": "et",
+        "predicate": "introduced",
+        "object": "learn"
+      },
+      {
+        "subject": "et",
+        "predicate": "introduced",
+        "object": "interactions"
+      },
+      {
+        "subject": "et",
+        "predicate": "introduced",
+        "object": "left"
+      },
+      {
+        "subject": "et",
+        "predicate": "introduced",
+        "object": "right"
+      },
+      {
+        "subject": "et",
+        "predicate": "introduced",
+        "object": "context"
+      },
+      {
+        "subject": "et",
+        "predicate": "introduced",
+        "object": "words"
+      },
+      {
+        "subject": "al",
+        "predicate": "introduced",
+        "object": "masked"
+      },
+      {
+        "subject": "al",
+        "predicate": "introduced",
+        "object": "language"
+      },
+      {
+        "subject": "al",
+        "predicate": "introduced",
+        "object": "modelling"
+      },
+      {
+        "subject": "al",
+        "predicate": "introduced",
+        "object": "allows"
+      },
+      {
+        "subject": "al",
+        "predicate": "introduced",
+        "object": "pre"
+      },
+      {
+        "subject": "al",
+        "predicate": "introduced",
+        "object": "training"
+      },
+      {
+        "subject": "al",
+        "predicate": "introduced",
+        "object": "learn"
+      },
+      {
+        "subject": "al",
+        "predicate": "introduced",
+        "object": "interactions"
+      },
+      {
+        "subject": "al",
+        "predicate": "introduced",
+        "object": "left"
+      },
+      {
+        "subject": "al",
+        "predicate": "introduced",
+        "object": "right"
+      },
+      {
+        "subject": "al",
+        "predicate": "introduced",
+        "object": "context"
+      },
+      {
+        "subject": "al",
+        "predicate": "introduced",
+        "object": "words"
+      },
+      {
+        "subject": "2019",
+        "predicate": "introduced",
+        "object": "masked"
+      },
+      {
+        "subject": "2019",
+        "predicate": "introduced",
+        "object": "language"
+      },
+      {
+        "subject": "2019",
+        "predicate": "introduced",
+        "object": "modelling"
+      },
+      {
+        "subject": "2019",
+        "predicate": "introduced",
+        "object": "allows"
+      },
+      {
+        "subject": "2019",
+        "predicate": "introduced",
+        "object": "pre"
+      },
+      {
+        "subject": "2019",
+        "predicate": "introduced",
+        "object": "training"
+      },
+      {
+        "subject": "2019",
+        "predicate": "introduced",
+        "object": "learn"
+      },
+      {
+        "subject": "2019",
+        "predicate": "introduced",
+        "object": "interactions"
+      },
+      {
+        "subject": "2019",
+        "predicate": "introduced",
+        "object": "left"
+      },
+      {
+        "subject": "2019",
+        "predicate": "introduced",
+        "object": "right"
+      },
+      {
+        "subject": "2019",
+        "predicate": "introduced",
+        "object": "context"
+      },
+      {
+        "subject": "2019",
+        "predicate": "introduced",
+        "object": "words"
+      }
+    ]
+  },
+  {
+    "tokens": [
+      "the",
+      "student",
+      "is",
+      "also",
+      "implemented",
+      "as",
+      "a",
+      "linear",
+      "hyper",
+      "##net",
+      "##work",
+      "with",
+      "the",
+      "hidden",
+      "dimension",
+      "potentially",
+      "different",
+      "from",
+      "the",
+      "teacher",
+      "."
+    ],
+    "predicted_labels": [
+      "O",
+      "B-SUBJ",
+      "O",
+      "O",
+      "B-PRED",
+      "O",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "O",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "O",
+      "B-OBJ",
+      "O",
+      "O",
+      "B-OBJ",
+      "O"
+    ],
+    "predicted_entities": {
+      "SUBJ": [
+        "student"
+      ],
+      "PRED": [
+        "implemented"
+      ],
+      "OBJ": [
+        "linear",
+        "hyper",
+        "##net ##work",
+        "hidden",
+        "dimension",
+        "different",
+        "teacher"
+      ]
+    },
+    "ground_truth": [
+      {
+        "subject": "student",
+        "predicate": "implemented",
+        "object": "linear"
+      },
+      {
+        "subject": "student",
+        "predicate": "implemented",
+        "object": "hyper"
+      },
+      {
+        "subject": "student",
+        "predicate": "implemented",
+        "object": "network"
+      },
+      {
+        "subject": "student",
+        "predicate": "implemented",
+        "object": "hidden"
+      },
+      {
+        "subject": "student",
+        "predicate": "implemented",
+        "object": "dimension"
+      },
+      {
+        "subject": "student",
+        "predicate": "implemented",
+        "object": "different"
+      },
+      {
+        "subject": "student",
+        "predicate": "implemented",
+        "object": "teacher"
+      }
+    ]
+  },
+  {
+    "tokens": [
+      "when",
+      "questioned",
+      "about",
+      "the",
+      "tallest",
+      "mountain",
+      ",",
+      "the",
+      "model",
+      "default",
+      "##s",
+      "to",
+      "honesty",
+      "on",
+      "the",
+      "left",
+      ",",
+      "but",
+      "we",
+      "can",
+      "control",
+      "it",
+      "to",
+      "dec",
+      "##ei",
+      "##ve",
+      "."
+    ],
+    "predicted_labels": [
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "B-SUBJ",
+      "B-PRED",
+      "I-PRED",
+      "O",
+      "O",
+      "O",
+      "O",
+      "B-OBJ",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O"
+    ],
+    "predicted_entities": {
+      "SUBJ": [
+        "model"
+      ],
+      "PRED": [
+        "default ##s"
+      ],
+      "OBJ": [
+        "left"
+      ]
+    },
+    "ground_truth": [
+      {
+        "subject": "model",
+        "predicate": "defaults",
+        "object": "left"
+      }
+    ]
+  },
+  {
+    "tokens": [
+      "unlike",
+      "traditional",
+      "medical",
+      "q",
+      "##a",
+      "tasks",
+      "like",
+      "med",
+      "##qa",
+      "[",
+      "15",
+      "]",
+      ",",
+      "which",
+      "overlook",
+      "sequential",
+      "decision",
+      "-",
+      "making",
+      ",",
+      "this",
+      "task",
+      "involves",
+      "an",
+      "agent",
+      "interacting",
+      "with",
+      "a",
+      "patient",
+      "to",
+      "gather",
+      "symptoms",
+      "for",
+      "diagnosis",
+      "."
+    ],
+    "predicted_labels": [
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "B-SUBJ",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "B-SUBJ",
+      "B-PRED",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "O",
+      "O",
+      "B-OBJ",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "O",
+      "B-OBJ",
+      "O"
+    ],
+    "predicted_entities": {
+      "SUBJ": [
+        "tasks",
+        "task"
+      ],
+      "PRED": [
+        "involves"
+      ],
+      "OBJ": [
+        "agent",
+        "interacting",
+        "patient",
+        "gather",
+        "symptoms",
+        "diagnosis"
+      ]
+    },
+    "ground_truth": [
+      {
+        "subject": "task",
+        "predicate": "involves",
+        "object": "agent"
+      },
+      {
+        "subject": "task",
+        "predicate": "involves",
+        "object": "interacting"
+      },
+      {
+        "subject": "task",
+        "predicate": "involves",
+        "object": "patient"
+      },
+      {
+        "subject": "task",
+        "predicate": "involves",
+        "object": "gather"
+      },
+      {
+        "subject": "task",
+        "predicate": "involves",
+        "object": "symptoms"
+      },
+      {
+        "subject": "task",
+        "predicate": "involves",
+        "object": "diagnosis"
+      }
+    ]
+  },
+  {
+    "tokens": [
+      ".",
+      "o",
+      "-",
+      "plan",
+      "##2",
+      "uses",
+      "the",
+      "least",
+      "##com",
+      "##mit",
+      "##ment",
+      "strategy",
+      "similarly",
+      "as",
+      "described",
+      "in",
+      "mo",
+      "##lge",
+      "##n",
+      "[",
+      "21",
+      "]",
+      "."
+    ],
+    "predicted_labels": [
+      "O",
+      "O",
+      "O",
+      "B-SUBJ",
+      "O",
+      "B-PRED",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O"
+    ],
+    "predicted_entities": {
+      "SUBJ": [
+        "plan"
+      ],
+      "PRED": [
+        "uses"
+      ],
+      "OBJ": [
+        "least",
+        "##com ##mit ##ment",
+        "strategy"
+      ]
+    },
+    "ground_truth": [
+      {
+        "subject": "plan",
+        "predicate": "uses",
+        "object": "least"
+      },
+      {
+        "subject": "plan",
+        "predicate": "uses",
+        "object": "commitment"
+      },
+      {
+        "subject": "plan",
+        "predicate": "uses",
+        "object": "strategy"
+      }
+    ]
+  },
+  {
+    "tokens": [
+      "ideally",
+      ",",
+      "advanced",
+      "ll",
+      "##ms",
+      "such",
+      "as",
+      "gp",
+      "##t",
+      "-",
+      "4",
+      "could",
+      "be",
+      "integrated",
+      "within",
+      "mc",
+      "##ts",
+      "to",
+      "generate",
+      "training",
+      "data",
+      "."
+    ],
+    "predicted_labels": [
+      "O",
+      "O",
+      "B-SUBJ",
+      "O",
+      "B-SUBJ",
+      "O",
+      "O",
+      "B-SUBJ",
+      "O",
+      "O",
+      "B-SUBJ",
+      "O",
+      "O",
+      "B-PRED",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O"
+    ],
+    "predicted_entities": {
+      "SUBJ": [
+        "advanced",
+        "##ms",
+        "gp",
+        "4"
+      ],
+      "PRED": [
+        "integrated"
+      ],
+      "OBJ": [
+        "mc",
+        "##ts"
+      ]
+    },
+    "ground_truth": [
+      {
+        "subject": "advanced",
+        "predicate": "integrated",
+        "object": "mc"
+      },
+      {
+        "subject": "advanced",
+        "predicate": "integrated",
+        "object": "ts"
+      },
+      {
+        "subject": "ms",
+        "predicate": "integrated",
+        "object": "mc"
+      },
+      {
+        "subject": "ms",
+        "predicate": "integrated",
+        "object": "ts"
+      },
+      {
+        "subject": "gp",
+        "predicate": "integrated",
+        "object": "mc"
+      },
+      {
+        "subject": "gp",
+        "predicate": "integrated",
+        "object": "ts"
+      },
+      {
+        "subject": "4",
+        "predicate": "integrated",
+        "object": "mc"
+      },
+      {
+        "subject": "4",
+        "predicate": "integrated",
+        "object": "ts"
+      }
+    ]
+  },
+  {
+    "tokens": [
+      "parameter",
+      "##izations",
+      "based",
+      "on",
+      "generators",
+      "and",
+      "late",
+      "##nt",
+      "vectors",
+      "can",
+      "be",
+      "regarded",
+      "as",
+      "a",
+      "decomposition",
+      "of",
+      "shared",
+      "knowledge",
+      "and",
+      "distinct",
+      "knowledge",
+      "across",
+      "various",
+      "samples",
+      ",",
+      "where",
+      "generators",
+      "extract",
+      "common",
+      "patterns",
+      "while",
+      "different",
+      "late",
+      "##nt",
+      "vectors",
+      "store",
+      "different",
+      "magnitude",
+      "##s",
+      "for",
+      "these",
+      "patterns",
+      "."
+    ],
+    "predicted_labels": [
+      "B-SUBJ",
+      "I-SUBJ",
+      "I-SUBJ",
+      "O",
+      "B-SUBJ",
+      "O",
+      "B-SUBJ",
+      "I-SUBJ",
+      "I-SUBJ",
+      "O",
+      "O",
+      "B-PRED",
+      "O",
+      "O",
+      "B-OBJ",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "O",
+      "O",
+      "B-SUBJ",
+      "B-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "O",
+      "B-OBJ",
+      "B-SUBJ",
+      "I-SUBJ",
+      "I-SUBJ",
+      "B-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "O",
+      "O",
+      "B-OBJ",
+      "O"
+    ],
+    "predicted_entities": {
+      "SUBJ": [
+        "parameter",
+        "##izations",
+        "based",
+        "generators",
+        "late ##nt",
+        "vectors",
+        "generators",
+        "late ##nt",
+        "vectors"
+      ],
+      "PRED": [
+        "regarded"
+      ],
+      "OBJ": [
+        "decomposition",
+        "shared",
+        "knowledge",
+        "distinct",
+        "knowledge",
+        "various",
+        "samples",
+        "extract",
+        "common",
+        "patterns",
+        "different",
+        "store",
+        "different",
+        "magnitude ##s",
+        "patterns"
+      ]
+    },
+    "ground_truth": [
+      {
+        "subject": "parameter",
+        "predicate": "regarded",
+        "object": "decomposition"
+      },
+      {
+        "subject": "parameter",
+        "predicate": "regarded",
+        "object": "shared"
+      },
+      {
+        "subject": "parameter",
+        "predicate": "regarded",
+        "object": "knowledge"
+      },
+      {
+        "subject": "parameter",
+        "predicate": "regarded",
+        "object": "distinct"
+      },
+      {
+        "subject": "parameter",
+        "predicate": "regarded",
+        "object": "various"
+      },
+      {
+        "subject": "parameter",
+        "predicate": "regarded",
+        "object": "samples"
+      },
+      {
+        "subject": "parameter",
+        "predicate": "regarded",
+        "object": "generators"
+      },
+      {
+        "subject": "parameter",
+        "predicate": "regarded",
+        "object": "extract"
+      },
+      {
+        "subject": "parameter",
+        "predicate": "regarded",
+        "object": "common"
+      },
+      {
+        "subject": "parameter",
+        "predicate": "regarded",
+        "object": "patterns"
+      },
+      {
+        "subject": "parameter",
+        "predicate": "regarded",
+        "object": "different"
+      },
+      {
+        "subject": "parameter",
+        "predicate": "regarded",
+        "object": "latent"
+      },
+      {
+        "subject": "parameter",
+        "predicate": "regarded",
+        "object": "vectors"
+      },
+      {
+        "subject": "parameter",
+        "predicate": "regarded",
+        "object": "store"
+      },
+      {
+        "subject": "parameter",
+        "predicate": "regarded",
+        "object": "magnitudes"
+      },
+      {
+        "subject": "iz",
+        "predicate": "regarded",
+        "object": "decomposition"
+      },
+      {
+        "subject": "iz",
+        "predicate": "regarded",
+        "object": "shared"
+      },
+      {
+        "subject": "iz",
+        "predicate": "regarded",
+        "object": "knowledge"
+      },
+      {
+        "subject": "iz",
+        "predicate": "regarded",
+        "object": "distinct"
+      },
+      {
+        "subject": "iz",
+        "predicate": "regarded",
+        "object": "various"
+      },
+      {
+        "subject": "iz",
+        "predicate": "regarded",
+        "object": "samples"
+      },
+      {
+        "subject": "iz",
+        "predicate": "regarded",
+        "object": "generators"
+      },
+      {
+        "subject": "iz",
+        "predicate": "regarded",
+        "object": "extract"
+      },
+      {
+        "subject": "iz",
+        "predicate": "regarded",
+        "object": "common"
+      },
+      {
+        "subject": "iz",
+        "predicate": "regarded",
+        "object": "patterns"
+      },
+      {
+        "subject": "iz",
+        "predicate": "regarded",
+        "object": "different"
+      },
+      {
+        "subject": "iz",
+        "predicate": "regarded",
+        "object": "latent"
+      },
+      {
+        "subject": "iz",
+        "predicate": "regarded",
+        "object": "vectors"
+      },
+      {
+        "subject": "iz",
+        "predicate": "regarded",
+        "object": "store"
+      },
+      {
+        "subject": "iz",
+        "predicate": "regarded",
+        "object": "magnitudes"
+      },
+      {
+        "subject": "ions",
+        "predicate": "regarded",
+        "object": "decomposition"
+      },
+      {
+        "subject": "ions",
+        "predicate": "regarded",
+        "object": "shared"
+      },
+      {
+        "subject": "ions",
+        "predicate": "regarded",
+        "object": "knowledge"
+      },
+      {
+        "subject": "ions",
+        "predicate": "regarded",
+        "object": "distinct"
+      },
+      {
+        "subject": "ions",
+        "predicate": "regarded",
+        "object": "various"
+      },
+      {
+        "subject": "ions",
+        "predicate": "regarded",
+        "object": "samples"
+      },
+      {
+        "subject": "ions",
+        "predicate": "regarded",
+        "object": "generators"
+      },
+      {
+        "subject": "ions",
+        "predicate": "regarded",
+        "object": "extract"
+      },
+      {
+        "subject": "ions",
+        "predicate": "regarded",
+        "object": "common"
+      },
+      {
+        "subject": "ions",
+        "predicate": "regarded",
+        "object": "patterns"
+      },
+      {
+        "subject": "ions",
+        "predicate": "regarded",
+        "object": "different"
+      },
+      {
+        "subject": "ions",
+        "predicate": "regarded",
+        "object": "latent"
+      },
+      {
+        "subject": "ions",
+        "predicate": "regarded",
+        "object": "vectors"
+      },
+      {
+        "subject": "ions",
+        "predicate": "regarded",
+        "object": "store"
+      },
+      {
+        "subject": "ions",
+        "predicate": "regarded",
+        "object": "magnitudes"
+      },
+      {
+        "subject": "based",
+        "predicate": "regarded",
+        "object": "decomposition"
+      },
+      {
+        "subject": "based",
+        "predicate": "regarded",
+        "object": "shared"
+      },
+      {
+        "subject": "based",
+        "predicate": "regarded",
+        "object": "knowledge"
+      },
+      {
+        "subject": "based",
+        "predicate": "regarded",
+        "object": "distinct"
+      },
+      {
+        "subject": "based",
+        "predicate": "regarded",
+        "object": "various"
+      },
+      {
+        "subject": "based",
+        "predicate": "regarded",
+        "object": "samples"
+      },
+      {
+        "subject": "based",
+        "predicate": "regarded",
+        "object": "generators"
+      },
+      {
+        "subject": "based",
+        "predicate": "regarded",
+        "object": "extract"
+      },
+      {
+        "subject": "based",
+        "predicate": "regarded",
+        "object": "common"
+      },
+      {
+        "subject": "based",
+        "predicate": "regarded",
+        "object": "patterns"
+      },
+      {
+        "subject": "based",
+        "predicate": "regarded",
+        "object": "different"
+      },
+      {
+        "subject": "based",
+        "predicate": "regarded",
+        "object": "latent"
+      },
+      {
+        "subject": "based",
+        "predicate": "regarded",
+        "object": "vectors"
+      },
+      {
+        "subject": "based",
+        "predicate": "regarded",
+        "object": "store"
+      },
+      {
+        "subject": "based",
+        "predicate": "regarded",
+        "object": "magnitudes"
+      },
+      {
+        "subject": "generators",
+        "predicate": "regarded",
+        "object": "decomposition"
+      },
+      {
+        "subject": "generators",
+        "predicate": "regarded",
+        "object": "shared"
+      },
+      {
+        "subject": "generators",
+        "predicate": "regarded",
+        "object": "knowledge"
+      },
+      {
+        "subject": "generators",
+        "predicate": "regarded",
+        "object": "distinct"
+      },
+      {
+        "subject": "generators",
+        "predicate": "regarded",
+        "object": "various"
+      },
+      {
+        "subject": "generators",
+        "predicate": "regarded",
+        "object": "samples"
+      },
+      {
+        "subject": "generators",
+        "predicate": "regarded",
+        "object": "extract"
+      },
+      {
+        "subject": "generators",
+        "predicate": "regarded",
+        "object": "common"
+      },
+      {
+        "subject": "generators",
+        "predicate": "regarded",
+        "object": "patterns"
+      },
+      {
+        "subject": "generators",
+        "predicate": "regarded",
+        "object": "different"
+      },
+      {
+        "subject": "generators",
+        "predicate": "regarded",
+        "object": "latent"
+      },
+      {
+        "subject": "generators",
+        "predicate": "regarded",
+        "object": "vectors"
+      },
+      {
+        "subject": "generators",
+        "predicate": "regarded",
+        "object": "store"
+      },
+      {
+        "subject": "generators",
+        "predicate": "regarded",
+        "object": "magnitudes"
+      },
+      {
+        "subject": "latent",
+        "predicate": "regarded",
+        "object": "decomposition"
+      },
+      {
+        "subject": "latent",
+        "predicate": "regarded",
+        "object": "shared"
+      },
+      {
+        "subject": "latent",
+        "predicate": "regarded",
+        "object": "knowledge"
+      },
+      {
+        "subject": "latent",
+        "predicate": "regarded",
+        "object": "distinct"
+      },
+      {
+        "subject": "latent",
+        "predicate": "regarded",
+        "object": "various"
+      },
+      {
+        "subject": "latent",
+        "predicate": "regarded",
+        "object": "samples"
+      },
+      {
+        "subject": "latent",
+        "predicate": "regarded",
+        "object": "generators"
+      },
+      {
+        "subject": "latent",
+        "predicate": "regarded",
+        "object": "extract"
+      },
+      {
+        "subject": "latent",
+        "predicate": "regarded",
+        "object": "common"
+      },
+      {
+        "subject": "latent",
+        "predicate": "regarded",
+        "object": "patterns"
+      },
+      {
+        "subject": "latent",
+        "predicate": "regarded",
+        "object": "different"
+      },
+      {
+        "subject": "latent",
+        "predicate": "regarded",
+        "object": "vectors"
+      },
+      {
+        "subject": "latent",
+        "predicate": "regarded",
+        "object": "store"
+      },
+      {
+        "subject": "latent",
+        "predicate": "regarded",
+        "object": "magnitudes"
+      },
+      {
+        "subject": "vectors",
+        "predicate": "regarded",
+        "object": "decomposition"
+      },
+      {
+        "subject": "vectors",
+        "predicate": "regarded",
+        "object": "shared"
+      },
+      {
+        "subject": "vectors",
+        "predicate": "regarded",
+        "object": "knowledge"
+      },
+      {
+        "subject": "vectors",
+        "predicate": "regarded",
+        "object": "distinct"
+      },
+      {
+        "subject": "vectors",
+        "predicate": "regarded",
+        "object": "various"
+      },
+      {
+        "subject": "vectors",
+        "predicate": "regarded",
+        "object": "samples"
+      },
+      {
+        "subject": "vectors",
+        "predicate": "regarded",
+        "object": "generators"
+      },
+      {
+        "subject": "vectors",
+        "predicate": "regarded",
+        "object": "extract"
+      },
+      {
+        "subject": "vectors",
+        "predicate": "regarded",
+        "object": "common"
+      },
+      {
+        "subject": "vectors",
+        "predicate": "regarded",
+        "object": "patterns"
+      },
+      {
+        "subject": "vectors",
+        "predicate": "regarded",
+        "object": "different"
+      },
+      {
+        "subject": "vectors",
+        "predicate": "regarded",
+        "object": "latent"
+      },
+      {
+        "subject": "vectors",
+        "predicate": "regarded",
+        "object": "store"
+      },
+      {
+        "subject": "vectors",
+        "predicate": "regarded",
+        "object": "magnitudes"
+      }
+    ]
+  },
+  {
+    "tokens": [
+      "related",
+      "##ly",
+      ",",
+      "collins",
+      "et",
+      "al",
+      ".",
+      "(",
+      "202",
+      "##2",
+      ")",
+      "bench",
+      "##mark",
+      "##ed",
+      "ll",
+      "##ms",
+      "'",
+      "planning",
+      "abilities",
+      "(",
+      "val",
+      "##me",
+      "##eka",
+      "##m",
+      "et",
+      "al",
+      ".",
+      ",",
+      "202",
+      "##3",
+      ")",
+      "under",
+      "28",
+      "manually",
+      "constructed",
+      "constrained",
+      "goals",
+      "."
+    ],
+    "predicted_labels": [
+      "O",
+      "O",
+      "O",
+      "B-SUBJ",
+      "I-SUBJ",
+      "I-SUBJ",
+      "O",
+      "O",
+      "B-SUBJ",
+      "I-SUBJ",
+      "O",
+      "B-PRED",
+      "I-PRED",
+      "I-PRED",
+      "O",
+      "B-SUBJ",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "O",
+      "B-SUBJ",
+      "O",
+      "O",
+      "I-SUBJ",
+      "I-SUBJ",
+      "I-SUBJ",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "B-OBJ",
+      "B-SUBJ",
+      "B-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "O"
+    ],
+    "predicted_entities": {
+      "SUBJ": [
+        "collins",
+        "et",
+        "al",
+        "202 ##2",
+        "##ms",
+        "val",
+        "##m",
+        "et",
+        "al",
+        "manually"
+      ],
+      "PRED": [
+        "bench ##mark ##ed"
+      ],
+      "OBJ": [
+        "planning",
+        "abilities",
+        "28",
+        "constructed",
+        "constrained",
+        "goals"
+      ]
+    },
+    "ground_truth": [
+      {
+        "subject": "collins",
+        "predicate": "benchmarked",
+        "object": "28"
+      },
+      {
+        "subject": "collins",
+        "predicate": "benchmarked",
+        "object": "constructed"
+      },
+      {
+        "subject": "collins",
+        "predicate": "benchmarked",
+        "object": "constrained"
+      },
+      {
+        "subject": "collins",
+        "predicate": "benchmarked",
+        "object": "goals"
+      },
+      {
+        "subject": "et",
+        "predicate": "benchmarked",
+        "object": "28"
+      },
+      {
+        "subject": "et",
+        "predicate": "benchmarked",
+        "object": "constructed"
+      },
+      {
+        "subject": "et",
+        "predicate": "benchmarked",
+        "object": "constrained"
+      },
+      {
+        "subject": "et",
+        "predicate": "benchmarked",
+        "object": "goals"
+      },
+      {
+        "subject": "al",
+        "predicate": "benchmarked",
+        "object": "28"
+      },
+      {
+        "subject": "al",
+        "predicate": "benchmarked",
+        "object": "constructed"
+      },
+      {
+        "subject": "al",
+        "predicate": "benchmarked",
+        "object": "constrained"
+      },
+      {
+        "subject": "al",
+        "predicate": "benchmarked",
+        "object": "goals"
+      },
+      {
+        "subject": "2022",
+        "predicate": "benchmarked",
+        "object": "28"
+      },
+      {
+        "subject": "2022",
+        "predicate": "benchmarked",
+        "object": "constructed"
+      },
+      {
+        "subject": "2022",
+        "predicate": "benchmarked",
+        "object": "constrained"
+      },
+      {
+        "subject": "2022",
+        "predicate": "benchmarked",
+        "object": "goals"
+      }
+    ]
+  },
+  {
+    "tokens": [
+      "this",
+      "approach",
+      "allows",
+      "for",
+      "further",
+      "optimization",
+      "of",
+      "rs",
+      "##d",
+      "'",
+      "s",
+      "efficiency",
+      "without",
+      "inc",
+      "##ur",
+      "##ring",
+      "additional",
+      "costs",
+      "."
+    ],
+    "predicted_labels": [
+      "O",
+      "B-SUBJ",
+      "B-PRED",
+      "O",
+      "O",
+      "B-OBJ",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "O",
+      "O",
+      "B-OBJ",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O"
+    ],
+    "predicted_entities": {
+      "SUBJ": [
+        "approach"
+      ],
+      "PRED": [
+        "allows"
+      ],
+      "OBJ": [
+        "optimization",
+        "rs ##d",
+        "efficiency"
+      ]
+    },
+    "ground_truth": [
+      {
+        "subject": "approach",
+        "predicate": "allows",
+        "object": "optimization"
+      },
+      {
+        "subject": "approach",
+        "predicate": "allows",
+        "object": "rs"
+      },
+      {
+        "subject": "approach",
+        "predicate": "allows",
+        "object": "efficiency"
+      }
+    ]
+  },
+  {
+    "tokens": [
+      "the",
+      "context",
+      "##ual",
+      "compression",
+      "retrieve",
+      "##r",
+      "uses",
+      "a",
+      "base",
+      "retrieve",
+      "##r",
+      "and",
+      "a",
+      "document",
+      "compressor",
+      "to",
+      "process",
+      "que",
+      "##ries",
+      "."
+    ],
+    "predicted_labels": [
+      "O",
+      "B-SUBJ",
+      "I-SUBJ",
+      "I-SUBJ",
+      "I-SUBJ",
+      "I-SUBJ",
+      "B-PRED",
+      "O",
+      "B-OBJ",
+      "B-SUBJ",
+      "I-SUBJ",
+      "O",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "O",
+      "O"
+    ],
+    "predicted_entities": {
+      "SUBJ": [
+        "context ##ual",
+        "compression",
+        "retrieve ##r",
+        "retrieve ##r"
+      ],
+      "PRED": [
+        "uses"
+      ],
+      "OBJ": [
+        "base",
+        "document",
+        "compressor",
+        "process",
+        "que"
+      ]
+    },
+    "ground_truth": [
+      {
+        "subject": "contextual",
+        "predicate": "uses",
+        "object": "base"
+      },
+      {
+        "subject": "contextual",
+        "predicate": "uses",
+        "object": "retriever"
+      },
+      {
+        "subject": "contextual",
+        "predicate": "uses",
+        "object": "document"
+      },
+      {
+        "subject": "contextual",
+        "predicate": "uses",
+        "object": "compressor"
+      },
+      {
+        "subject": "compression",
+        "predicate": "uses",
+        "object": "base"
+      },
+      {
+        "subject": "compression",
+        "predicate": "uses",
+        "object": "retriever"
+      },
+      {
+        "subject": "compression",
+        "predicate": "uses",
+        "object": "document"
+      },
+      {
+        "subject": "compression",
+        "predicate": "uses",
+        "object": "compressor"
+      },
+      {
+        "subject": "retriever",
+        "predicate": "uses",
+        "object": "base"
+      },
+      {
+        "subject": "retriever",
+        "predicate": "uses",
+        "object": "document"
+      },
+      {
+        "subject": "retriever",
+        "predicate": "uses",
+        "object": "compressor"
+      }
+    ]
+  },
+  {
+    "tokens": [
+      "results",
+      "are",
+      "shown",
+      "in",
+      "table",
+      "7",
+      "."
+    ],
+    "predicted_labels": [
+      "B-SUBJ",
+      "O",
+      "B-PRED",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "O"
+    ],
+    "predicted_entities": {
+      "SUBJ": [
+        "results"
+      ],
+      "PRED": [
+        "shown"
+      ],
+      "OBJ": [
+        "table",
+        "7"
+      ]
+    },
+    "ground_truth": [
+      {
+        "subject": "results",
+        "predicate": "shown",
+        "object": "table"
+      },
+      {
+        "subject": "results",
+        "predicate": "shown",
+        "object": "7"
+      }
+    ]
+  },
+  {
+    "tokens": [
+      "in",
+      "this",
+      "context",
+      ",",
+      "\"",
+      "com",
+      "##pressing",
+      "\"",
+      "encompasses",
+      "both",
+      "conde",
+      "##ns",
+      "##ing",
+      "the",
+      "content",
+      "of",
+      "individual",
+      "documents",
+      "and",
+      "eliminating",
+      "irrelevant",
+      "documents",
+      "altogether",
+      "."
+    ],
+    "predicted_labels": [
+      "O",
+      "O",
+      "B-OBJ",
+      "O",
+      "O",
+      "B-SUBJ",
+      "I-SUBJ",
+      "O",
+      "B-PRED",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O"
+    ],
+    "predicted_entities": {
+      "SUBJ": [
+        "com ##pressing"
+      ],
+      "PRED": [
+        "encompasses"
+      ],
+      "OBJ": [
+        "context"
+      ]
+    },
+    "ground_truth": [
+      {
+        "subject": "compressing",
+        "predicate": "encompasses",
+        "object": "context"
+      }
+    ]
+  },
+  {
+    "tokens": [
+      "a",
+      "'",
+      "base",
+      "'",
+      "model",
+      "refers",
+      "to",
+      "a",
+      "pre",
+      "-",
+      "trained",
+      "ll",
+      "##m",
+      "without",
+      "any",
+      "further",
+      "fine",
+      "-",
+      "tuning",
+      ",",
+      "while",
+      "a",
+      "'",
+      "vanilla",
+      "'",
+      "reward",
+      "model",
+      "is",
+      "a",
+      "base",
+      "model",
+      "fine",
+      "-",
+      "tuned",
+      "(",
+      "only",
+      ")",
+      "on",
+      "standard",
+      "human",
+      "preference",
+      "data",
+      "##set",
+      "##s",
+      "such",
+      "as",
+      "open",
+      "##ass",
+      "##istan",
+      "##t",
+      "(",
+      "ko",
+      "##pf",
+      "et",
+      "al",
+      ".",
+      ",",
+      "202",
+      "##3",
+      ")",
+      ",",
+      "ant",
+      "##hr",
+      "##op",
+      "##ic",
+      "helpful",
+      "-",
+      "harmless",
+      "(",
+      "bai",
+      "et",
+      "al",
+      ".",
+      ",",
+      "202",
+      "##2",
+      ")",
+      ",",
+      "and",
+      "open",
+      "##ai",
+      "'",
+      "s",
+      "sum",
+      "##mar",
+      "##izing",
+      "from",
+      "human",
+      "feedback",
+      "data",
+      "(",
+      "st",
+      "##ien",
+      "##non",
+      "et",
+      "al",
+      ".",
+      ",",
+      "2020",
+      ")",
+      "."
+    ],
+    "predicted_labels": [
+      "O",
+      "B-SUBJ",
+      "I-SUBJ",
+      "I-SUBJ",
+      "I-SUBJ",
+      "B-PRED",
+      "O",
+      "O",
+      "B-OBJ",
+      "O",
+      "B-OBJ",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "B-OBJ",
+      "O",
+      "B-OBJ",
+      "O",
+      "O",
+      "O",
+      "B-SUBJ",
+      "O",
+      "B-SUBJ",
+      "O",
+      "B-SUBJ",
+      "O",
+      "O",
+      "B-SUBJ",
+      "I-SUBJ",
+      "B-OBJ",
+      "O",
+      "B-SUBJ",
+      "O",
+      "O",
+      "O",
+      "O",
+      "B-OBJ",
+      "O",
+      "O",
+      "O",
+      "O",
+      "I-OBJ",
+      "O",
+      "O",
+      "O",
+      "O",
+      "I-OBJ",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "B-SUBJ",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O"
+    ],
+    "predicted_entities": {
+      "SUBJ": [
+        "'",
+        "base",
+        "'",
+        "model",
+        "'",
+        "'",
+        "model",
+        "base",
+        "model",
+        "tuned",
+        "'"
+      ],
+      "PRED": [
+        "refers"
+      ],
+      "OBJ": [
+        "pre",
+        "trained",
+        "fine",
+        "tuning",
+        "fine",
+        "standard",
+        "##s",
+        "##istan"
+      ]
+    },
+    "ground_truth": [
+      {
+        "subject": "'",
+        "predicate": "refers",
+        "object": "fine"
+      },
+      {
+        "subject": "'",
+        "predicate": "refers",
+        "object": "tuning"
+      },
+      {
+        "subject": "base",
+        "predicate": "refers",
+        "object": "fine"
+      },
+      {
+        "subject": "base",
+        "predicate": "refers",
+        "object": "tuning"
+      },
+      {
+        "subject": "model",
+        "predicate": "refers",
+        "object": "fine"
+      },
+      {
+        "subject": "model",
+        "predicate": "refers",
+        "object": "tuning"
+      }
+    ]
+  },
+  {
+    "tokens": [
+      "the",
+      "design",
+      "of",
+      "the",
+      "proxy",
+      "reward",
+      "function",
+      "allows",
+      "for",
+      "off",
+      "##line",
+      "query",
+      "-",
+      "dependent",
+      "evaluation",
+      "thus",
+      "achieving",
+      "both",
+      "context",
+      "awareness",
+      "and",
+      "lower",
+      "costs",
+      ",",
+      "and",
+      "the",
+      "framework",
+      "was",
+      "evaluated",
+      "across",
+      "four",
+      "ll",
+      "##ms",
+      "and",
+      "three",
+      "arithmetic",
+      "data",
+      "##set",
+      "##s",
+      "."
+    ],
+    "predicted_labels": [
+      "O",
+      "B-SUBJ",
+      "O",
+      "O",
+      "B-SUBJ",
+      "I-SUBJ",
+      "I-SUBJ",
+      "B-PRED",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "B-SUBJ",
+      "O",
+      "B-PRED",
+      "O",
+      "B-OBJ",
+      "O",
+      "O",
+      "O",
+      "B-OBJ",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O"
+    ],
+    "predicted_entities": {
+      "SUBJ": [
+        "design",
+        "proxy",
+        "reward",
+        "function",
+        "framework"
+      ],
+      "PRED": [
+        "allows",
+        "evaluated"
+      ],
+      "OBJ": [
+        "off ##line",
+        "query",
+        "dependent",
+        "evaluation",
+        "four",
+        "three"
+      ]
+    },
+    "ground_truth": [
+      {
+        "subject": "design",
+        "predicate": "allows",
+        "object": "offline"
+      },
+      {
+        "subject": "design",
+        "predicate": "allows",
+        "object": "query"
+      },
+      {
+        "subject": "design",
+        "predicate": "allows",
+        "object": "dependent"
+      },
+      {
+        "subject": "design",
+        "predicate": "allows",
+        "object": "evaluation"
+      },
+      {
+        "subject": "proxy",
+        "predicate": "allows",
+        "object": "offline"
+      },
+      {
+        "subject": "proxy",
+        "predicate": "allows",
+        "object": "query"
+      },
+      {
+        "subject": "proxy",
+        "predicate": "allows",
+        "object": "dependent"
+      },
+      {
+        "subject": "proxy",
+        "predicate": "allows",
+        "object": "evaluation"
+      },
+      {
+        "subject": "reward",
+        "predicate": "allows",
+        "object": "offline"
+      },
+      {
+        "subject": "reward",
+        "predicate": "allows",
+        "object": "query"
+      },
+      {
+        "subject": "reward",
+        "predicate": "allows",
+        "object": "dependent"
+      },
+      {
+        "subject": "reward",
+        "predicate": "allows",
+        "object": "evaluation"
+      },
+      {
+        "subject": "function",
+        "predicate": "allows",
+        "object": "offline"
+      },
+      {
+        "subject": "function",
+        "predicate": "allows",
+        "object": "query"
+      },
+      {
+        "subject": "function",
+        "predicate": "allows",
+        "object": "dependent"
+      },
+      {
+        "subject": "function",
+        "predicate": "allows",
+        "object": "evaluation"
+      },
+      {
+        "subject": "framework",
+        "predicate": "evaluated",
+        "object": "four"
+      }
+    ]
+  },
+  {
+    "tokens": [
+      "in",
+      "addition",
+      ",",
+      "chiang",
+      "and",
+      "lee",
+      "(",
+      "202",
+      "##4",
+      ")",
+      "proposed",
+      "a",
+      "bench",
+      "##mark",
+      "to",
+      "study",
+      "ll",
+      "##ms",
+      "accuracy",
+      "while",
+      "incorporating",
+      "a",
+      "manual",
+      "red",
+      "##unda",
+      "##ncy",
+      "assessment",
+      "."
+    ],
+    "predicted_labels": [
+      "O",
+      "O",
+      "O",
+      "B-SUBJ",
+      "O",
+      "B-SUBJ",
+      "O",
+      "B-SUBJ",
+      "I-SUBJ",
+      "O",
+      "B-PRED",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "O",
+      "B-OBJ",
+      "O",
+      "O",
+      "B-OBJ",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "I-OBJ",
+      "O",
+      "O",
+      "O"
+    ],
+    "predicted_entities": {
+      "SUBJ": [
+        "chiang",
+        "lee",
+        "202 ##4"
+      ],
+      "PRED": [
+        "proposed"
+      ],
+      "OBJ": [
+        "bench ##mark",
+        "study",
+        "accuracy",
+        "##unda"
+      ]
+    },
+    "ground_truth": [
+      {
+        "subject": "chiang",
+        "predicate": "proposed",
+        "object": "benchmark"
+      },
+      {
+        "subject": "lee",
+        "predicate": "proposed",
+        "object": "benchmark"
+      },
+      {
+        "subject": "2024",
+        "predicate": "proposed",
+        "object": "benchmark"
+      }
+    ]
+  },
+  {
+    "tokens": [
+      "as",
+      "shown",
+      "in",
+      "table",
+      "1",
+      ",",
+      "mr",
+      "##t",
+      "out",
+      "##per",
+      "##forms",
+      "training",
+      "on",
+      "the",
+      "same",
+      "data",
+      "##set",
+      "without",
+      "the",
+      "dense",
+      "reward",
+      "bonus",
+      "."
+    ],
+    "predicted_labels": [
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "B-SUBJ",
+      "I-SUBJ",
+      "B-PRED",
+      "I-PRED",
+      "I-PRED",
+      "B-SUBJ",
+      "O",
+      "O",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "O",
+      "O",
+      "B-OBJ",
+      "O",
+      "O",
+      "O"
+    ],
+    "predicted_entities": {
+      "SUBJ": [
+        "mr ##t",
+        "training"
+      ],
+      "PRED": [
+        "out ##per ##forms"
+      ],
+      "OBJ": [
+        "data",
+        "##set",
+        "dense"
+      ]
+    },
+    "ground_truth": [
+      {
+        "subject": "mrt",
+        "predicate": "outperforms",
+        "object": "dense"
+      },
+      {
+        "subject": "mrt",
+        "predicate": "outperforms",
+        "object": "reward"
+      },
+      {
+        "subject": "mrt",
+        "predicate": "outperforms",
+        "object": "bonus"
+      }
+    ]
+  },
+  {
+    "tokens": [
+      "despite",
+      "these",
+      "advancement",
+      "##s",
+      ",",
+      "semantic",
+      "##par",
+      "##sing",
+      "methods",
+      "heavily",
+      "rely",
+      "on",
+      "the",
+      "quality",
+      "of",
+      "generated",
+      "que",
+      "##ries",
+      ",",
+      "and",
+      "no",
+      "answers",
+      "can",
+      "be",
+      "obtained",
+      "if",
+      "the",
+      "query",
+      "is",
+      "not",
+      "ex",
+      "##ec",
+      "##utable",
+      "."
+    ],
+    "predicted_labels": [
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "B-SUBJ",
+      "I-SUBJ",
+      "I-SUBJ",
+      "I-SUBJ",
+      "O",
+      "B-PRED",
+      "O",
+      "O",
+      "B-OBJ",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O"
+    ],
+    "predicted_entities": {
+      "SUBJ": [
+        "semantic",
+        "##par ##sing",
+        "methods"
+      ],
+      "PRED": [
+        "rely"
+      ],
+      "OBJ": [
+        "quality",
+        "generated",
+        "que ##ries"
+      ]
+    },
+    "ground_truth": [
+      {
+        "subject": "semantic",
+        "predicate": "rely",
+        "object": "quality"
+      },
+      {
+        "subject": "semantic",
+        "predicate": "rely",
+        "object": "generated"
+      },
+      {
+        "subject": "semantic",
+        "predicate": "rely",
+        "object": "queries"
+      },
+      {
+        "subject": "parsing",
+        "predicate": "rely",
+        "object": "quality"
+      },
+      {
+        "subject": "parsing",
+        "predicate": "rely",
+        "object": "generated"
+      },
+      {
+        "subject": "parsing",
+        "predicate": "rely",
+        "object": "queries"
+      },
+      {
+        "subject": "methods",
+        "predicate": "rely",
+        "object": "quality"
+      },
+      {
+        "subject": "methods",
+        "predicate": "rely",
+        "object": "generated"
+      },
+      {
+        "subject": "methods",
+        "predicate": "rely",
+        "object": "queries"
+      }
+    ]
+  },
+  {
+    "tokens": [
+      "the",
+      "cw",
+      "##m",
+      "predict",
+      "##or",
+      "and",
+      "its",
+      "various",
+      "read",
+      "##outs",
+      "form",
+      "an",
+      "ex",
+      "##tens",
+      "##ible",
+      "computational",
+      "graph",
+      ",",
+      "in",
+      "which",
+      "each",
+      "component",
+      "can",
+      "be",
+      "boots",
+      "##tra",
+      "##pped",
+      "to",
+      "construct",
+      "further",
+      "downstream",
+      "task",
+      "read",
+      "##outs",
+      "."
+    ],
+    "predicted_labels": [
+      "O",
+      "B-SUBJ",
+      "I-SUBJ",
+      "I-SUBJ",
+      "I-SUBJ",
+      "O",
+      "O",
+      "B-SUBJ",
+      "I-SUBJ",
+      "I-SUBJ",
+      "B-PRED",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "O",
+      "O",
+      "O",
+      "O",
+      "B-OBJ",
+      "O",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "O",
+      "B-OBJ",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "B-SUBJ",
+      "I-SUBJ",
+      "O"
+    ],
+    "predicted_entities": {
+      "SUBJ": [
+        "cw ##m",
+        "predict ##or",
+        "various",
+        "read ##outs",
+        "read ##outs"
+      ],
+      "PRED": [
+        "form"
+      ],
+      "OBJ": [
+        "ex ##tens ##ible",
+        "computational",
+        "graph",
+        "component",
+        "boots",
+        "##tra ##pped",
+        "construct",
+        "downstream",
+        "task"
+      ]
+    },
+    "ground_truth": [
+      {
+        "subject": "cwm",
+        "predicate": "form",
+        "object": "extensible"
+      },
+      {
+        "subject": "cwm",
+        "predicate": "form",
+        "object": "computational"
+      },
+      {
+        "subject": "cwm",
+        "predicate": "form",
+        "object": "graph"
+      },
+      {
+        "subject": "cwm",
+        "predicate": "form",
+        "object": "component"
+      },
+      {
+        "subject": "cwm",
+        "predicate": "form",
+        "object": "boots"
+      },
+      {
+        "subject": "cwm",
+        "predicate": "form",
+        "object": "trapped"
+      },
+      {
+        "subject": "cwm",
+        "predicate": "form",
+        "object": "construct"
+      },
+      {
+        "subject": "cwm",
+        "predicate": "form",
+        "object": "downstream"
+      },
+      {
+        "subject": "cwm",
+        "predicate": "form",
+        "object": "task"
+      },
+      {
+        "subject": "cwm",
+        "predicate": "form",
+        "object": "readouts"
+      },
+      {
+        "subject": "predictor",
+        "predicate": "form",
+        "object": "extensible"
+      },
+      {
+        "subject": "predictor",
+        "predicate": "form",
+        "object": "computational"
+      },
+      {
+        "subject": "predictor",
+        "predicate": "form",
+        "object": "graph"
+      },
+      {
+        "subject": "predictor",
+        "predicate": "form",
+        "object": "component"
+      },
+      {
+        "subject": "predictor",
+        "predicate": "form",
+        "object": "boots"
+      },
+      {
+        "subject": "predictor",
+        "predicate": "form",
+        "object": "trapped"
+      },
+      {
+        "subject": "predictor",
+        "predicate": "form",
+        "object": "construct"
+      },
+      {
+        "subject": "predictor",
+        "predicate": "form",
+        "object": "downstream"
+      },
+      {
+        "subject": "predictor",
+        "predicate": "form",
+        "object": "task"
+      },
+      {
+        "subject": "predictor",
+        "predicate": "form",
+        "object": "readouts"
+      },
+      {
+        "subject": "various",
+        "predicate": "form",
+        "object": "extensible"
+      },
+      {
+        "subject": "various",
+        "predicate": "form",
+        "object": "computational"
+      },
+      {
+        "subject": "various",
+        "predicate": "form",
+        "object": "graph"
+      },
+      {
+        "subject": "various",
+        "predicate": "form",
+        "object": "component"
+      },
+      {
+        "subject": "various",
+        "predicate": "form",
+        "object": "boots"
+      },
+      {
+        "subject": "various",
+        "predicate": "form",
+        "object": "trapped"
+      },
+      {
+        "subject": "various",
+        "predicate": "form",
+        "object": "construct"
+      },
+      {
+        "subject": "various",
+        "predicate": "form",
+        "object": "downstream"
+      },
+      {
+        "subject": "various",
+        "predicate": "form",
+        "object": "task"
+      },
+      {
+        "subject": "various",
+        "predicate": "form",
+        "object": "readouts"
+      },
+      {
+        "subject": "readouts",
+        "predicate": "form",
+        "object": "extensible"
+      },
+      {
+        "subject": "readouts",
+        "predicate": "form",
+        "object": "computational"
+      },
+      {
+        "subject": "readouts",
+        "predicate": "form",
+        "object": "graph"
+      },
+      {
+        "subject": "readouts",
+        "predicate": "form",
+        "object": "component"
+      },
+      {
+        "subject": "readouts",
+        "predicate": "form",
+        "object": "boots"
+      },
+      {
+        "subject": "readouts",
+        "predicate": "form",
+        "object": "trapped"
+      },
+      {
+        "subject": "readouts",
+        "predicate": "form",
+        "object": "construct"
+      },
+      {
+        "subject": "readouts",
+        "predicate": "form",
+        "object": "downstream"
+      },
+      {
+        "subject": "readouts",
+        "predicate": "form",
+        "object": "task"
+      }
+    ]
+  },
+  {
+    "tokens": [
+      "even",
+      "in",
+      "the",
+      "model",
+      "with",
+      "seed",
+      "training",
+      "on",
+      "the",
+      "8",
+      "training",
+      "domains",
+      ",",
+      "removal",
+      "of",
+      "a",
+      "elm",
+      "greatly",
+      "de",
+      "##grade",
+      "##s",
+      "test",
+      "per",
+      "##plex",
+      "##ity",
+      "in",
+      "the",
+      "corresponding",
+      "domain",
+      "."
+    ],
+    "predicted_labels": [
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "B-OBJ",
+      "O",
+      "B-SUBJ",
+      "O",
+      "O",
+      "B-SUBJ",
+      "O",
+      "B-PRED",
+      "I-PRED",
+      "I-PRED",
+      "O",
+      "O",
+      "I-OBJ",
+      "I-OBJ",
+      "O",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "O"
+    ],
+    "predicted_entities": {
+      "SUBJ": [
+        "removal",
+        "elm"
+      ],
+      "PRED": [
+        "de ##grade ##s"
+      ],
+      "OBJ": [
+        "domains",
+        "##plex ##ity",
+        "corresponding",
+        "domain"
+      ]
+    },
+    "ground_truth": [
+      {
+        "subject": "removal",
+        "predicate": "degrades",
+        "object": "corresponding"
+      },
+      {
+        "subject": "removal",
+        "predicate": "degrades",
+        "object": "domain"
+      },
+      {
+        "subject": "elm",
+        "predicate": "degrades",
+        "object": "corresponding"
+      },
+      {
+        "subject": "elm",
+        "predicate": "degrades",
+        "object": "domain"
+      }
+    ]
+  },
+  {
+    "tokens": [
+      "table",
+      "2",
+      "demonstrates",
+      "detailed",
+      "spa",
+      "##rs",
+      "##ity",
+      "of",
+      "each",
+      "component",
+      "for",
+      "bit",
+      "##net",
+      "a",
+      "##4",
+      ".",
+      "8",
+      ",",
+      "bit",
+      "##net",
+      "b1",
+      ".",
+      "58",
+      "and",
+      "f",
+      "##p",
+      "##16",
+      "ll",
+      "##ama",
+      "ll",
+      "##m",
+      "across",
+      "various",
+      "sizes",
+      "."
+    ],
+    "predicted_labels": [
+      "B-SUBJ",
+      "O",
+      "B-PRED",
+      "B-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "O",
+      "O",
+      "B-OBJ",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "O",
+      "B-OBJ",
+      "O",
+      "B-OBJ",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "O",
+      "B-OBJ",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "O",
+      "O",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "O"
+    ],
+    "predicted_entities": {
+      "SUBJ": [
+        "table"
+      ],
+      "PRED": [
+        "demonstrates"
+      ],
+      "OBJ": [
+        "detailed",
+        "spa ##rs ##ity",
+        "component",
+        "bit",
+        "##net",
+        "##4",
+        "8",
+        "bit",
+        "##net",
+        "b1",
+        "58",
+        "f ##p",
+        "##16",
+        "ll ##ama",
+        "various",
+        "sizes"
+      ]
+    },
+    "ground_truth": [
+      {
+        "subject": "table",
+        "predicate": "demonstrates",
+        "object": "detailed"
+      },
+      {
+        "subject": "table",
+        "predicate": "demonstrates",
+        "object": "sparsity"
+      },
+      {
+        "subject": "table",
+        "predicate": "demonstrates",
+        "object": "component"
+      },
+      {
+        "subject": "table",
+        "predicate": "demonstrates",
+        "object": "bit"
+      },
+      {
+        "subject": "table",
+        "predicate": "demonstrates",
+        "object": "net"
+      },
+      {
+        "subject": "table",
+        "predicate": "demonstrates",
+        "object": "4"
+      },
+      {
+        "subject": "table",
+        "predicate": "demonstrates",
+        "object": "8"
+      },
+      {
+        "subject": "table",
+        "predicate": "demonstrates",
+        "object": "b"
+      },
+      {
+        "subject": "table",
+        "predicate": "demonstrates",
+        "object": "1"
+      },
+      {
+        "subject": "table",
+        "predicate": "demonstrates",
+        "object": "58"
+      },
+      {
+        "subject": "table",
+        "predicate": "demonstrates",
+        "object": "fp"
+      },
+      {
+        "subject": "table",
+        "predicate": "demonstrates",
+        "object": "16"
+      },
+      {
+        "subject": "table",
+        "predicate": "demonstrates",
+        "object": "llama"
+      },
+      {
+        "subject": "table",
+        "predicate": "demonstrates",
+        "object": "various"
+      },
+      {
+        "subject": "table",
+        "predicate": "demonstrates",
+        "object": "sizes"
+      }
+    ]
+  },
+  {
+    "tokens": [
+      "in",
+      "each",
+      "iteration",
+      ",",
+      "our",
+      "approach",
+      "boots",
+      "##tra",
+      "##ps",
+      "on",
+      "-",
+      "policy",
+      "roll",
+      "##outs",
+      "from",
+      "the",
+      "learn",
+      "##er",
+      "with",
+      "better",
+      "responses",
+      "at",
+      "the",
+      "next",
+      "turn",
+      "obtained",
+      "by",
+      "running",
+      "best",
+      "-",
+      "of",
+      "-",
+      "n",
+      "(",
+      "using",
+      "a",
+      "success",
+      "indicator",
+      "on",
+      "the",
+      "task",
+      ")",
+      "on",
+      "multiple",
+      "revision",
+      "candidates",
+      "obtained",
+      "by",
+      "sampling",
+      "from",
+      "the",
+      "learn",
+      "##er",
+      "itself",
+      "or",
+      "using",
+      "responses",
+      "from",
+      "a",
+      "more",
+      "capable",
+      "model",
+      ",",
+      "whichever",
+      "is",
+      "more",
+      "convenient",
+      "."
+    ],
+    "predicted_labels": [
+      "O",
+      "O",
+      "B-OBJ",
+      "O",
+      "O",
+      "B-SUBJ",
+      "B-PRED",
+      "I-PRED",
+      "I-PRED",
+      "O",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "O",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "O",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "O",
+      "B-OBJ",
+      "O",
+      "O",
+      "O",
+      "O",
+      "B-OBJ",
+      "O",
+      "B-OBJ",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "O",
+      "B-OBJ",
+      "O",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "O",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "O",
+      "O",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "O",
+      "B-OBJ",
+      "O",
+      "O",
+      "O",
+      "O"
+    ],
+    "predicted_entities": {
+      "SUBJ": [
+        "approach"
+      ],
+      "PRED": [
+        "boots ##tra ##ps"
+      ],
+      "OBJ": [
+        "iteration",
+        "policy",
+        "roll ##outs",
+        "learn ##er",
+        "better",
+        "responses",
+        "next",
+        "turn",
+        "obtained",
+        "running",
+        "n",
+        "using",
+        "multiple",
+        "revision",
+        "candidates",
+        "obtained",
+        "sampling",
+        "learn ##er",
+        "using",
+        "responses",
+        "capable",
+        "model",
+        "whichever"
+      ]
+    },
+    "ground_truth": [
+      {
+        "subject": "approach",
+        "predicate": "bootstraps",
+        "object": "better"
+      },
+      {
+        "subject": "approach",
+        "predicate": "bootstraps",
+        "object": "responses"
+      },
+      {
+        "subject": "approach",
+        "predicate": "bootstraps",
+        "object": "next"
+      },
+      {
+        "subject": "approach",
+        "predicate": "bootstraps",
+        "object": "turn"
+      },
+      {
+        "subject": "approach",
+        "predicate": "bootstraps",
+        "object": "obtained"
+      },
+      {
+        "subject": "approach",
+        "predicate": "bootstraps",
+        "object": "running"
+      },
+      {
+        "subject": "approach",
+        "predicate": "bootstraps",
+        "object": "best"
+      },
+      {
+        "subject": "approach",
+        "predicate": "bootstraps",
+        "object": "n"
+      },
+      {
+        "subject": "approach",
+        "predicate": "bootstraps",
+        "object": "using"
+      },
+      {
+        "subject": "approach",
+        "predicate": "bootstraps",
+        "object": "success"
+      },
+      {
+        "subject": "approach",
+        "predicate": "bootstraps",
+        "object": "indicator"
+      },
+      {
+        "subject": "approach",
+        "predicate": "bootstraps",
+        "object": "task"
+      },
+      {
+        "subject": "approach",
+        "predicate": "bootstraps",
+        "object": "multiple"
+      },
+      {
+        "subject": "approach",
+        "predicate": "bootstraps",
+        "object": "revision"
+      },
+      {
+        "subject": "approach",
+        "predicate": "bootstraps",
+        "object": "candidates"
+      },
+      {
+        "subject": "approach",
+        "predicate": "bootstraps",
+        "object": "sampling"
+      },
+      {
+        "subject": "approach",
+        "predicate": "bootstraps",
+        "object": "learner"
+      },
+      {
+        "subject": "approach",
+        "predicate": "bootstraps",
+        "object": "capable"
+      },
+      {
+        "subject": "approach",
+        "predicate": "bootstraps",
+        "object": "model"
+      },
+      {
+        "subject": "approach",
+        "predicate": "bootstraps",
+        "object": "convenient"
+      }
+    ]
+  },
+  {
+    "tokens": [
+      "second",
+      ",",
+      "our",
+      "proposed",
+      "compression",
+      "objective",
+      "-",
+      "sparse",
+      "rate",
+      "reduction",
+      "-",
+      "encourages",
+      "the",
+      "features",
+      "to",
+      "be",
+      "diverse",
+      "and",
+      "expanded",
+      "within",
+      "their",
+      "supporting",
+      "subsp",
+      "##ace",
+      "##s",
+      ",",
+      "and",
+      "in",
+      "particular",
+      "not",
+      "collapsed",
+      "to",
+      "individual",
+      "points",
+      "."
+    ],
+    "predicted_labels": [
+      "O",
+      "O",
+      "O",
+      "B-SUBJ",
+      "I-SUBJ",
+      "I-SUBJ",
+      "O",
+      "B-SUBJ",
+      "I-SUBJ",
+      "I-SUBJ",
+      "O",
+      "B-PRED",
+      "O",
+      "B-OBJ",
+      "O",
+      "O",
+      "B-OBJ",
+      "O",
+      "O",
+      "O",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "B-OBJ",
+      "O",
+      "O"
+    ],
+    "predicted_entities": {
+      "SUBJ": [
+        "proposed",
+        "compression",
+        "objective",
+        "sparse",
+        "rate",
+        "reduction"
+      ],
+      "PRED": [
+        "encourages"
+      ],
+      "OBJ": [
+        "features",
+        "diverse",
+        "supporting",
+        "subsp ##ace ##s",
+        "individual"
+      ]
+    },
+    "ground_truth": [
+      {
+        "subject": "proposed",
+        "predicate": "encourages",
+        "object": "features"
+      },
+      {
+        "subject": "compression",
+        "predicate": "encourages",
+        "object": "features"
+      },
+      {
+        "subject": "objective",
+        "predicate": "encourages",
+        "object": "features"
+      },
+      {
+        "subject": "sparse",
+        "predicate": "encourages",
+        "object": "features"
+      },
+      {
+        "subject": "rate",
+        "predicate": "encourages",
+        "object": "features"
+      },
+      {
+        "subject": "reduction",
+        "predicate": "encourages",
+        "object": "features"
+      }
+    ]
+  },
+  {
+    "tokens": [
+      "with",
+      "this",
+      "priority",
+      ",",
+      "a",
+      "candidate",
+      "from",
+      "the",
+      "list",
+      "is",
+      "chosen",
+      "and",
+      "an",
+      "appropriate",
+      "modification",
+      "to",
+      "the",
+      "task",
+      "network",
+      "is",
+      "applied",
+      "."
+    ],
+    "predicted_labels": [
+      "O",
+      "O",
+      "B-OBJ",
+      "O",
+      "O",
+      "B-SUBJ",
+      "O",
+      "O",
+      "B-SUBJ",
+      "O",
+      "B-PRED",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O"
+    ],
+    "predicted_entities": {
+      "SUBJ": [
+        "candidate",
+        "list"
+      ],
+      "PRED": [
+        "chosen"
+      ],
+      "OBJ": [
+        "priority"
+      ]
+    },
+    "ground_truth": [
+      {
+        "subject": "candidate",
+        "predicate": "chosen",
+        "object": "priority"
+      },
+      {
+        "subject": "list",
+        "predicate": "chosen",
+        "object": "priority"
+      }
+    ]
+  },
+  {
+    "tokens": [
+      "this",
+      "technique",
+      "stands",
+      "in",
+      "contrast",
+      "to",
+      "traditional",
+      "transfer",
+      "learning",
+      ",",
+      "where",
+      "a",
+      "pre",
+      "-",
+      "trained",
+      "model",
+      "is",
+      "further",
+      "fine",
+      "-",
+      "tuned",
+      "for",
+      "a",
+      "new",
+      "task",
+      "."
+    ],
+    "predicted_labels": [
+      "O",
+      "B-SUBJ",
+      "B-PRED",
+      "O",
+      "B-OBJ",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "O",
+      "O",
+      "O",
+      "B-OBJ",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "O",
+      "O",
+      "B-OBJ",
+      "O",
+      "B-OBJ",
+      "O",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "O"
+    ],
+    "predicted_entities": {
+      "SUBJ": [
+        "technique"
+      ],
+      "PRED": [
+        "stands"
+      ],
+      "OBJ": [
+        "contrast",
+        "traditional",
+        "transfer",
+        "learning",
+        "pre",
+        "trained",
+        "model",
+        "fine",
+        "tuned",
+        "new",
+        "task"
+      ]
+    },
+    "ground_truth": [
+      {
+        "subject": "technique",
+        "predicate": "stands",
+        "object": "contrast"
+      },
+      {
+        "subject": "technique",
+        "predicate": "stands",
+        "object": "traditional"
+      },
+      {
+        "subject": "technique",
+        "predicate": "stands",
+        "object": "transfer"
+      },
+      {
+        "subject": "technique",
+        "predicate": "stands",
+        "object": "learning"
+      },
+      {
+        "subject": "technique",
+        "predicate": "stands",
+        "object": "pre"
+      },
+      {
+        "subject": "technique",
+        "predicate": "stands",
+        "object": "trained"
+      },
+      {
+        "subject": "technique",
+        "predicate": "stands",
+        "object": "model"
+      },
+      {
+        "subject": "technique",
+        "predicate": "stands",
+        "object": "fine"
+      },
+      {
+        "subject": "technique",
+        "predicate": "stands",
+        "object": "tuned"
+      },
+      {
+        "subject": "technique",
+        "predicate": "stands",
+        "object": "new"
+      },
+      {
+        "subject": "technique",
+        "predicate": "stands",
+        "object": "task"
+      }
+    ]
+  },
+  {
+    "tokens": [
+      "humans",
+      "possess",
+      "an",
+      "extraordinary",
+      "ability",
+      "to",
+      "create",
+      "and",
+      "utilize",
+      "tools",
+      ",",
+      "allowing",
+      "them",
+      "to",
+      "overcome",
+      "physical",
+      "limitations",
+      "and",
+      "explore",
+      "new",
+      "frontiers",
+      "."
+    ],
+    "predicted_labels": [
+      "B-SUBJ",
+      "B-PRED",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "O",
+      "B-OBJ",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O"
+    ],
+    "predicted_entities": {
+      "SUBJ": [
+        "humans"
+      ],
+      "PRED": [
+        "possess"
+      ],
+      "OBJ": [
+        "extraordinary",
+        "ability",
+        "create",
+        "utilize",
+        "tools"
+      ]
+    },
+    "ground_truth": [
+      {
+        "subject": "humans",
+        "predicate": "possess",
+        "object": "extraordinary"
+      },
+      {
+        "subject": "humans",
+        "predicate": "possess",
+        "object": "ability"
+      },
+      {
+        "subject": "humans",
+        "predicate": "possess",
+        "object": "create"
+      },
+      {
+        "subject": "humans",
+        "predicate": "possess",
+        "object": "utilize"
+      },
+      {
+        "subject": "humans",
+        "predicate": "possess",
+        "object": "tools"
+      }
+    ]
+  },
+  {
+    "tokens": [
+      "future",
+      "work",
+      "may",
+      "also",
+      "investigate",
+      "the",
+      "effects",
+      "of",
+      "overlap",
+      "and",
+      "any",
+      "required",
+      "guarantees",
+      "of",
+      "domain",
+      "di",
+      "##s",
+      "##jun",
+      "##ction",
+      "."
+    ],
+    "predicted_labels": [
+      "B-SUBJ",
+      "I-SUBJ",
+      "O",
+      "O",
+      "B-PRED",
+      "O",
+      "B-OBJ",
+      "O",
+      "B-OBJ",
+      "O",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "O"
+    ],
+    "predicted_entities": {
+      "SUBJ": [
+        "future",
+        "work"
+      ],
+      "PRED": [
+        "investigate"
+      ],
+      "OBJ": [
+        "effects",
+        "overlap",
+        "required",
+        "guarantees",
+        "domain",
+        "di ##s ##jun ##ction"
+      ]
+    },
+    "ground_truth": [
+      {
+        "subject": "future",
+        "predicate": "investigate",
+        "object": "effects"
+      },
+      {
+        "subject": "future",
+        "predicate": "investigate",
+        "object": "overlap"
+      },
+      {
+        "subject": "future",
+        "predicate": "investigate",
+        "object": "required"
+      },
+      {
+        "subject": "future",
+        "predicate": "investigate",
+        "object": "guarantees"
+      },
+      {
+        "subject": "future",
+        "predicate": "investigate",
+        "object": "domain"
+      },
+      {
+        "subject": "future",
+        "predicate": "investigate",
+        "object": "disjunction"
+      },
+      {
+        "subject": "work",
+        "predicate": "investigate",
+        "object": "effects"
+      },
+      {
+        "subject": "work",
+        "predicate": "investigate",
+        "object": "overlap"
+      },
+      {
+        "subject": "work",
+        "predicate": "investigate",
+        "object": "required"
+      },
+      {
+        "subject": "work",
+        "predicate": "investigate",
+        "object": "guarantees"
+      },
+      {
+        "subject": "work",
+        "predicate": "investigate",
+        "object": "domain"
+      },
+      {
+        "subject": "work",
+        "predicate": "investigate",
+        "object": "disjunction"
+      }
+    ]
+  },
+  {
+    "tokens": [
+      "when",
+      "adapted",
+      "to",
+      "ll",
+      "##ms",
+      ",",
+      "r",
+      "##l",
+      "##h",
+      "##f",
+      "further",
+      "relies",
+      "on",
+      "a",
+      "strong",
+      "sf",
+      "##t",
+      "model",
+      "as",
+      "initial",
+      "model",
+      "checkpoint",
+      "for",
+      "efficiently",
+      "achieving",
+      "good",
+      "performance",
+      "."
+    ],
+    "predicted_labels": [
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "B-SUBJ",
+      "I-SUBJ",
+      "I-SUBJ",
+      "I-SUBJ",
+      "O",
+      "B-PRED",
+      "O",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O"
+    ],
+    "predicted_entities": {
+      "SUBJ": [
+        "r ##l ##h ##f"
+      ],
+      "PRED": [
+        "relies"
+      ],
+      "OBJ": [
+        "strong",
+        "sf ##t",
+        "model",
+        "initial",
+        "model",
+        "checkpoint"
+      ]
+    },
+    "ground_truth": [
+      {
+        "subject": "rl",
+        "predicate": "relies",
+        "object": "initial"
+      },
+      {
+        "subject": "rl",
+        "predicate": "relies",
+        "object": "model"
+      },
+      {
+        "subject": "rl",
+        "predicate": "relies",
+        "object": "checkpoint"
+      },
+      {
+        "subject": "hf",
+        "predicate": "relies",
+        "object": "initial"
+      },
+      {
+        "subject": "hf",
+        "predicate": "relies",
+        "object": "model"
+      },
+      {
+        "subject": "hf",
+        "predicate": "relies",
+        "object": "checkpoint"
+      }
+    ]
+  },
+  {
+    "tokens": [
+      "using",
+      "more",
+      "than",
+      "20",
+      "retrieved",
+      "documents",
+      "only",
+      "marginal",
+      "##ly",
+      "improves",
+      "reader",
+      "performance",
+      "(",
+      "[UNK]",
+      "1",
+      ".",
+      "5",
+      "%",
+      "for",
+      "gp",
+      "##t",
+      "-",
+      "3",
+      ".",
+      "5",
+      "##tur",
+      "##bo",
+      "and",
+      "[UNK]",
+      "1",
+      "%",
+      "for",
+      "claude",
+      "-",
+      "1",
+      ".",
+      "3",
+      ")",
+      ",",
+      "while",
+      "significantly",
+      "increasing",
+      "the",
+      "input",
+      "context",
+      "length",
+      "(",
+      "and",
+      "thus",
+      "late",
+      "##ncy",
+      "and",
+      "cost",
+      ")",
+      "."
+    ],
+    "predicted_labels": [
+      "B-SUBJ",
+      "O",
+      "O",
+      "B-SUBJ",
+      "I-SUBJ",
+      "I-SUBJ",
+      "O",
+      "O",
+      "O",
+      "B-PRED",
+      "B-OBJ",
+      "I-OBJ",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "O",
+      "B-OBJ",
+      "O",
+      "O",
+      "B-OBJ",
+      "O",
+      "O",
+      "B-OBJ",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "B-OBJ",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O"
+    ],
+    "predicted_entities": {
+      "SUBJ": [
+        "using",
+        "20",
+        "retrieved",
+        "documents"
+      ],
+      "PRED": [
+        "improves"
+      ],
+      "OBJ": [
+        "reader",
+        "performance",
+        "[UNK]",
+        "1",
+        "5",
+        "gp",
+        "3",
+        "[UNK]"
+      ]
+    },
+    "ground_truth": [
+      {
+        "subject": "using",
+        "predicate": "improves",
+        "object": "reader"
+      },
+      {
+        "subject": "using",
+        "predicate": "improves",
+        "object": "performance"
+      },
+      {
+        "subject": "using",
+        "predicate": "improves",
+        "object": "1"
+      },
+      {
+        "subject": "using",
+        "predicate": "improves",
+        "object": "5"
+      },
+      {
+        "subject": "using",
+        "predicate": "improves",
+        "object": "gp"
+      },
+      {
+        "subject": "using",
+        "predicate": "improves",
+        "object": "3"
+      },
+      {
+        "subject": "using",
+        "predicate": "improves",
+        "object": "turbo"
+      },
+      {
+        "subject": "using",
+        "predicate": "improves",
+        "object": "claude"
+      },
+      {
+        "subject": "20",
+        "predicate": "improves",
+        "object": "reader"
+      },
+      {
+        "subject": "20",
+        "predicate": "improves",
+        "object": "performance"
+      },
+      {
+        "subject": "20",
+        "predicate": "improves",
+        "object": "1"
+      },
+      {
+        "subject": "20",
+        "predicate": "improves",
+        "object": "5"
+      },
+      {
+        "subject": "20",
+        "predicate": "improves",
+        "object": "gp"
+      },
+      {
+        "subject": "20",
+        "predicate": "improves",
+        "object": "3"
+      },
+      {
+        "subject": "20",
+        "predicate": "improves",
+        "object": "turbo"
+      },
+      {
+        "subject": "20",
+        "predicate": "improves",
+        "object": "claude"
+      },
+      {
+        "subject": "retrieved",
+        "predicate": "improves",
+        "object": "reader"
+      },
+      {
+        "subject": "retrieved",
+        "predicate": "improves",
+        "object": "performance"
+      },
+      {
+        "subject": "retrieved",
+        "predicate": "improves",
+        "object": "1"
+      },
+      {
+        "subject": "retrieved",
+        "predicate": "improves",
+        "object": "5"
+      },
+      {
+        "subject": "retrieved",
+        "predicate": "improves",
+        "object": "gp"
+      },
+      {
+        "subject": "retrieved",
+        "predicate": "improves",
+        "object": "3"
+      },
+      {
+        "subject": "retrieved",
+        "predicate": "improves",
+        "object": "turbo"
+      },
+      {
+        "subject": "retrieved",
+        "predicate": "improves",
+        "object": "claude"
+      },
+      {
+        "subject": "documents",
+        "predicate": "improves",
+        "object": "reader"
+      },
+      {
+        "subject": "documents",
+        "predicate": "improves",
+        "object": "performance"
+      },
+      {
+        "subject": "documents",
+        "predicate": "improves",
+        "object": "1"
+      },
+      {
+        "subject": "documents",
+        "predicate": "improves",
+        "object": "5"
+      },
+      {
+        "subject": "documents",
+        "predicate": "improves",
+        "object": "gp"
+      },
+      {
+        "subject": "documents",
+        "predicate": "improves",
+        "object": "3"
+      },
+      {
+        "subject": "documents",
+        "predicate": "improves",
+        "object": "turbo"
+      },
+      {
+        "subject": "documents",
+        "predicate": "improves",
+        "object": "claude"
+      }
+    ]
+  },
+  {
+    "tokens": [
+      "throughout",
+      "all",
+      "training",
+      "processes",
+      ",",
+      "the",
+      "vision",
+      "en",
+      "##code",
+      "##r",
+      "remains",
+      "frozen",
+      "to",
+      "ensure",
+      "stable",
+      "and",
+      "efficient",
+      "training",
+      "."
+    ],
+    "predicted_labels": [
+      "O",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "O",
+      "O",
+      "B-SUBJ",
+      "I-SUBJ",
+      "I-SUBJ",
+      "I-SUBJ",
+      "B-PRED",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "B-OBJ",
+      "O"
+    ],
+    "predicted_entities": {
+      "SUBJ": [
+        "vision",
+        "en ##code ##r"
+      ],
+      "PRED": [
+        "remains"
+      ],
+      "OBJ": [
+        "training",
+        "processes",
+        "training"
+      ]
+    },
+    "ground_truth": [
+      {
+        "subject": "vision",
+        "predicate": "remains",
+        "object": "training"
+      },
+      {
+        "subject": "vision",
+        "predicate": "remains",
+        "object": "processes"
+      },
+      {
+        "subject": "encoder",
+        "predicate": "remains",
+        "object": "training"
+      },
+      {
+        "subject": "encoder",
+        "predicate": "remains",
+        "object": "processes"
+      }
+    ]
+  },
+  {
+    "tokens": [
+      "qui",
+      "##p",
+      "#",
+      "(",
+      "e",
+      "##gia",
+      "##zar",
+      "##ian",
+      "et",
+      "al",
+      ".",
+      ",",
+      "202",
+      "##4",
+      "##b",
+      ")",
+      "uses",
+      "vector",
+      "quan",
+      "##ti",
+      "##zation",
+      "to",
+      "exploit",
+      "the",
+      "spherical",
+      "sub",
+      "-",
+      "ga",
+      "##uss",
+      "##ian",
+      "distribution",
+      "inherent",
+      "in",
+      "inc",
+      "##oh",
+      "##ere",
+      "##nt",
+      "weights",
+      "by",
+      "introducing",
+      "a",
+      "hardware",
+      "-",
+      "efficient",
+      "code",
+      "##book",
+      "based",
+      "on",
+      "the",
+      "highly",
+      "symmetrical",
+      "e",
+      "##8",
+      "lattice",
+      "."
+    ],
+    "predicted_labels": [
+      "B-SUBJ",
+      "I-SUBJ",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "I-SUBJ",
+      "O",
+      "O",
+      "B-PRED",
+      "B-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O"
+    ],
+    "predicted_entities": {
+      "SUBJ": [
+        "qui ##p",
+        "##4"
+      ],
+      "PRED": [
+        "uses"
+      ],
+      "OBJ": [
+        "vector",
+        "quan ##ti ##zation"
+      ]
+    },
+    "ground_truth": [
+      {
+        "subject": "quip",
+        "predicate": "uses",
+        "object": "vector"
+      },
+      {
+        "subject": "quip",
+        "predicate": "uses",
+        "object": "quantization"
+      }
+    ]
+  },
+  {
+    "tokens": [
+      "meta",
+      "##ma",
+      "##ze",
+      "navigation",
+      "(",
+      "mic",
+      "##oni",
+      "et",
+      "al",
+      ".",
+      ",",
+      "2020",
+      ")",
+      "the",
+      "meta",
+      "##ma",
+      "##ze",
+      "navigation",
+      "task",
+      "simulate",
+      "##s",
+      "a",
+      "grid",
+      "-",
+      "world",
+      "environment",
+      "where",
+      "agents",
+      "must",
+      "navigate",
+      "using",
+      "local",
+      "observations",
+      "and",
+      "reach",
+      "the",
+      "goal",
+      "location",
+      "."
+    ],
+    "predicted_labels": [
+      "B-SUBJ",
+      "I-SUBJ",
+      "I-SUBJ",
+      "I-SUBJ",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "B-SUBJ",
+      "I-SUBJ",
+      "I-SUBJ",
+      "I-SUBJ",
+      "I-SUBJ",
+      "B-PRED",
+      "I-PRED",
+      "O",
+      "B-OBJ",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "O",
+      "B-OBJ",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "O",
+      "B-OBJ",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "O"
+    ],
+    "predicted_entities": {
+      "SUBJ": [
+        "meta ##ma ##ze",
+        "navigation",
+        "meta ##ma ##ze",
+        "navigation",
+        "task"
+      ],
+      "PRED": [
+        "simulate ##s"
+      ],
+      "OBJ": [
+        "grid",
+        "world",
+        "environment",
+        "agents",
+        "navigate",
+        "using",
+        "local",
+        "observations",
+        "reach",
+        "goal",
+        "location"
+      ]
+    },
+    "ground_truth": [
+      {
+        "subject": "met",
+        "predicate": "simulates",
+        "object": "grid"
+      },
+      {
+        "subject": "met",
+        "predicate": "simulates",
+        "object": "world"
+      },
+      {
+        "subject": "met",
+        "predicate": "simulates",
+        "object": "environment"
+      },
+      {
+        "subject": "met",
+        "predicate": "simulates",
+        "object": "agents"
+      },
+      {
+        "subject": "met",
+        "predicate": "simulates",
+        "object": "navigate"
+      },
+      {
+        "subject": "met",
+        "predicate": "simulates",
+        "object": "using"
+      },
+      {
+        "subject": "met",
+        "predicate": "simulates",
+        "object": "local"
+      },
+      {
+        "subject": "met",
+        "predicate": "simulates",
+        "object": "observations"
+      },
+      {
+        "subject": "met",
+        "predicate": "simulates",
+        "object": "reach"
+      },
+      {
+        "subject": "met",
+        "predicate": "simulates",
+        "object": "goal"
+      },
+      {
+        "subject": "met",
+        "predicate": "simulates",
+        "object": "location"
+      },
+      {
+        "subject": "amaze",
+        "predicate": "simulates",
+        "object": "grid"
+      },
+      {
+        "subject": "amaze",
+        "predicate": "simulates",
+        "object": "world"
+      },
+      {
+        "subject": "amaze",
+        "predicate": "simulates",
+        "object": "environment"
+      },
+      {
+        "subject": "amaze",
+        "predicate": "simulates",
+        "object": "agents"
+      },
+      {
+        "subject": "amaze",
+        "predicate": "simulates",
+        "object": "navigate"
+      },
+      {
+        "subject": "amaze",
+        "predicate": "simulates",
+        "object": "using"
+      },
+      {
+        "subject": "amaze",
+        "predicate": "simulates",
+        "object": "local"
+      },
+      {
+        "subject": "amaze",
+        "predicate": "simulates",
+        "object": "observations"
+      },
+      {
+        "subject": "amaze",
+        "predicate": "simulates",
+        "object": "reach"
+      },
+      {
+        "subject": "amaze",
+        "predicate": "simulates",
+        "object": "goal"
+      },
+      {
+        "subject": "amaze",
+        "predicate": "simulates",
+        "object": "location"
+      },
+      {
+        "subject": "navigation",
+        "predicate": "simulates",
+        "object": "grid"
+      },
+      {
+        "subject": "navigation",
+        "predicate": "simulates",
+        "object": "world"
+      },
+      {
+        "subject": "navigation",
+        "predicate": "simulates",
+        "object": "environment"
+      },
+      {
+        "subject": "navigation",
+        "predicate": "simulates",
+        "object": "agents"
+      },
+      {
+        "subject": "navigation",
+        "predicate": "simulates",
+        "object": "navigate"
+      },
+      {
+        "subject": "navigation",
+        "predicate": "simulates",
+        "object": "using"
+      },
+      {
+        "subject": "navigation",
+        "predicate": "simulates",
+        "object": "local"
+      },
+      {
+        "subject": "navigation",
+        "predicate": "simulates",
+        "object": "observations"
+      },
+      {
+        "subject": "navigation",
+        "predicate": "simulates",
+        "object": "reach"
+      },
+      {
+        "subject": "navigation",
+        "predicate": "simulates",
+        "object": "goal"
+      },
+      {
+        "subject": "navigation",
+        "predicate": "simulates",
+        "object": "location"
+      },
+      {
+        "subject": "task",
+        "predicate": "simulates",
+        "object": "grid"
+      },
+      {
+        "subject": "task",
+        "predicate": "simulates",
+        "object": "world"
+      },
+      {
+        "subject": "task",
+        "predicate": "simulates",
+        "object": "environment"
+      },
+      {
+        "subject": "task",
+        "predicate": "simulates",
+        "object": "agents"
+      },
+      {
+        "subject": "task",
+        "predicate": "simulates",
+        "object": "navigate"
+      },
+      {
+        "subject": "task",
+        "predicate": "simulates",
+        "object": "using"
+      },
+      {
+        "subject": "task",
+        "predicate": "simulates",
+        "object": "local"
+      },
+      {
+        "subject": "task",
+        "predicate": "simulates",
+        "object": "observations"
+      },
+      {
+        "subject": "task",
+        "predicate": "simulates",
+        "object": "reach"
+      },
+      {
+        "subject": "task",
+        "predicate": "simulates",
+        "object": "goal"
+      },
+      {
+        "subject": "task",
+        "predicate": "simulates",
+        "object": "location"
+      }
+    ]
+  },
+  {
+    "tokens": [
+      "with",
+      "the",
+      "unified",
+      "late",
+      "##nt",
+      "structural",
+      "diffusion",
+      "model",
+      ",",
+      "spatial",
+      "##ly",
+      "-",
+      "aligned",
+      "conditions",
+      "of",
+      "depth",
+      "and",
+      "surface",
+      "-",
+      "normal",
+      "can",
+      "be",
+      "predicted",
+      "."
+    ],
+    "predicted_labels": [
+      "O",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "O",
+      "B-SUBJ",
+      "O",
+      "O",
+      "B-SUBJ",
+      "I-SUBJ",
+      "O",
+      "B-SUBJ",
+      "O",
+      "B-SUBJ",
+      "O",
+      "B-SUBJ",
+      "O",
+      "O",
+      "B-PRED",
+      "O"
+    ],
+    "predicted_entities": {
+      "SUBJ": [
+        "spatial",
+        "aligned",
+        "conditions",
+        "depth",
+        "surface",
+        "normal"
+      ],
+      "PRED": [
+        "predicted"
+      ],
+      "OBJ": [
+        "unified",
+        "late ##nt",
+        "structural",
+        "diffusion",
+        "model"
+      ]
+    },
+    "ground_truth": [
+      {
+        "subject": "aligned",
+        "predicate": "predicted",
+        "object": "unified"
+      },
+      {
+        "subject": "aligned",
+        "predicate": "predicted",
+        "object": "latent"
+      },
+      {
+        "subject": "aligned",
+        "predicate": "predicted",
+        "object": "structural"
+      },
+      {
+        "subject": "aligned",
+        "predicate": "predicted",
+        "object": "diffusion"
+      },
+      {
+        "subject": "aligned",
+        "predicate": "predicted",
+        "object": "model"
+      },
+      {
+        "subject": "conditions",
+        "predicate": "predicted",
+        "object": "unified"
+      },
+      {
+        "subject": "conditions",
+        "predicate": "predicted",
+        "object": "latent"
+      },
+      {
+        "subject": "conditions",
+        "predicate": "predicted",
+        "object": "structural"
+      },
+      {
+        "subject": "conditions",
+        "predicate": "predicted",
+        "object": "diffusion"
+      },
+      {
+        "subject": "conditions",
+        "predicate": "predicted",
+        "object": "model"
+      },
+      {
+        "subject": "depth",
+        "predicate": "predicted",
+        "object": "unified"
+      },
+      {
+        "subject": "depth",
+        "predicate": "predicted",
+        "object": "latent"
+      },
+      {
+        "subject": "depth",
+        "predicate": "predicted",
+        "object": "structural"
+      },
+      {
+        "subject": "depth",
+        "predicate": "predicted",
+        "object": "diffusion"
+      },
+      {
+        "subject": "depth",
+        "predicate": "predicted",
+        "object": "model"
+      },
+      {
+        "subject": "surface",
+        "predicate": "predicted",
+        "object": "unified"
+      },
+      {
+        "subject": "surface",
+        "predicate": "predicted",
+        "object": "latent"
+      },
+      {
+        "subject": "surface",
+        "predicate": "predicted",
+        "object": "structural"
+      },
+      {
+        "subject": "surface",
+        "predicate": "predicted",
+        "object": "diffusion"
+      },
+      {
+        "subject": "surface",
+        "predicate": "predicted",
+        "object": "model"
+      },
+      {
+        "subject": "normal",
+        "predicate": "predicted",
+        "object": "unified"
+      },
+      {
+        "subject": "normal",
+        "predicate": "predicted",
+        "object": "latent"
+      },
+      {
+        "subject": "normal",
+        "predicate": "predicted",
+        "object": "structural"
+      },
+      {
+        "subject": "normal",
+        "predicate": "predicted",
+        "object": "diffusion"
+      },
+      {
+        "subject": "normal",
+        "predicate": "predicted",
+        "object": "model"
+      }
+    ]
+  },
+  {
+    "tokens": [
+      "to",
+      "ref",
+      "##act",
+      "##or",
+      "a",
+      "set",
+      "of",
+      "program",
+      "solutions",
+      ",",
+      "lil",
+      "##o",
+      "integrate",
+      "##s",
+      "a",
+      "compression",
+      "algorithm",
+      "called",
+      "stitch",
+      "(",
+      "b",
+      ";",
+      "bow",
+      "##ers",
+      "et",
+      "al",
+      ".",
+      ",",
+      "202",
+      "##3",
+      ")",
+      "with",
+      "ll",
+      "##m",
+      "-",
+      "generated",
+      "auto",
+      "-",
+      "documentation",
+      "(",
+      "c",
+      ")",
+      "to",
+      "produce",
+      "an",
+      "interpret",
+      "##able",
+      "library",
+      "of",
+      "\u03bb",
+      "-",
+      "abstraction",
+      "##s",
+      "."
+    ],
+    "predicted_labels": [
+      "O",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "B-SUBJ",
+      "I-SUBJ",
+      "B-PRED",
+      "I-PRED",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "I-OBJ",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "O",
+      "B-OBJ",
+      "O",
+      "B-OBJ",
+      "O",
+      "O",
+      "B-OBJ",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O"
+    ],
+    "predicted_entities": {
+      "SUBJ": [
+        "lil ##o"
+      ],
+      "PRED": [
+        "integrate ##s"
+      ],
+      "OBJ": [
+        "##act ##or",
+        "compression",
+        "algorithm",
+        "called",
+        "stitch",
+        "##3",
+        "generated",
+        "auto",
+        "documentation",
+        "c",
+        "produce"
+      ]
+    },
+    "ground_truth": [
+      {
+        "subject": "lilo",
+        "predicate": "integrates",
+        "object": "generated"
+      },
+      {
+        "subject": "lilo",
+        "predicate": "integrates",
+        "object": "auto"
+      },
+      {
+        "subject": "lilo",
+        "predicate": "integrates",
+        "object": "documentation"
+      },
+      {
+        "subject": "lilo",
+        "predicate": "integrates",
+        "object": "c"
+      }
+    ]
+  },
+  {
+    "tokens": [
+      "transform",
+      "##er",
+      "-",
+      "v",
+      "##q",
+      "(",
+      "ling",
+      "##le",
+      ",",
+      "202",
+      "##3",
+      ")",
+      "applies",
+      "vector",
+      "quan",
+      "##ti",
+      "##zation",
+      "(",
+      "v",
+      "##q",
+      ")",
+      "to",
+      "the",
+      "key",
+      "vector",
+      "sequence",
+      "of",
+      "attention",
+      ",",
+      "reducing",
+      "the",
+      "complexity",
+      "of",
+      "attention",
+      "to",
+      "linear",
+      "."
+    ],
+    "predicted_labels": [
+      "B-SUBJ",
+      "I-SUBJ",
+      "O",
+      "B-SUBJ",
+      "I-SUBJ",
+      "O",
+      "B-SUBJ",
+      "I-SUBJ",
+      "O",
+      "B-SUBJ",
+      "I-SUBJ",
+      "O",
+      "B-PRED",
+      "B-SUBJ",
+      "I-SUBJ",
+      "I-SUBJ",
+      "I-SUBJ",
+      "O",
+      "B-SUBJ",
+      "I-SUBJ",
+      "O",
+      "O",
+      "O",
+      "B-OBJ",
+      "B-SUBJ",
+      "I-SUBJ",
+      "O",
+      "B-OBJ",
+      "O",
+      "B-SUBJ",
+      "O",
+      "B-SUBJ",
+      "O",
+      "B-OBJ",
+      "O",
+      "B-SUBJ",
+      "O"
+    ],
+    "predicted_entities": {
+      "SUBJ": [
+        "transform ##er",
+        "v",
+        "##q",
+        "ling",
+        "##le",
+        "202 ##3",
+        "vector",
+        "quan ##ti ##zation",
+        "v",
+        "##q",
+        "vector",
+        "sequence",
+        "reducing",
+        "complexity",
+        "linear"
+      ],
+      "PRED": [
+        "applies"
+      ],
+      "OBJ": [
+        "key",
+        "attention",
+        "attention"
+      ]
+    },
+    "ground_truth": [
+      {
+        "subject": "transformer",
+        "predicate": "applies",
+        "object": "key"
+      },
+      {
+        "subject": "transformer",
+        "predicate": "applies",
+        "object": "vector"
+      },
+      {
+        "subject": "transformer",
+        "predicate": "applies",
+        "object": "sequence"
+      },
+      {
+        "subject": "transformer",
+        "predicate": "applies",
+        "object": "attention"
+      },
+      {
+        "subject": "v",
+        "predicate": "applies",
+        "object": "key"
+      },
+      {
+        "subject": "v",
+        "predicate": "applies",
+        "object": "vector"
+      },
+      {
+        "subject": "v",
+        "predicate": "applies",
+        "object": "sequence"
+      },
+      {
+        "subject": "v",
+        "predicate": "applies",
+        "object": "attention"
+      },
+      {
+        "subject": "q",
+        "predicate": "applies",
+        "object": "key"
+      },
+      {
+        "subject": "q",
+        "predicate": "applies",
+        "object": "vector"
+      },
+      {
+        "subject": "q",
+        "predicate": "applies",
+        "object": "sequence"
+      },
+      {
+        "subject": "q",
+        "predicate": "applies",
+        "object": "attention"
+      },
+      {
+        "subject": "ling",
+        "predicate": "applies",
+        "object": "key"
+      },
+      {
+        "subject": "ling",
+        "predicate": "applies",
+        "object": "vector"
+      },
+      {
+        "subject": "ling",
+        "predicate": "applies",
+        "object": "sequence"
+      },
+      {
+        "subject": "ling",
+        "predicate": "applies",
+        "object": "attention"
+      },
+      {
+        "subject": "le",
+        "predicate": "applies",
+        "object": "key"
+      },
+      {
+        "subject": "le",
+        "predicate": "applies",
+        "object": "vector"
+      },
+      {
+        "subject": "le",
+        "predicate": "applies",
+        "object": "sequence"
+      },
+      {
+        "subject": "le",
+        "predicate": "applies",
+        "object": "attention"
+      },
+      {
+        "subject": "2023",
+        "predicate": "applies",
+        "object": "key"
+      },
+      {
+        "subject": "2023",
+        "predicate": "applies",
+        "object": "vector"
+      },
+      {
+        "subject": "2023",
+        "predicate": "applies",
+        "object": "sequence"
+      },
+      {
+        "subject": "2023",
+        "predicate": "applies",
+        "object": "attention"
+      }
+    ]
+  },
+  {
+    "tokens": [
+      "large",
+      "language",
+      "models",
+      "have",
+      "shown",
+      "remarkable",
+      "apt",
+      "##itude",
+      "in",
+      "code",
+      "generation",
+      ",",
+      "but",
+      "still",
+      "struggle",
+      "to",
+      "perform",
+      "complex",
+      "tasks",
+      "."
+    ],
+    "predicted_labels": [
+      "B-SUBJ",
+      "I-SUBJ",
+      "I-SUBJ",
+      "O",
+      "B-PRED",
+      "B-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O"
+    ],
+    "predicted_entities": {
+      "SUBJ": [
+        "large",
+        "language",
+        "models"
+      ],
+      "PRED": [
+        "shown"
+      ],
+      "OBJ": [
+        "remarkable",
+        "apt ##itude",
+        "code",
+        "generation"
+      ]
+    },
+    "ground_truth": [
+      {
+        "subject": "large",
+        "predicate": "shown",
+        "object": "remarkable"
+      },
+      {
+        "subject": "large",
+        "predicate": "shown",
+        "object": "aptitude"
+      },
+      {
+        "subject": "large",
+        "predicate": "shown",
+        "object": "code"
+      },
+      {
+        "subject": "large",
+        "predicate": "shown",
+        "object": "generation"
+      },
+      {
+        "subject": "language",
+        "predicate": "shown",
+        "object": "remarkable"
+      },
+      {
+        "subject": "language",
+        "predicate": "shown",
+        "object": "aptitude"
+      },
+      {
+        "subject": "language",
+        "predicate": "shown",
+        "object": "code"
+      },
+      {
+        "subject": "language",
+        "predicate": "shown",
+        "object": "generation"
+      },
+      {
+        "subject": "models",
+        "predicate": "shown",
+        "object": "remarkable"
+      },
+      {
+        "subject": "models",
+        "predicate": "shown",
+        "object": "aptitude"
+      },
+      {
+        "subject": "models",
+        "predicate": "shown",
+        "object": "code"
+      },
+      {
+        "subject": "models",
+        "predicate": "shown",
+        "object": "generation"
+      }
+    ]
+  },
+  {
+    "tokens": [
+      "second",
+      ",",
+      "system",
+      "-",
+      "level",
+      "security",
+      "measures",
+      "such",
+      "as",
+      "monitoring",
+      "and",
+      "access",
+      "control",
+      "can",
+      "mit",
+      "##igate",
+      "harm",
+      "even",
+      "if",
+      "the",
+      "model",
+      "is",
+      "mis",
+      "##ali",
+      "##gned",
+      "."
+    ],
+    "predicted_labels": [
+      "O",
+      "O",
+      "B-SUBJ",
+      "O",
+      "B-SUBJ",
+      "I-SUBJ",
+      "I-SUBJ",
+      "O",
+      "O",
+      "B-SUBJ",
+      "O",
+      "B-SUBJ",
+      "I-SUBJ",
+      "O",
+      "B-PRED",
+      "I-PRED",
+      "B-OBJ",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O"
+    ],
+    "predicted_entities": {
+      "SUBJ": [
+        "system",
+        "level",
+        "security",
+        "measures",
+        "monitoring",
+        "access",
+        "control"
+      ],
+      "PRED": [
+        "mit ##igate"
+      ],
+      "OBJ": [
+        "harm"
+      ]
+    },
+    "ground_truth": [
+      {
+        "subject": "system",
+        "predicate": "mitigate",
+        "object": "harm"
+      },
+      {
+        "subject": "level",
+        "predicate": "mitigate",
+        "object": "harm"
+      },
+      {
+        "subject": "security",
+        "predicate": "mitigate",
+        "object": "harm"
+      },
+      {
+        "subject": "measures",
+        "predicate": "mitigate",
+        "object": "harm"
+      },
+      {
+        "subject": "monitoring",
+        "predicate": "mitigate",
+        "object": "harm"
+      },
+      {
+        "subject": "access",
+        "predicate": "mitigate",
+        "object": "harm"
+      },
+      {
+        "subject": "control",
+        "predicate": "mitigate",
+        "object": "harm"
+      }
+    ]
+  },
+  {
+    "tokens": [
+      "if",
+      "a",
+      "request",
+      "is",
+      "chunk",
+      "##ed",
+      "and",
+      "the",
+      "processing",
+      "of",
+      "each",
+      "chunk",
+      "is",
+      "inline",
+      "##d",
+      "with",
+      "other",
+      "deco",
+      "##ding",
+      "requests",
+      "in",
+      "chunk",
+      "##ed",
+      "pre",
+      "##fi",
+      "##ll",
+      ",",
+      "t",
+      "will",
+      "increase",
+      ",",
+      "leading",
+      "to",
+      "a",
+      "larger",
+      "occupation",
+      "cost",
+      "."
+    ],
+    "predicted_labels": [
+      "O",
+      "O",
+      "O",
+      "O",
+      "B-SUBJ",
+      "B-OBJ",
+      "O",
+      "O",
+      "B-SUBJ",
+      "O",
+      "O",
+      "B-SUBJ",
+      "O",
+      "B-PRED",
+      "I-PRED",
+      "O",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "O",
+      "B-SUBJ",
+      "B-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O"
+    ],
+    "predicted_entities": {
+      "SUBJ": [
+        "chunk",
+        "processing",
+        "chunk",
+        "chunk"
+      ],
+      "PRED": [
+        "inline ##d"
+      ],
+      "OBJ": [
+        "##ed",
+        "deco ##ding",
+        "requests",
+        "##ed",
+        "pre",
+        "##fi ##ll"
+      ]
+    },
+    "ground_truth": [
+      {
+        "subject": "processing",
+        "predicate": "lined",
+        "object": "decoding"
+      },
+      {
+        "subject": "processing",
+        "predicate": "lined",
+        "object": "requests"
+      },
+      {
+        "subject": "processing",
+        "predicate": "lined",
+        "object": "chunk"
+      },
+      {
+        "subject": "processing",
+        "predicate": "lined",
+        "object": "ed"
+      },
+      {
+        "subject": "processing",
+        "predicate": "lined",
+        "object": "pre"
+      },
+      {
+        "subject": "processing",
+        "predicate": "lined",
+        "object": "fill"
+      },
+      {
+        "subject": "chunk",
+        "predicate": "lined",
+        "object": "decoding"
+      },
+      {
+        "subject": "chunk",
+        "predicate": "lined",
+        "object": "requests"
+      },
+      {
+        "subject": "chunk",
+        "predicate": "lined",
+        "object": "ed"
+      },
+      {
+        "subject": "chunk",
+        "predicate": "lined",
+        "object": "pre"
+      },
+      {
+        "subject": "chunk",
+        "predicate": "lined",
+        "object": "fill"
+      }
+    ]
+  },
+  {
+    "tokens": [
+      "collecting",
+      "script",
+      "knowledge",
+      "requires",
+      "either",
+      "human",
+      "ann",
+      "##ota",
+      "##tion",
+      "(",
+      "wan",
+      "##zar",
+      "##e",
+      "et",
+      "al",
+      ".",
+      ",",
+      "2016",
+      ")",
+      ",",
+      "un",
+      "##su",
+      "##per",
+      "##vis",
+      "##ed",
+      "feature",
+      "-",
+      "based",
+      "extraction",
+      "(",
+      "chambers",
+      "&",
+      "amp",
+      ";",
+      "ju",
+      "##raf",
+      "##sky",
+      ",",
+      "2008",
+      ")",
+      ",",
+      "or",
+      ",",
+      "more",
+      "recently",
+      ",",
+      "methods",
+      "that",
+      "utilize",
+      "task",
+      "-",
+      "specific",
+      "fine",
+      "-",
+      "tuned",
+      "ll",
+      "##ms",
+      "(",
+      "sa",
+      "##ka",
+      "##guchi",
+      "et",
+      "al",
+      ".",
+      ",",
+      "2021",
+      ")",
+      "and",
+      "pipeline",
+      "-",
+      "based",
+      "approaches",
+      "(",
+      "san",
+      "##chet",
+      "##i",
+      "&",
+      "amp",
+      ";",
+      "ru",
+      "##ding",
+      "##er",
+      ",",
+      "202",
+      "##2",
+      ")",
+      "."
+    ],
+    "predicted_labels": [
+      "B-SUBJ",
+      "I-SUBJ",
+      "I-SUBJ",
+      "B-PRED",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "O",
+      "O",
+      "B-OBJ",
+      "O",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "O",
+      "B-OBJ",
+      "O",
+      "B-OBJ",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "O",
+      "B-OBJ",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "O",
+      "B-OBJ",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "O",
+      "B-OBJ",
+      "O",
+      "B-OBJ",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "O",
+      "O",
+      "B-OBJ",
+      "O",
+      "O",
+      "B-OBJ",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "O",
+      "B-OBJ",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "O",
+      "O"
+    ],
+    "predicted_entities": {
+      "SUBJ": [
+        "collecting",
+        "script",
+        "knowledge"
+      ],
+      "PRED": [
+        "requires"
+      ],
+      "OBJ": [
+        "human",
+        "ann ##ota ##tion",
+        "wan",
+        "##zar ##e",
+        "et",
+        "al",
+        "2016",
+        "un ##su ##per ##vis ##ed",
+        "feature",
+        "based",
+        "extraction",
+        "chambers",
+        "amp",
+        "ju",
+        "##raf ##sky",
+        "2008",
+        "methods",
+        "utilize",
+        "task",
+        "specific",
+        "fine",
+        "tuned",
+        "##ms",
+        "sa ##ka ##guchi",
+        "et",
+        "al",
+        "2021",
+        "pipeline",
+        "based",
+        "approaches",
+        "san",
+        "##chet ##i",
+        "amp",
+        "ru",
+        "##ding ##er",
+        "202 ##2"
+      ]
+    },
+    "ground_truth": [
+      {
+        "subject": "collecting",
+        "predicate": "requires",
+        "object": "human"
+      },
+      {
+        "subject": "collecting",
+        "predicate": "requires",
+        "object": "annotation"
+      },
+      {
+        "subject": "collecting",
+        "predicate": "requires",
+        "object": "wan"
+      },
+      {
+        "subject": "collecting",
+        "predicate": "requires",
+        "object": "z"
+      },
+      {
+        "subject": "collecting",
+        "predicate": "requires",
+        "object": "et"
+      },
+      {
+        "subject": "collecting",
+        "predicate": "requires",
+        "object": "al"
+      },
+      {
+        "subject": "collecting",
+        "predicate": "requires",
+        "object": "2016"
+      },
+      {
+        "subject": "collecting",
+        "predicate": "requires",
+        "object": "unsupervised"
+      },
+      {
+        "subject": "collecting",
+        "predicate": "requires",
+        "object": "feature"
+      },
+      {
+        "subject": "collecting",
+        "predicate": "requires",
+        "object": "based"
+      },
+      {
+        "subject": "collecting",
+        "predicate": "requires",
+        "object": "extraction"
+      },
+      {
+        "subject": "collecting",
+        "predicate": "requires",
+        "object": "chambers"
+      },
+      {
+        "subject": "collecting",
+        "predicate": "requires",
+        "object": "amp"
+      },
+      {
+        "subject": "collecting",
+        "predicate": "requires",
+        "object": "jura"
+      },
+      {
+        "subject": "collecting",
+        "predicate": "requires",
+        "object": "f"
+      },
+      {
+        "subject": "collecting",
+        "predicate": "requires",
+        "object": "sky"
+      },
+      {
+        "subject": "collecting",
+        "predicate": "requires",
+        "object": "2008"
+      },
+      {
+        "subject": "collecting",
+        "predicate": "requires",
+        "object": "methods"
+      },
+      {
+        "subject": "collecting",
+        "predicate": "requires",
+        "object": "utilize"
+      },
+      {
+        "subject": "collecting",
+        "predicate": "requires",
+        "object": "task"
+      },
+      {
+        "subject": "collecting",
+        "predicate": "requires",
+        "object": "specific"
+      },
+      {
+        "subject": "collecting",
+        "predicate": "requires",
+        "object": "fine"
+      },
+      {
+        "subject": "collecting",
+        "predicate": "requires",
+        "object": "tuned"
+      },
+      {
+        "subject": "collecting",
+        "predicate": "requires",
+        "object": "ms"
+      },
+      {
+        "subject": "collecting",
+        "predicate": "requires",
+        "object": "sakaguchi"
+      },
+      {
+        "subject": "collecting",
+        "predicate": "requires",
+        "object": "2021"
+      },
+      {
+        "subject": "collecting",
+        "predicate": "requires",
+        "object": "pipeline"
+      },
+      {
+        "subject": "collecting",
+        "predicate": "requires",
+        "object": "approaches"
+      },
+      {
+        "subject": "collecting",
+        "predicate": "requires",
+        "object": "san"
+      },
+      {
+        "subject": "collecting",
+        "predicate": "requires",
+        "object": "cheti"
+      },
+      {
+        "subject": "collecting",
+        "predicate": "requires",
+        "object": "ru"
+      },
+      {
+        "subject": "collecting",
+        "predicate": "requires",
+        "object": "dinger"
+      },
+      {
+        "subject": "collecting",
+        "predicate": "requires",
+        "object": "2022"
+      },
+      {
+        "subject": "script",
+        "predicate": "requires",
+        "object": "human"
+      },
+      {
+        "subject": "script",
+        "predicate": "requires",
+        "object": "annotation"
+      },
+      {
+        "subject": "script",
+        "predicate": "requires",
+        "object": "wan"
+      },
+      {
+        "subject": "script",
+        "predicate": "requires",
+        "object": "z"
+      },
+      {
+        "subject": "script",
+        "predicate": "requires",
+        "object": "et"
+      },
+      {
+        "subject": "script",
+        "predicate": "requires",
+        "object": "al"
+      },
+      {
+        "subject": "script",
+        "predicate": "requires",
+        "object": "2016"
+      },
+      {
+        "subject": "script",
+        "predicate": "requires",
+        "object": "unsupervised"
+      },
+      {
+        "subject": "script",
+        "predicate": "requires",
+        "object": "feature"
+      },
+      {
+        "subject": "script",
+        "predicate": "requires",
+        "object": "based"
+      },
+      {
+        "subject": "script",
+        "predicate": "requires",
+        "object": "extraction"
+      },
+      {
+        "subject": "script",
+        "predicate": "requires",
+        "object": "chambers"
+      },
+      {
+        "subject": "script",
+        "predicate": "requires",
+        "object": "amp"
+      },
+      {
+        "subject": "script",
+        "predicate": "requires",
+        "object": "jura"
+      },
+      {
+        "subject": "script",
+        "predicate": "requires",
+        "object": "f"
+      },
+      {
+        "subject": "script",
+        "predicate": "requires",
+        "object": "sky"
+      },
+      {
+        "subject": "script",
+        "predicate": "requires",
+        "object": "2008"
+      },
+      {
+        "subject": "script",
+        "predicate": "requires",
+        "object": "methods"
+      },
+      {
+        "subject": "script",
+        "predicate": "requires",
+        "object": "utilize"
+      },
+      {
+        "subject": "script",
+        "predicate": "requires",
+        "object": "task"
+      },
+      {
+        "subject": "script",
+        "predicate": "requires",
+        "object": "specific"
+      },
+      {
+        "subject": "script",
+        "predicate": "requires",
+        "object": "fine"
+      },
+      {
+        "subject": "script",
+        "predicate": "requires",
+        "object": "tuned"
+      },
+      {
+        "subject": "script",
+        "predicate": "requires",
+        "object": "ms"
+      },
+      {
+        "subject": "script",
+        "predicate": "requires",
+        "object": "sakaguchi"
+      },
+      {
+        "subject": "script",
+        "predicate": "requires",
+        "object": "2021"
+      },
+      {
+        "subject": "script",
+        "predicate": "requires",
+        "object": "pipeline"
+      },
+      {
+        "subject": "script",
+        "predicate": "requires",
+        "object": "approaches"
+      },
+      {
+        "subject": "script",
+        "predicate": "requires",
+        "object": "san"
+      },
+      {
+        "subject": "script",
+        "predicate": "requires",
+        "object": "cheti"
+      },
+      {
+        "subject": "script",
+        "predicate": "requires",
+        "object": "ru"
+      },
+      {
+        "subject": "script",
+        "predicate": "requires",
+        "object": "dinger"
+      },
+      {
+        "subject": "script",
+        "predicate": "requires",
+        "object": "2022"
+      },
+      {
+        "subject": "knowledge",
+        "predicate": "requires",
+        "object": "human"
+      },
+      {
+        "subject": "knowledge",
+        "predicate": "requires",
+        "object": "annotation"
+      },
+      {
+        "subject": "knowledge",
+        "predicate": "requires",
+        "object": "wan"
+      },
+      {
+        "subject": "knowledge",
+        "predicate": "requires",
+        "object": "z"
+      },
+      {
+        "subject": "knowledge",
+        "predicate": "requires",
+        "object": "et"
+      },
+      {
+        "subject": "knowledge",
+        "predicate": "requires",
+        "object": "al"
+      },
+      {
+        "subject": "knowledge",
+        "predicate": "requires",
+        "object": "2016"
+      },
+      {
+        "subject": "knowledge",
+        "predicate": "requires",
+        "object": "unsupervised"
+      },
+      {
+        "subject": "knowledge",
+        "predicate": "requires",
+        "object": "feature"
+      },
+      {
+        "subject": "knowledge",
+        "predicate": "requires",
+        "object": "based"
+      },
+      {
+        "subject": "knowledge",
+        "predicate": "requires",
+        "object": "extraction"
+      },
+      {
+        "subject": "knowledge",
+        "predicate": "requires",
+        "object": "chambers"
+      },
+      {
+        "subject": "knowledge",
+        "predicate": "requires",
+        "object": "amp"
+      },
+      {
+        "subject": "knowledge",
+        "predicate": "requires",
+        "object": "jura"
+      },
+      {
+        "subject": "knowledge",
+        "predicate": "requires",
+        "object": "f"
+      },
+      {
+        "subject": "knowledge",
+        "predicate": "requires",
+        "object": "sky"
+      },
+      {
+        "subject": "knowledge",
+        "predicate": "requires",
+        "object": "2008"
+      },
+      {
+        "subject": "knowledge",
+        "predicate": "requires",
+        "object": "methods"
+      },
+      {
+        "subject": "knowledge",
+        "predicate": "requires",
+        "object": "utilize"
+      },
+      {
+        "subject": "knowledge",
+        "predicate": "requires",
+        "object": "task"
+      },
+      {
+        "subject": "knowledge",
+        "predicate": "requires",
+        "object": "specific"
+      },
+      {
+        "subject": "knowledge",
+        "predicate": "requires",
+        "object": "fine"
+      },
+      {
+        "subject": "knowledge",
+        "predicate": "requires",
+        "object": "tuned"
+      },
+      {
+        "subject": "knowledge",
+        "predicate": "requires",
+        "object": "ms"
+      },
+      {
+        "subject": "knowledge",
+        "predicate": "requires",
+        "object": "sakaguchi"
+      },
+      {
+        "subject": "knowledge",
+        "predicate": "requires",
+        "object": "2021"
+      },
+      {
+        "subject": "knowledge",
+        "predicate": "requires",
+        "object": "pipeline"
+      },
+      {
+        "subject": "knowledge",
+        "predicate": "requires",
+        "object": "approaches"
+      },
+      {
+        "subject": "knowledge",
+        "predicate": "requires",
+        "object": "san"
+      },
+      {
+        "subject": "knowledge",
+        "predicate": "requires",
+        "object": "cheti"
+      },
+      {
+        "subject": "knowledge",
+        "predicate": "requires",
+        "object": "ru"
+      },
+      {
+        "subject": "knowledge",
+        "predicate": "requires",
+        "object": "dinger"
+      },
+      {
+        "subject": "knowledge",
+        "predicate": "requires",
+        "object": "2022"
+      }
+    ]
+  },
+  {
+    "tokens": [
+      "(",
+      "a",
+      ")",
+      "lil",
+      "##o",
+      "synth",
+      "##es",
+      "##izes",
+      "programs",
+      "based",
+      "on",
+      "natural",
+      "language",
+      "task",
+      "descriptions",
+      "using",
+      "a",
+      "dual",
+      "-",
+      "system",
+      "search",
+      "model",
+      "."
+    ],
+    "predicted_labels": [
+      "O",
+      "O",
+      "O",
+      "B-SUBJ",
+      "I-SUBJ",
+      "B-PRED",
+      "I-PRED",
+      "I-PRED",
+      "B-OBJ",
+      "I-OBJ",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "O",
+      "B-OBJ",
+      "O",
+      "B-OBJ",
+      "I-OBJ",
+      "I-OBJ",
+      "O"
+    ],
+    "predicted_entities": {
+      "SUBJ": [
+        "lil ##o"
+      ],
+      "PRED": [
+        "synth ##es ##izes"
+      ],
+      "OBJ": [
+        "programs",
+        "based",
+        "natural",
+        "language",
+        "task",
+        "descriptions",
+        "using",
+        "dual",
+        "system",
+        "search",
+        "model"
+      ]
+    },
+    "ground_truth": [
+      {
+        "subject": "lilo",
+        "predicate": "synthesizes",
+        "object": "programs"
+      },
+      {
+        "subject": "lilo",
+        "predicate": "synthesizes",
+        "object": "based"
+      },
+      {
+        "subject": "lilo",
+        "predicate": "synthesizes",
+        "object": "natural"
+      },
+      {
+        "subject": "lilo",
+        "predicate": "synthesizes",
+        "object": "language"
+      },
+      {
+        "subject": "lilo",
+        "predicate": "synthesizes",
+        "object": "task"
+      },
+      {
+        "subject": "lilo",
+        "predicate": "synthesizes",
+        "object": "descriptions"
+      },
+      {
+        "subject": "lilo",
+        "predicate": "synthesizes",
+        "object": "using"
+      },
+      {
+        "subject": "lilo",
+        "predicate": "synthesizes",
+        "object": "dual"
+      },
+      {
+        "subject": "lilo",
+        "predicate": "synthesizes",
+        "object": "system"
+      },
+      {
+        "subject": "lilo",
+        "predicate": "synthesizes",
+        "object": "search"
+      },
+      {
+        "subject": "lilo",
+        "predicate": "synthesizes",
+        "object": "model"
+      }
+    ]
+  }
+]

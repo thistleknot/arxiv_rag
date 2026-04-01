@@ -1,0 +1,1133 @@
+2026-03-28 16:55:43,898 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 16:55:43,944 - INFO - Going to convert document batch...
+2026-03-28 16:55:43,944 - INFO - Initializing pipeline for StandardPdfPipeline with options hash e647edf348883bed75367b22fbe60347
+2026-03-28 16:55:44,091 - INFO - Loading plugin 'docling_defaults'
+2026-03-28 16:55:44,096 - INFO - Registered picture descriptions: ['vlm', 'api']
+2026-03-28 16:55:44,255 - INFO - Loading plugin 'docling_defaults'
+2026-03-28 16:55:44,256 - INFO - Registered ocr engines: ['easyocr', 'ocrmac', 'rapidocr', 'tesserocr', 'tesseract']
+2026-03-28 16:55:44,422 - INFO - Accelerator device: 'cuda:0'
+2026-03-28 16:55:48,234 - INFO - Accelerator device: 'cuda:0'
+2026-03-28 16:55:48,452 - INFO - HTTP Request: GET https://huggingface.co/api/models/ds4sd/docling-layout-heron/revision/main "HTTP/1.1 307 Temporary Redirect"
+2026-03-28 16:55:48,559 - INFO - HTTP Request: GET https://huggingface.co/api/models/docling-project/docling-layout-heron/revision/main "HTTP/1.1 200 OK"
+Loading weights:   0%|          | 0/770 [00:00<?, ?it/s]Loading weights:  24%|##4       | 185/770 [00:00<00:00, 1801.50it/s]Loading weights:  48%|####7     | 366/770 [00:00<00:00, 1555.67it/s]Loading weights:  68%|######8   | 524/770 [00:00<00:00, 1434.39it/s]Loading weights:  87%|########6 | 669/770 [00:00<00:00, 1423.41it/s]Loading weights: 100%|##########| 770/770 [00:00<00:00, 1465.51it/s]
+2026-03-28 16:55:49,731 - INFO - HTTP Request: GET https://huggingface.co/api/models/ds4sd/docling-models/revision/v2.3.0 "HTTP/1.1 307 Temporary Redirect"
+2026-03-28 16:55:49,844 - INFO - HTTP Request: GET https://huggingface.co/api/models/docling-project/docling-models/revision/v2.3.0 "HTTP/1.1 200 OK"
+2026-03-28 16:55:49,872 - INFO - Accelerator device: 'cuda:0'
+2026-03-28 16:55:51,147 - INFO - Processing document 2601_01046.pdf
+2026-03-28 17:00:41,939 - INFO - Finished converting document 2601_01046.pdf in 298.08 sec.
+2026-03-28 17:00:46,177 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:00:46,198 - INFO - Going to convert document batch...
+2026-03-28 17:00:46,199 - INFO - Processing document 1410_0281.pdf
+2026-03-28 17:03:53,066 - INFO - Finished converting document 1410_0281.pdf in 186.94 sec.
+2026-03-28 17:03:57,551 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:03:57,556 - INFO - Going to convert document batch...
+2026-03-28 17:03:57,557 - INFO - Processing document 1412_3328.pdf
+2026-03-28 17:04:08,189 - INFO - Finished converting document 1412_3328.pdf in 10.66 sec.
+2026-03-28 17:04:11,874 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:04:11,877 - INFO - Going to convert document batch...
+2026-03-28 17:04:11,878 - INFO - Processing document 2305_1025.pdf
+2026-03-28 17:04:26,386 - INFO - Finished converting document 2305_1025.pdf in 14.53 sec.
+2026-03-28 17:04:29,925 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:04:29,930 - INFO - Going to convert document batch...
+2026-03-28 17:04:29,931 - INFO - Processing document 2309_12252.pdf
+2026-03-28 17:05:06,213 - INFO - Finished converting document 2309_12252.pdf in 36.31 sec.
+2026-03-28 17:05:12,919 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:05:12,970 - INFO - Going to convert document batch...
+2026-03-28 17:05:12,970 - INFO - Processing document 2309_17288.pdf
+2026-03-28 17:07:00,701 - INFO - Finished converting document 2309_17288.pdf in 107.81 sec.
+2026-03-28 17:07:04,391 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:07:04,402 - INFO - Going to convert document batch...
+2026-03-28 17:07:04,403 - INFO - Processing document 2312_10893.pdf
+2026-03-28 17:07:35,709 - INFO - Finished converting document 2312_10893.pdf in 31.34 sec.
+2026-03-28 17:07:39,334 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:07:39,344 - INFO - Going to convert document batch...
+2026-03-28 17:07:39,345 - INFO - Processing document 2312_10997.pdf
+2026-03-28 17:08:25,961 - INFO - Finished converting document 2312_10997.pdf in 46.64 sec.
+2026-03-28 17:08:34,813 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:08:34,853 - INFO - Going to convert document batch...
+2026-03-28 17:08:34,854 - INFO - Processing document 2312_15868.pdf
+2026-03-28 17:09:02,630 - INFO - Finished converting document 2312_15868.pdf in 27.84 sec.
+2026-03-28 17:09:06,177 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:09:06,181 - INFO - Going to convert document batch...
+2026-03-28 17:09:06,182 - INFO - Processing document 2401_07013.pdf
+2026-03-28 17:09:22,013 - INFO - Finished converting document 2401_07013.pdf in 15.86 sec.
+2026-03-28 17:09:40,064 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:09:40,180 - INFO - Going to convert document batch...
+2026-03-28 17:09:40,181 - INFO - Processing document 2402_07148.pdf
+2026-03-28 17:11:45,887 - INFO - Finished converting document 2402_07148.pdf in 125.86 sec.
+2026-03-28 17:11:49,529 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:11:49,536 - INFO - Going to convert document batch...
+2026-03-28 17:11:49,536 - INFO - Processing document 2403_07809.pdf
+2026-03-28 17:11:57,054 - INFO - Finished converting document 2403_07809.pdf in 7.53 sec.
+2026-03-28 17:12:02,619 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:12:02,671 - INFO - Going to convert document batch...
+2026-03-28 17:12:02,673 - INFO - Processing document 2403_11322.pdf
+2026-03-28 17:12:36,878 - INFO - Finished converting document 2403_11322.pdf in 34.28 sec.
+2026-03-28 17:12:41,027 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:12:41,036 - INFO - Going to convert document batch...
+2026-03-28 17:12:41,037 - INFO - Processing document 2404_02948.pdf
+2026-03-28 17:13:23,390 - INFO - Finished converting document 2404_02948.pdf in 42.38 sec.
+2026-03-28 17:13:26,975 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:13:26,983 - INFO - Going to convert document batch...
+2026-03-28 17:13:26,984 - INFO - Processing document 2405_17681.pdf
+2026-03-28 17:13:30,905 - INFO - Finished converting document 2405_17681.pdf in 3.95 sec.
+2026-03-28 17:13:34,641 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:13:34,645 - INFO - Going to convert document batch...
+2026-03-28 17:13:34,646 - INFO - Processing document 2406_09044.pdf
+2026-03-28 17:13:54,719 - INFO - Finished converting document 2406_09044.pdf in 20.09 sec.
+2026-03-28 17:13:59,173 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:13:59,189 - INFO - Going to convert document batch...
+2026-03-28 17:13:59,190 - INFO - Processing document 2407_12883.pdf
+2026-03-28 17:15:46,406 - INFO - Finished converting document 2407_12883.pdf in 107.27 sec.
+2026-03-28 17:15:51,096 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:15:51,101 - INFO - Going to convert document batch...
+2026-03-28 17:15:51,102 - INFO - Processing document 2408_13885.pdf
+2026-03-28 17:16:51,062 - INFO - Finished converting document 2408_13885.pdf in 59.99 sec.
+2026-03-28 17:16:54,692 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:16:54,697 - INFO - Going to convert document batch...
+2026-03-28 17:16:54,698 - INFO - Processing document 2409_07429.pdf
+2026-03-28 17:17:18,587 - INFO - Finished converting document 2409_07429.pdf in 23.91 sec.
+2026-03-28 17:17:25,382 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:17:25,443 - INFO - Going to convert document batch...
+2026-03-28 17:17:25,444 - INFO - Processing document 2409_11629.pdf
+2026-03-28 17:17:39,237 - INFO - Finished converting document 2409_11629.pdf in 13.88 sec.
+2026-03-28 17:17:42,701 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:17:42,705 - INFO - Going to convert document batch...
+2026-03-28 17:17:42,706 - INFO - Processing document 2409_19878.pdf
+2026-03-28 17:17:51,056 - INFO - Finished converting document 2409_19878.pdf in 8.36 sec.
+2026-03-28 17:17:54,500 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:17:54,505 - INFO - Going to convert document batch...
+2026-03-28 17:17:54,506 - INFO - Processing document 2411_07641.pdf
+2026-03-28 17:18:08,894 - INFO - Finished converting document 2411_07641.pdf in 14.41 sec.
+2026-03-28 17:18:16,911 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:18:16,939 - INFO - Going to convert document batch...
+2026-03-28 17:18:16,940 - INFO - Processing document 2411_15124.pdf
+2026-03-28 17:20:37,866 - INFO - Finished converting document 2411_15124.pdf in 140.98 sec.
+2026-03-28 17:20:42,573 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:20:42,580 - INFO - Going to convert document batch...
+2026-03-28 17:20:42,581 - INFO - Processing document 2412_16075.pdf
+2026-03-28 17:21:14,367 - INFO - Finished converting document 2412_16075.pdf in 31.81 sec.
+2026-03-28 17:21:18,074 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:21:18,079 - INFO - Going to convert document batch...
+2026-03-28 17:21:18,080 - INFO - Processing document 2501_06642.pdf
+2026-03-28 17:21:33,571 - INFO - Finished converting document 2501_06642.pdf in 15.52 sec.
+2026-03-28 17:21:37,938 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:21:37,977 - INFO - Going to convert document batch...
+2026-03-28 17:21:37,979 - INFO - Processing document 2503_1015.pdf
+2026-03-28 17:21:48,296 - INFO - Finished converting document 2503_1015.pdf in 10.39 sec.
+2026-03-28 17:21:54,490 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:21:54,706 - INFO - Going to convert document batch...
+2026-03-28 17:21:54,711 - INFO - Processing document 2503_14499.pdf
+2026-03-28 17:23:43,028 - INFO - Finished converting document 2503_14499.pdf in 108.58 sec.
+2026-03-28 17:23:46,689 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:23:46,699 - INFO - Going to convert document batch...
+2026-03-28 17:23:46,699 - INFO - Processing document 2503_17247.pdf
+2026-03-28 17:24:13,089 - INFO - Finished converting document 2503_17247.pdf in 26.42 sec.
+2026-03-28 17:24:18,766 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:24:18,782 - INFO - Going to convert document batch...
+2026-03-28 17:24:18,782 - INFO - Processing document 2503_2068.pdf
+2026-03-28 17:24:41,045 - INFO - Finished converting document 2503_2068.pdf in 22.30 sec.
+2026-03-28 17:24:44,657 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:24:44,670 - INFO - Going to convert document batch...
+2026-03-28 17:24:44,675 - INFO - Processing document 2504_09037.pdf
+2026-03-28 17:25:32,782 - INFO - Finished converting document 2504_09037.pdf in 48.16 sec.
+2026-03-28 17:25:36,454 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:25:36,459 - INFO - Going to convert document batch...
+2026-03-28 17:25:36,460 - INFO - Processing document 2504_15965.pdf
+2026-03-28 17:25:56,283 - INFO - Finished converting document 2504_15965.pdf in 19.84 sec.
+2026-03-28 17:26:03,301 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:26:03,319 - INFO - Going to convert document batch...
+2026-03-28 17:26:03,319 - INFO - Processing document 2504_17192.pdf
+2026-03-28 17:28:19,764 - INFO - Finished converting document 2504_17192.pdf in 136.50 sec.
+2026-03-28 17:28:23,542 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:28:23,550 - INFO - Going to convert document batch...
+2026-03-28 17:28:23,550 - INFO - Processing document 2504_19413.pdf
+2026-03-28 17:28:53,026 - INFO - Finished converting document 2504_19413.pdf in 29.50 sec.
+2026-03-28 17:28:56,669 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:28:56,679 - INFO - Going to convert document batch...
+2026-03-28 17:28:56,680 - INFO - Processing document 2505_00661.pdf
+2026-03-28 17:29:11,779 - INFO - Finished converting document 2505_00661.pdf in 15.12 sec.
+2026-03-28 17:29:32,938 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:29:33,082 - INFO - Going to convert document batch...
+2026-03-28 17:29:33,084 - INFO - Processing document 2505_11409.pdf
+2026-03-28 17:30:23,501 - INFO - Finished converting document 2505_11409.pdf in 50.61 sec.
+2026-03-28 17:30:27,642 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:30:27,669 - INFO - Going to convert document batch...
+2026-03-28 17:30:27,670 - INFO - Processing document 2505_12514.pdf
+2026-03-28 17:30:58,099 - INFO - Finished converting document 2505_12514.pdf in 30.47 sec.
+2026-03-28 17:31:01,869 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:31:01,874 - INFO - Going to convert document batch...
+2026-03-28 17:31:01,874 - INFO - Processing document 2505_1254.pdf
+2026-03-28 17:31:28,322 - INFO - Finished converting document 2505_1254.pdf in 26.47 sec.
+2026-03-28 17:31:42,842 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:31:42,969 - INFO - Going to convert document batch...
+2026-03-28 17:31:42,970 - INFO - Processing document 2505_13763.pdf
+2026-03-28 17:32:57,663 - INFO - Finished converting document 2505_13763.pdf in 74.88 sec.
+2026-03-28 17:33:01,222 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:33:01,228 - INFO - Going to convert document batch...
+2026-03-28 17:33:01,228 - INFO - Processing document 2505_14156.pdf
+2026-03-28 17:33:18,862 - INFO - Finished converting document 2505_14156.pdf in 17.66 sec.
+2026-03-28 17:33:23,083 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:33:23,108 - INFO - Going to convert document batch...
+2026-03-28 17:33:23,108 - INFO - Processing document 2505_18235.pdf
+2026-03-28 17:33:42,049 - INFO - Finished converting document 2505_18235.pdf in 18.98 sec.
+2026-03-28 17:33:45,579 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:33:45,596 - INFO - Going to convert document batch...
+2026-03-28 17:33:45,597 - INFO - Processing document 2505_20278.pdf
+2026-03-28 17:34:32,459 - INFO - Finished converting document 2505_20278.pdf in 46.91 sec.
+2026-03-28 17:34:37,032 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:34:37,040 - INFO - Going to convert document batch...
+2026-03-28 17:34:37,041 - INFO - Processing document 2505_22101.pdf
+2026-03-28 17:34:42,394 - INFO - Finished converting document 2505_22101.pdf in 5.38 sec.
+2026-03-28 17:34:45,897 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:34:45,906 - INFO - Going to convert document batch...
+2026-03-28 17:34:45,907 - INFO - Processing document 2505_22635.pdf
+2026-03-28 17:35:17,240 - INFO - Finished converting document 2505_22635.pdf in 31.36 sec.
+2026-03-28 17:35:22,124 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:35:22,155 - INFO - Going to convert document batch...
+2026-03-28 17:35:22,155 - INFO - Processing document 2505_22749.pdf
+2026-03-28 17:35:54,204 - INFO - Finished converting document 2505_22749.pdf in 32.09 sec.
+2026-03-28 17:36:04,755 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:36:04,805 - INFO - Going to convert document batch...
+2026-03-28 17:36:04,805 - INFO - Processing document 2505_24785.pdf
+2026-03-28 17:38:50,305 - INFO - Finished converting document 2505_24785.pdf in 165.58 sec.
+2026-03-28 17:38:54,332 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:38:54,342 - INFO - Going to convert document batch...
+2026-03-28 17:38:54,342 - INFO - Processing document 2505_24863.pdf
+2026-03-28 17:39:17,152 - INFO - Finished converting document 2505_24863.pdf in 22.84 sec.
+2026-03-28 17:39:20,536 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:39:20,536 - INFO - Going to convert document batch...
+2026-03-28 17:39:20,536 - INFO - Processing document 2506_02153.pdf
+2026-03-28 17:39:29,503 - INFO - Finished converting document 2506_02153.pdf in 8.98 sec.
+2026-03-28 17:39:33,095 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:39:33,104 - INFO - Going to convert document batch...
+2026-03-28 17:39:33,104 - INFO - Processing document 2506_06105.pdf
+2026-03-28 17:40:16,353 - INFO - Finished converting document 2506_06105.pdf in 43.27 sec.
+2026-03-28 17:40:20,185 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:40:20,193 - INFO - Going to convert document batch...
+2026-03-28 17:40:20,193 - INFO - Processing document 2506_08276.pdf
+2026-03-28 17:40:40,194 - INFO - Finished converting document 2506_08276.pdf in 20.03 sec.
+2026-03-28 17:40:59,662 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:40:59,742 - INFO - Going to convert document batch...
+2026-03-28 17:40:59,742 - INFO - Processing document 2506_0979.pdf
+2026-03-28 17:41:55,676 - INFO - Finished converting document 2506_0979.pdf in 56.03 sec.
+2026-03-28 17:42:01,127 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:42:01,138 - INFO - Going to convert document batch...
+2026-03-28 17:42:01,139 - INFO - Processing document 2506_10139.pdf
+2026-03-28 17:42:18,378 - INFO - Finished converting document 2506_10139.pdf in 17.27 sec.
+2026-03-28 17:42:22,414 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:42:22,434 - INFO - Going to convert document batch...
+2026-03-28 17:42:22,435 - INFO - Processing document 2506_10943.pdf
+2026-03-28 17:42:46,008 - INFO - Finished converting document 2506_10943.pdf in 23.61 sec.
+2026-03-28 17:42:53,556 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:42:53,582 - INFO - Going to convert document batch...
+2026-03-28 17:42:53,582 - INFO - Processing document 2506_17188.pdf
+2026-03-28 17:43:42,167 - INFO - Finished converting document 2506_17188.pdf in 48.64 sec.
+2026-03-28 17:43:45,912 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:43:45,932 - INFO - Going to convert document batch...
+2026-03-28 17:43:45,932 - INFO - Processing document 2506_18096.pdf
+2026-03-28 17:44:37,341 - INFO - Finished converting document 2506_18096.pdf in 51.45 sec.
+2026-03-28 17:44:40,972 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:44:40,979 - INFO - Going to convert document batch...
+2026-03-28 17:44:40,981 - INFO - Processing document 2506_19467.pdf
+2026-03-28 17:45:16,515 - INFO - Finished converting document 2506_19467.pdf in 35.61 sec.
+2026-03-28 17:45:20,500 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:45:20,511 - INFO - Going to convert document batch...
+2026-03-28 17:45:20,511 - INFO - Processing document 2506_21718.pdf
+2026-03-28 17:45:51,253 - INFO - Finished converting document 2506_21718.pdf in 30.77 sec.
+2026-03-28 17:45:55,040 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:45:55,051 - INFO - Going to convert document batch...
+2026-03-28 17:45:55,051 - INFO - Processing document 2506_21734.pdf
+2026-03-28 17:46:13,927 - INFO - Finished converting document 2506_21734.pdf in 18.91 sec.
+2026-03-28 17:46:20,982 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:46:21,009 - INFO - Going to convert document batch...
+2026-03-28 17:46:21,010 - INFO - Processing document 2506_22516.pdf
+2026-03-28 17:46:50,077 - INFO - Finished converting document 2506_22516.pdf in 29.12 sec.
+2026-03-28 17:46:54,462 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:46:54,503 - INFO - Going to convert document batch...
+2026-03-28 17:46:54,509 - INFO - Processing document 2507_01903.pdf
+2026-03-28 17:48:57,911 - INFO - Finished converting document 2507_01903.pdf in 123.48 sec.
+2026-03-28 17:49:01,608 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:49:01,612 - INFO - Going to convert document batch...
+2026-03-28 17:49:01,612 - INFO - Processing document 2507_07505.pdf
+2026-03-28 17:49:05,909 - INFO - Finished converting document 2507_07505.pdf in 4.31 sec.
+2026-03-28 17:49:09,456 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:49:09,473 - INFO - Going to convert document batch...
+2026-03-28 17:49:09,473 - INFO - Processing document 2507_07957.pdf
+2026-03-28 17:49:37,369 - INFO - Finished converting document 2507_07957.pdf in 27.94 sec.
+2026-03-28 17:49:42,949 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:49:42,967 - INFO - Going to convert document batch...
+2026-03-28 17:49:42,968 - INFO - Processing document 2507_11851.pdf
+2026-03-28 17:50:05,613 - INFO - Finished converting document 2507_11851.pdf in 22.67 sec.
+2026-03-28 17:50:10,596 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:50:10,608 - INFO - Going to convert document batch...
+2026-03-28 17:50:10,611 - INFO - Processing document 2507_19715.pdf
+2026-03-28 17:50:24,767 - INFO - Finished converting document 2507_19715.pdf in 14.19 sec.
+2026-03-28 17:50:28,235 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:50:28,240 - INFO - Going to convert document batch...
+2026-03-28 17:50:28,241 - INFO - Processing document 2507_23751.pdf
+2026-03-28 17:50:58,770 - INFO - Finished converting document 2507_23751.pdf in 30.56 sec.
+2026-03-28 17:51:02,280 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:51:02,283 - INFO - Going to convert document batch...
+2026-03-28 17:51:02,283 - INFO - Processing document 2508_03682.pdf
+2026-03-28 17:51:24,995 - INFO - Finished converting document 2508_03682.pdf in 22.73 sec.
+2026-03-28 17:51:29,430 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:51:29,465 - INFO - Going to convert document batch...
+2026-03-28 17:51:29,466 - INFO - Processing document 2508_13167.pdf
+2026-03-28 17:52:33,465 - INFO - Finished converting document 2508_13167.pdf in 64.08 sec.
+2026-03-28 17:52:37,666 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:52:37,675 - INFO - Going to convert document batch...
+2026-03-28 17:52:37,676 - INFO - Processing document 2508_13898.pdf
+2026-03-28 17:53:04,913 - INFO - Finished converting document 2508_13898.pdf in 27.27 sec.
+2026-03-28 17:53:24,084 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:53:24,176 - INFO - Going to convert document batch...
+2026-03-28 17:53:24,177 - INFO - Processing document 2508_1605.pdf
+2026-03-28 17:54:26,470 - INFO - Finished converting document 2508_1605.pdf in 62.41 sec.
+2026-03-28 17:54:30,052 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:54:30,060 - INFO - Going to convert document batch...
+2026-03-28 17:54:30,060 - INFO - Processing document 2508_16153.pdf
+2026-03-28 17:55:02,610 - INFO - Finished converting document 2508_16153.pdf in 32.58 sec.
+2026-03-28 17:55:07,215 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:55:07,222 - INFO - Going to convert document batch...
+2026-03-28 17:55:07,222 - INFO - Processing document 2508_17627.pdf
+2026-03-28 17:55:32,759 - INFO - Finished converting document 2508_17627.pdf in 25.55 sec.
+2026-03-28 17:55:37,733 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:55:37,794 - INFO - Going to convert document batch...
+2026-03-28 17:55:37,797 - INFO - Processing document 2508_18091.pdf
+2026-03-28 17:56:55,741 - INFO - Finished converting document 2508_18091.pdf in 78.06 sec.
+2026-03-28 17:57:01,637 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:57:01,669 - INFO - Going to convert document batch...
+2026-03-28 17:57:01,669 - INFO - Processing document 2508_18413.pdf
+2026-03-28 17:57:42,365 - INFO - Finished converting document 2508_18413.pdf in 40.73 sec.
+2026-03-28 17:57:47,000 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:57:47,013 - INFO - Going to convert document batch...
+2026-03-28 17:57:47,014 - INFO - Processing document 2508_20722.pdf
+2026-03-28 17:58:20,207 - INFO - Finished converting document 2508_20722.pdf in 33.22 sec.
+2026-03-28 17:58:49,456 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 17:58:49,676 - INFO - Going to convert document batch...
+2026-03-28 17:58:49,677 - INFO - Processing document 2508_20729.pdf
+2026-03-28 18:00:03,430 - INFO - Finished converting document 2508_20729.pdf in 74.00 sec.
+2026-03-28 18:00:06,883 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:00:06,890 - INFO - Going to convert document batch...
+2026-03-28 18:00:06,891 - INFO - Processing document 2508_21038.pdf
+2026-03-28 18:00:44,282 - INFO - Finished converting document 2508_21038.pdf in 37.41 sec.
+2026-03-28 18:00:47,852 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:00:47,861 - INFO - Going to convert document batch...
+2026-03-28 18:00:47,861 - INFO - Processing document 2509_00244.pdf
+2026-03-28 18:01:06,989 - INFO - Finished converting document 2509_00244.pdf in 19.14 sec.
+2026-03-28 18:01:10,604 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:01:10,615 - INFO - Going to convert document batch...
+2026-03-28 18:01:10,616 - INFO - Processing document 2509_01092.pdf
+2026-03-28 18:02:37,816 - INFO - Finished converting document 2509_01092.pdf in 87.24 sec.
+2026-03-28 18:02:42,517 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:02:42,567 - INFO - Going to convert document batch...
+2026-03-28 18:02:42,567 - INFO - Processing document 2509_02547.pdf
+2026-03-28 18:04:13,939 - INFO - Finished converting document 2509_02547.pdf in 91.47 sec.
+2026-03-28 18:04:23,643 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:04:23,747 - INFO - Going to convert document batch...
+2026-03-28 18:04:23,747 - INFO - Processing document 2509_03581.pdf
+2026-03-28 18:05:25,511 - INFO - Finished converting document 2509_03581.pdf in 61.89 sec.
+2026-03-28 18:05:29,449 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:05:29,468 - INFO - Going to convert document batch...
+2026-03-28 18:05:29,468 - INFO - Processing document 2509_03646.pdf
+2026-03-28 18:05:56,340 - INFO - Finished converting document 2509_03646.pdf in 26.91 sec.
+2026-03-28 18:05:59,949 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:05:59,965 - INFO - Going to convert document batch...
+2026-03-28 18:05:59,966 - INFO - Processing document 2509_04259.pdf
+2026-03-28 18:06:20,380 - INFO - Finished converting document 2509_04259.pdf in 20.44 sec.
+2026-03-28 18:06:23,886 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:06:23,893 - INFO - Going to convert document batch...
+2026-03-28 18:06:23,894 - INFO - Processing document 2509_04442.pdf
+2026-03-28 18:06:44,930 - INFO - Finished converting document 2509_04442.pdf in 21.08 sec.
+2026-03-28 18:06:52,233 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:06:52,260 - INFO - Going to convert document batch...
+2026-03-28 18:06:52,261 - INFO - Processing document 2509_04472.pdf
+2026-03-28 18:07:21,235 - INFO - Finished converting document 2509_04472.pdf in 29.03 sec.
+2026-03-28 18:07:27,316 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:07:27,339 - INFO - Going to convert document batch...
+2026-03-28 18:07:27,340 - INFO - Processing document 2509_05276.pdf
+2026-03-28 18:08:07,717 - INFO - Finished converting document 2509_05276.pdf in 40.42 sec.
+2026-03-28 18:08:11,186 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:08:11,192 - INFO - Going to convert document batch...
+2026-03-28 18:08:11,193 - INFO - Processing document 2509_05691.pdf
+2026-03-28 18:08:33,893 - INFO - Finished converting document 2509_05691.pdf in 22.72 sec.
+2026-03-28 18:08:44,813 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:08:44,936 - INFO - Going to convert document batch...
+2026-03-28 18:08:44,938 - INFO - Processing document 2509_06503.pdf
+2026-03-28 18:10:50,926 - INFO - Finished converting document 2509_06503.pdf in 126.14 sec.
+2026-03-28 18:10:54,863 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:10:54,872 - INFO - Going to convert document batch...
+2026-03-28 18:10:54,872 - INFO - Processing document 2509_06544.pdf
+2026-03-28 18:11:55,953 - INFO - Finished converting document 2509_06544.pdf in 61.11 sec.
+2026-03-28 18:11:59,997 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:12:00,010 - INFO - Going to convert document batch...
+2026-03-28 18:12:00,011 - INFO - Processing document 2509_07794.pdf
+2026-03-28 18:12:26,658 - INFO - Finished converting document 2509_07794.pdf in 26.67 sec.
+2026-03-28 18:12:31,599 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:12:31,621 - INFO - Going to convert document batch...
+2026-03-28 18:12:31,621 - INFO - Processing document 2509_08814.pdf
+2026-03-28 18:13:31,696 - INFO - Finished converting document 2509_08814.pdf in 60.11 sec.
+2026-03-28 18:13:35,457 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:13:35,472 - INFO - Going to convert document batch...
+2026-03-28 18:13:35,473 - INFO - Processing document 2509_11177.pdf
+2026-03-28 18:14:25,212 - INFO - Finished converting document 2509_11177.pdf in 49.76 sec.
+2026-03-28 18:14:32,362 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:14:32,393 - INFO - Going to convert document batch...
+2026-03-28 18:14:32,395 - INFO - Processing document 2509_11826.pdf
+2026-03-28 18:15:31,608 - INFO - Finished converting document 2509_11826.pdf in 59.28 sec.
+2026-03-28 18:15:35,267 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:15:35,278 - INFO - Going to convert document batch...
+2026-03-28 18:15:35,278 - INFO - Processing document 2509_11944.pdf
+2026-03-28 18:16:14,447 - INFO - Finished converting document 2509_11944.pdf in 39.20 sec.
+2026-03-28 18:16:18,030 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:16:18,039 - INFO - Going to convert document batch...
+2026-03-28 18:16:18,039 - INFO - Processing document 2509_13237.pdf
+2026-03-28 18:16:45,415 - INFO - Finished converting document 2509_13237.pdf in 27.41 sec.
+2026-03-28 18:16:49,432 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:16:49,464 - INFO - Going to convert document batch...
+2026-03-28 18:16:49,464 - INFO - Processing document 2509_16198.pdf
+2026-03-28 18:18:17,361 - INFO - Finished converting document 2509_16198.pdf in 87.95 sec.
+2026-03-28 18:18:21,050 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:18:21,062 - INFO - Going to convert document batch...
+2026-03-28 18:18:21,062 - INFO - Processing document 2509_16411.pdf
+2026-03-28 18:18:43,133 - INFO - Finished converting document 2509_16411.pdf in 22.09 sec.
+2026-03-28 18:18:46,722 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:18:46,732 - INFO - Going to convert document batch...
+2026-03-28 18:18:46,732 - INFO - Processing document 2509_22906.pdf
+2026-03-28 18:19:00,563 - INFO - Finished converting document 2509_22906.pdf in 13.86 sec.
+2026-03-28 18:19:10,992 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:19:11,082 - INFO - Going to convert document batch...
+2026-03-28 18:19:11,082 - INFO - Processing document 2509_23883.pdf
+2026-03-28 18:20:11,935 - INFO - Finished converting document 2509_23883.pdf in 60.97 sec.
+2026-03-28 18:20:16,053 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:20:16,079 - INFO - Going to convert document batch...
+2026-03-28 18:20:16,079 - INFO - Processing document 2509_24107.pdf
+2026-03-28 18:20:43,017 - INFO - Finished converting document 2509_24107.pdf in 26.98 sec.
+2026-03-28 18:20:46,626 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:20:46,634 - INFO - Going to convert document batch...
+2026-03-28 18:20:46,634 - INFO - Processing document 2509_24869.pdf
+2026-03-28 18:21:30,056 - INFO - Finished converting document 2509_24869.pdf in 43.44 sec.
+2026-03-28 18:21:33,840 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:21:33,844 - INFO - Going to convert document batch...
+2026-03-28 18:21:33,845 - INFO - Processing document 2509_2514.pdf
+2026-03-28 18:21:42,403 - INFO - Finished converting document 2509_2514.pdf in 8.58 sec.
+2026-03-28 18:21:45,933 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:21:45,941 - INFO - Going to convert document batch...
+2026-03-28 18:21:45,943 - INFO - Processing document 2509_25454.pdf
+2026-03-28 18:22:17,612 - INFO - Finished converting document 2509_25454.pdf in 31.70 sec.
+2026-03-28 18:22:21,510 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:22:21,526 - INFO - Going to convert document batch...
+2026-03-28 18:22:21,527 - INFO - Processing document 2509_25522.pdf
+2026-03-28 18:22:49,975 - INFO - Finished converting document 2509_25522.pdf in 28.48 sec.
+2026-03-28 18:22:54,010 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:22:54,033 - INFO - Going to convert document batch...
+2026-03-28 18:22:54,033 - INFO - Processing document 2509_26476.pdf
+2026-03-28 18:23:33,300 - INFO - Finished converting document 2509_26476.pdf in 39.31 sec.
+2026-03-28 18:23:37,776 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:23:37,870 - INFO - Going to convert document batch...
+2026-03-28 18:23:37,872 - INFO - Processing document 2509_26507.pdf
+2026-03-28 18:24:49,693 - INFO - Finished converting document 2509_26507.pdf in 71.94 sec.
+2026-03-28 18:24:53,553 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:24:53,565 - INFO - Going to convert document batch...
+2026-03-28 18:24:53,566 - INFO - Processing document 2509_26626.pdf
+2026-03-28 18:25:17,974 - INFO - Finished converting document 2509_26626.pdf in 24.45 sec.
+2026-03-28 18:25:21,570 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:25:21,575 - INFO - Going to convert document batch...
+2026-03-28 18:25:21,575 - INFO - Processing document 2510_00219.pdf
+2026-03-28 18:25:46,306 - INFO - Finished converting document 2510_00219.pdf in 24.75 sec.
+2026-03-28 18:25:49,725 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:25:49,735 - INFO - Going to convert document batch...
+2026-03-28 18:25:49,735 - INFO - Processing document 2510_00526.pdf
+2026-03-28 18:26:20,650 - INFO - Finished converting document 2510_00526.pdf in 30.95 sec.
+2026-03-28 18:26:25,859 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:26:25,877 - INFO - Going to convert document batch...
+2026-03-28 18:26:25,880 - INFO - Processing document 2510_01123.pdf
+2026-03-28 18:26:47,440 - INFO - Finished converting document 2510_01123.pdf in 21.61 sec.
+2026-03-28 18:26:52,010 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:26:52,031 - INFO - Going to convert document batch...
+2026-03-28 18:26:52,031 - INFO - Processing document 2510_01141.pdf
+2026-03-28 18:27:26,066 - INFO - Finished converting document 2510_01141.pdf in 34.06 sec.
+2026-03-28 18:27:32,539 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:27:32,649 - INFO - Going to convert document batch...
+2026-03-28 18:27:32,651 - INFO - Processing document 2510_01171.pdf
+2026-03-28 18:30:42,155 - INFO - Finished converting document 2510_01171.pdf in 189.66 sec.
+2026-03-28 18:30:46,136 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:30:46,147 - INFO - Going to convert document batch...
+2026-03-28 18:30:46,148 - INFO - Processing document 2510_02228.pdf
+2026-03-28 18:32:01,710 - INFO - Finished converting document 2510_02228.pdf in 75.59 sec.
+2026-03-28 18:32:09,848 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:32:09,898 - INFO - Going to convert document batch...
+2026-03-28 18:32:09,899 - INFO - Processing document 2510_02263.pdf
+2026-03-28 18:32:52,465 - INFO - Finished converting document 2510_02263.pdf in 42.67 sec.
+2026-03-28 18:32:55,966 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:32:55,971 - INFO - Going to convert document batch...
+2026-03-28 18:32:55,972 - INFO - Processing document 2510_02294.pdf
+2026-03-28 18:33:58,524 - INFO - Finished converting document 2510_02294.pdf in 62.59 sec.
+2026-03-28 18:34:03,326 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:34:03,349 - INFO - Going to convert document batch...
+2026-03-28 18:34:03,349 - INFO - Processing document 2510_02297.pdf
+2026-03-28 18:34:21,808 - INFO - Finished converting document 2510_02297.pdf in 18.50 sec.
+2026-03-28 18:34:26,131 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:34:26,160 - INFO - Going to convert document batch...
+2026-03-28 18:34:26,161 - INFO - Processing document 2510_02425.pdf
+2026-03-28 18:35:00,179 - INFO - Finished converting document 2510_02425.pdf in 34.06 sec.
+2026-03-28 18:35:03,951 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:35:03,958 - INFO - Going to convert document batch...
+2026-03-28 18:35:03,961 - INFO - Processing document 2510_03215.pdf
+2026-03-28 18:35:38,705 - INFO - Finished converting document 2510_03215.pdf in 34.76 sec.
+2026-03-28 18:35:43,091 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:35:43,116 - INFO - Going to convert document batch...
+2026-03-28 18:35:43,116 - INFO - Processing document 2510_03259.pdf
+2026-03-28 18:36:15,386 - INFO - Finished converting document 2510_03259.pdf in 32.34 sec.
+2026-03-28 18:36:19,022 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:36:19,034 - INFO - Going to convert document batch...
+2026-03-28 18:36:19,035 - INFO - Processing document 2510_04023.pdf
+2026-03-28 18:36:57,727 - INFO - Finished converting document 2510_04023.pdf in 38.73 sec.
+2026-03-28 18:37:01,267 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:37:01,279 - INFO - Going to convert document batch...
+2026-03-28 18:37:01,280 - INFO - Processing document 2510_04206.pdf
+2026-03-28 18:37:32,850 - INFO - Finished converting document 2510_04206.pdf in 31.59 sec.
+2026-03-28 18:37:41,213 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:37:41,268 - INFO - Going to convert document batch...
+2026-03-28 18:37:41,270 - INFO - Processing document 2510_04978.pdf
+2026-03-28 18:38:15,713 - INFO - Finished converting document 2510_04978.pdf in 34.55 sec.
+2026-03-28 18:38:19,763 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:38:19,817 - INFO - Going to convert document batch...
+2026-03-28 18:38:19,818 - INFO - Processing document 2510_05087.pdf
+2026-03-28 18:39:11,761 - INFO - Finished converting document 2510_05087.pdf in 52.03 sec.
+2026-03-28 18:39:15,833 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:39:15,854 - INFO - Going to convert document batch...
+2026-03-28 18:39:15,855 - INFO - Processing document 2510_05174.pdf
+2026-03-28 18:40:06,060 - INFO - Finished converting document 2510_05174.pdf in 50.28 sec.
+2026-03-28 18:40:10,177 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:40:10,195 - INFO - Going to convert document batch...
+2026-03-28 18:40:10,195 - INFO - Processing document 2510_06105.pdf
+2026-03-28 18:41:08,856 - INFO - Finished converting document 2510_06105.pdf in 58.70 sec.
+2026-03-28 18:41:12,373 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:41:12,381 - INFO - Going to convert document batch...
+2026-03-28 18:41:12,382 - INFO - Processing document 2510_06189.pdf
+2026-03-28 18:41:36,581 - INFO - Finished converting document 2510_06189.pdf in 24.23 sec.
+2026-03-28 18:41:40,274 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:41:40,286 - INFO - Going to convert document batch...
+2026-03-28 18:41:40,287 - INFO - Processing document 2510_06557.pdf
+2026-03-28 18:42:14,299 - INFO - Finished converting document 2510_06557.pdf in 34.05 sec.
+2026-03-28 18:42:18,514 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:42:18,527 - INFO - Going to convert document batch...
+2026-03-28 18:42:18,528 - INFO - Processing document 2510_07318.pdf
+2026-03-28 18:42:58,476 - INFO - Finished converting document 2510_07318.pdf in 39.97 sec.
+2026-03-28 18:43:02,081 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:43:02,094 - INFO - Going to convert document batch...
+2026-03-28 18:43:02,095 - INFO - Processing document 2510_07962.pdf
+2026-03-28 18:43:39,076 - INFO - Finished converting document 2510_07962.pdf in 37.01 sec.
+2026-03-28 18:43:43,058 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:43:43,065 - INFO - Going to convert document batch...
+2026-03-28 18:43:43,066 - INFO - Processing document 2510_0879.pdf
+2026-03-28 18:44:13,356 - INFO - Finished converting document 2510_0879.pdf in 30.31 sec.
+2026-03-28 18:44:17,009 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:44:17,015 - INFO - Going to convert document batch...
+2026-03-28 18:44:17,016 - INFO - Processing document 2510_08847.pdf
+2026-03-28 18:45:23,354 - INFO - Finished converting document 2510_08847.pdf in 66.38 sec.
+2026-03-28 18:45:27,238 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:45:27,258 - INFO - Going to convert document batch...
+2026-03-28 18:45:27,259 - INFO - Processing document 2510_09244.pdf
+2026-03-28 18:46:21,967 - INFO - Finished converting document 2510_09244.pdf in 54.75 sec.
+2026-03-28 18:46:25,637 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:46:25,648 - INFO - Going to convert document batch...
+2026-03-28 18:46:25,649 - INFO - Processing document 2510_09535.pdf
+2026-03-28 18:46:38,653 - INFO - Finished converting document 2510_09535.pdf in 13.05 sec.
+2026-03-28 18:46:42,756 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:46:42,766 - INFO - Going to convert document batch...
+2026-03-28 18:46:42,767 - INFO - Processing document 2510_10304.pdf
+2026-03-28 18:47:03,866 - INFO - Finished converting document 2510_10304.pdf in 21.12 sec.
+2026-03-28 18:47:17,531 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:47:17,605 - INFO - Going to convert document batch...
+2026-03-28 18:47:17,606 - INFO - Processing document 2510_1169.pdf
+2026-03-28 18:47:31,089 - INFO - Finished converting document 2510_1169.pdf in 13.61 sec.
+2026-03-28 18:47:34,498 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:47:34,506 - INFO - Going to convert document batch...
+2026-03-28 18:47:34,507 - INFO - Processing document 2510_14253.pdf
+2026-03-28 18:47:46,752 - INFO - Finished converting document 2510_14253.pdf in 12.27 sec.
+2026-03-28 18:47:50,703 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:47:50,712 - INFO - Going to convert document batch...
+2026-03-28 18:47:50,712 - INFO - Processing document 2510_1505.pdf
+2026-03-28 18:48:11,241 - INFO - Finished converting document 2510_1505.pdf in 20.55 sec.
+2026-03-28 18:48:17,458 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:48:17,487 - INFO - Going to convert document batch...
+2026-03-28 18:48:17,488 - INFO - Processing document 2510_15511.pdf
+2026-03-28 18:49:17,491 - INFO - Finished converting document 2510_15511.pdf in 60.05 sec.
+2026-03-28 18:49:55,960 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:49:56,282 - INFO - Going to convert document batch...
+2026-03-28 18:49:56,285 - INFO - Processing document 2510_16333.pdf
+2026-03-28 18:51:22,818 - INFO - Finished converting document 2510_16333.pdf in 86.91 sec.
+2026-03-28 18:51:27,233 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 18:51:27,274 - INFO - Going to convert document batch...
+2026-03-28 18:51:27,275 - INFO - Processing document 2510_16872.pdf
+2026-03-28 19:00:47,006 - INFO - Finished converting document 2510_16872.pdf in 559.83 sec.
+2026-03-28 19:00:51,405 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 19:00:51,420 - INFO - Going to convert document batch...
+2026-03-28 19:00:51,421 - INFO - Processing document 2510_17795.pdf
+2026-03-28 19:02:07,453 - INFO - Finished converting document 2510_17795.pdf in 76.08 sec.
+2026-03-28 19:02:27,018 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 19:02:27,230 - INFO - Going to convert document batch...
+2026-03-28 19:02:27,232 - INFO - Processing document 2510_18871.pdf
+2026-03-28 19:09:03,083 - INFO - Finished converting document 2510_18871.pdf in 396.11 sec.
+2026-03-28 19:09:07,357 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 19:09:07,405 - INFO - Going to convert document batch...
+2026-03-28 19:09:07,407 - INFO - Processing document 2510_19767.pdf
+2026-03-28 19:09:38,683 - INFO - Finished converting document 2510_19767.pdf in 31.36 sec.
+2026-03-28 19:09:43,606 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 19:09:43,657 - INFO - Going to convert document batch...
+2026-03-28 19:09:43,660 - INFO - Processing document 2510_19771.pdf
+2026-03-28 19:11:20,466 - INFO - Finished converting document 2510_19771.pdf in 96.89 sec.
+2026-03-28 19:11:30,923 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 19:11:31,005 - INFO - Going to convert document batch...
+2026-03-28 19:11:31,006 - INFO - Processing document 2510_20198.pdf
+2026-03-28 19:14:16,755 - INFO - Finished converting document 2510_20198.pdf in 165.88 sec.
+2026-03-28 19:14:20,382 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 19:14:20,393 - INFO - Going to convert document batch...
+2026-03-28 19:14:20,394 - INFO - Processing document 2510_20784.pdf
+2026-03-28 19:16:05,269 - INFO - Finished converting document 2510_20784.pdf in 104.92 sec.
+2026-03-28 19:16:09,303 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 19:16:09,344 - INFO - Going to convert document batch...
+2026-03-28 19:16:09,346 - INFO - Processing document 2510_23822.pdf
+2026-03-28 19:18:43,085 - INFO - Finished converting document 2510_23822.pdf in 153.81 sec.
+2026-03-28 19:18:55,740 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 19:18:56,163 - INFO - Going to convert document batch...
+2026-03-28 19:18:56,166 - INFO - Processing document 2510_24342.pdf
+2026-03-28 19:20:41,155 - INFO - Finished converting document 2510_24342.pdf in 105.48 sec.
+2026-03-28 19:20:44,866 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 19:20:44,888 - INFO - Going to convert document batch...
+2026-03-28 19:20:44,889 - INFO - Processing document 2510_24699.pdf
+2026-03-28 19:21:37,686 - INFO - Finished converting document 2510_24699.pdf in 52.84 sec.
+2026-03-28 19:21:41,232 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 19:21:41,243 - INFO - Going to convert document batch...
+2026-03-28 19:21:41,245 - INFO - Processing document 2510_24801.pdf
+2026-03-28 19:22:36,429 - INFO - Finished converting document 2510_24801.pdf in 55.22 sec.
+2026-03-28 19:22:40,603 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 19:22:40,628 - INFO - Going to convert document batch...
+2026-03-28 19:22:40,628 - INFO - Processing document 2510_25781.pdf
+2026-03-28 19:24:05,478 - INFO - Finished converting document 2510_25781.pdf in 84.92 sec.
+2026-03-28 19:24:09,462 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 19:24:09,480 - INFO - Going to convert document batch...
+2026-03-28 19:24:09,480 - INFO - Processing document 2510_26143.pdf
+2026-03-28 19:24:38,579 - INFO - Finished converting document 2510_26143.pdf in 29.14 sec.
+2026-03-28 19:24:42,382 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 19:24:42,409 - INFO - Going to convert document batch...
+2026-03-28 19:24:42,410 - INFO - Processing document 2510_26493.pdf
+2026-03-28 19:25:25,644 - INFO - Finished converting document 2510_26493.pdf in 43.30 sec.
+2026-03-28 19:25:29,475 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 19:25:29,492 - INFO - Going to convert document batch...
+2026-03-28 19:25:29,493 - INFO - Processing document 2510_26692.pdf
+2026-03-28 19:26:38,366 - INFO - Finished converting document 2510_26692.pdf in 68.91 sec.
+2026-03-28 19:27:01,434 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 19:27:01,921 - INFO - Going to convert document batch...
+2026-03-28 19:27:01,922 - INFO - Processing document 2510_26745.pdf
+2026-03-28 19:29:41,080 - INFO - Finished converting document 2510_26745.pdf in 159.73 sec.
+2026-03-28 19:29:45,748 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 19:29:45,770 - INFO - Going to convert document batch...
+2026-03-28 19:29:45,775 - INFO - Processing document 2510_27246.pdf
+2026-03-28 19:32:20,470 - INFO - Finished converting document 2510_27246.pdf in 154.75 sec.
+2026-03-28 19:32:25,145 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 19:32:25,154 - INFO - Going to convert document batch...
+2026-03-28 19:32:25,155 - INFO - Processing document 2510_2741.pdf
+2026-03-28 19:32:55,562 - INFO - Finished converting document 2510_2741.pdf in 30.44 sec.
+2026-03-28 19:32:59,078 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 19:32:59,091 - INFO - Going to convert document batch...
+2026-03-28 19:32:59,091 - INFO - Processing document 2510_27688.pdf
+2026-03-28 19:33:36,366 - INFO - Finished converting document 2510_27688.pdf in 37.31 sec.
+2026-03-28 19:33:40,191 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 19:33:40,214 - INFO - Going to convert document batch...
+2026-03-28 19:33:40,215 - INFO - Processing document 2511_01386.pdf
+2026-03-28 19:34:38,033 - INFO - Finished converting document 2511_01386.pdf in 57.86 sec.
+2026-03-28 19:34:41,897 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 19:34:41,914 - INFO - Going to convert document batch...
+2026-03-28 19:34:41,915 - INFO - Processing document 2511_02303.pdf
+2026-03-28 19:35:11,466 - INFO - Finished converting document 2511_02303.pdf in 29.61 sec.
+2026-03-28 19:35:15,198 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 19:35:15,221 - INFO - Going to convert document batch...
+2026-03-28 19:35:15,224 - INFO - Processing document 2511_02805.pdf
+2026-03-28 19:35:39,478 - INFO - Finished converting document 2511_02805.pdf in 24.31 sec.
+2026-03-28 19:37:56,536 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 19:37:56,619 - INFO - Going to convert document batch...
+2026-03-28 19:37:56,620 - INFO - Processing document 2511_02824.pdf
+2026-03-28 19:38:43,828 - INFO - Finished converting document 2511_02824.pdf in 47.34 sec.
+2026-03-28 19:39:15,065 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 19:39:15,092 - INFO - Going to convert document batch...
+2026-03-28 19:39:15,093 - INFO - Processing document 2511_03492.pdf
+2026-03-28 19:40:06,839 - INFO - Finished converting document 2511_03492.pdf in 51.81 sec.
+2026-03-28 19:40:10,756 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 19:40:10,772 - INFO - Going to convert document batch...
+2026-03-28 19:40:10,773 - INFO - Processing document 2511_04427.pdf
+2026-03-28 19:40:49,437 - INFO - Finished converting document 2511_04427.pdf in 38.74 sec.
+2026-03-28 19:40:53,902 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 19:40:53,925 - INFO - Going to convert document batch...
+2026-03-28 19:40:53,926 - INFO - Processing document 2511_04898.pdf
+2026-03-28 19:41:52,607 - INFO - Finished converting document 2511_04898.pdf in 58.75 sec.
+2026-03-28 19:41:56,396 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 19:41:56,415 - INFO - Going to convert document batch...
+2026-03-28 19:41:56,416 - INFO - Processing document 2511_04939.pdf
+2026-03-28 19:42:25,004 - INFO - Finished converting document 2511_04939.pdf in 28.62 sec.
+2026-03-28 19:42:29,674 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 19:42:29,720 - INFO - Going to convert document batch...
+2026-03-28 19:42:29,722 - INFO - Processing document 2511_04962.pdf
+2026-03-28 19:44:34,955 - INFO - Finished converting document 2511_04962.pdf in 125.31 sec.
+2026-03-28 19:44:39,991 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 19:44:40,094 - INFO - Going to convert document batch...
+2026-03-28 19:44:40,096 - INFO - Processing document 2511_05271.pdf
+2026-03-28 19:53:32,500 - INFO - Finished converting document 2511_05271.pdf in 532.62 sec.
+2026-03-28 19:54:26,051 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 19:54:26,789 - INFO - Going to convert document batch...
+2026-03-28 19:54:26,791 - INFO - Processing document 2511_0609.pdf
+2026-03-28 19:59:06,242 - INFO - Finished converting document 2511_0609.pdf in 280.41 sec.
+2026-03-28 19:59:10,063 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 19:59:10,081 - INFO - Going to convert document batch...
+2026-03-28 19:59:10,081 - INFO - Processing document 2511_06221.pdf
+2026-03-28 20:02:00,613 - INFO - Finished converting document 2511_06221.pdf in 170.56 sec.
+2026-03-28 20:02:04,462 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 20:02:04,521 - INFO - Going to convert document batch...
+2026-03-28 20:02:04,523 - INFO - Processing document 2511_06307.pdf
+2026-03-28 20:05:06,976 - INFO - Finished converting document 2511_06307.pdf in 182.53 sec.
+2026-03-28 20:05:10,801 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 20:05:10,829 - INFO - Going to convert document batch...
+2026-03-28 20:05:10,831 - INFO - Processing document 2511_06344.pdf
+2026-03-28 20:08:37,829 - INFO - Finished converting document 2511_06344.pdf in 207.08 sec.
+2026-03-28 20:08:41,465 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 20:08:41,473 - INFO - Going to convert document batch...
+2026-03-28 20:08:41,474 - INFO - Processing document 2511_07124.pdf
+2026-03-28 20:11:04,390 - INFO - Finished converting document 2511_07124.pdf in 142.95 sec.
+2026-03-28 20:11:08,354 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 20:11:08,398 - INFO - Going to convert document batch...
+2026-03-28 20:11:08,399 - INFO - Processing document 2511_07327.pdf
+2026-03-28 20:15:53,815 - INFO - Finished converting document 2511_07327.pdf in 285.49 sec.
+2026-03-28 20:15:57,431 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 20:15:57,442 - INFO - Going to convert document batch...
+2026-03-28 20:15:57,443 - INFO - Processing document 2511_07555.pdf
+2026-03-28 20:18:36,115 - INFO - Finished converting document 2511_07555.pdf in 158.70 sec.
+2026-03-28 20:18:40,277 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 20:18:40,335 - INFO - Going to convert document batch...
+2026-03-28 20:18:40,337 - INFO - Processing document 2511_07885.pdf
+2026-03-28 20:28:48,666 - INFO - Finished converting document 2511_07885.pdf in 608.44 sec.
+2026-03-28 20:28:53,172 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 20:28:53,262 - INFO - Going to convert document batch...
+2026-03-28 20:28:53,264 - INFO - Processing document 2511_08544.pdf
+2026-03-28 20:31:41,046 - INFO - Finished converting document 2511_08544.pdf in 167.91 sec.
+2026-03-28 20:31:48,589 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 20:31:48,760 - INFO - Going to convert document batch...
+2026-03-28 20:31:48,762 - INFO - Processing document 2511_08747.pdf
+2026-03-28 20:35:44,617 - INFO - Finished converting document 2511_08747.pdf in 236.06 sec.
+2026-03-28 20:35:48,419 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 20:35:48,427 - INFO - Going to convert document batch...
+2026-03-28 20:35:48,428 - INFO - Processing document 2511_0903.pdf
+2026-03-28 20:36:16,437 - INFO - Finished converting document 2511_0903.pdf in 28.05 sec.
+2026-03-28 20:36:19,838 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 20:36:19,847 - INFO - Going to convert document batch...
+2026-03-28 20:36:19,849 - INFO - Processing document 2511_14823.pdf
+2026-03-28 20:36:37,965 - INFO - Finished converting document 2511_14823.pdf in 18.16 sec.
+2026-03-28 20:36:41,755 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 20:36:41,790 - INFO - Going to convert document batch...
+2026-03-28 20:36:41,791 - INFO - Processing document 2511_16652.pdf
+2026-03-28 20:38:24,933 - INFO - Finished converting document 2511_16652.pdf in 103.24 sec.
+2026-03-28 20:38:29,202 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 20:38:29,218 - INFO - Going to convert document batch...
+2026-03-28 20:38:29,219 - INFO - Processing document 2511_17592.pdf
+2026-03-28 20:38:46,001 - INFO - Finished converting document 2511_17592.pdf in 16.81 sec.
+2026-03-28 20:38:51,471 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 20:38:51,497 - INFO - Going to convert document batch...
+2026-03-28 20:38:51,499 - INFO - Processing document 2511_18036.pdf
+2026-03-28 20:39:12,645 - INFO - Finished converting document 2511_18036.pdf in 21.19 sec.
+2026-03-28 20:39:31,331 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 20:39:31,623 - INFO - Going to convert document batch...
+2026-03-28 20:39:31,625 - INFO - Processing document 2511_18303.pdf
+2026-03-28 20:44:51,048 - INFO - Finished converting document 2511_18303.pdf in 319.75 sec.
+2026-03-28 20:44:55,040 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 20:44:55,055 - INFO - Going to convert document batch...
+2026-03-28 20:44:55,056 - INFO - Processing document 2511_18423.pdf
+2026-03-28 20:45:22,824 - INFO - Finished converting document 2511_18423.pdf in 27.81 sec.
+2026-03-28 20:45:26,458 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 20:45:26,470 - INFO - Going to convert document batch...
+2026-03-28 20:45:26,471 - INFO - Processing document 2511_18517.pdf
+2026-03-28 20:46:12,794 - INFO - Finished converting document 2511_18517.pdf in 46.39 sec.
+2026-03-28 20:46:16,661 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 20:46:16,712 - INFO - Going to convert document batch...
+2026-03-28 20:46:16,714 - INFO - Processing document 2511_19046.pdf
+2026-03-28 20:46:42,705 - INFO - Finished converting document 2511_19046.pdf in 26.06 sec.
+2026-03-28 20:46:46,340 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 20:46:46,355 - INFO - Going to convert document batch...
+2026-03-28 20:46:46,356 - INFO - Processing document 2511_19423.pdf
+2026-03-28 20:47:04,030 - INFO - Finished converting document 2511_19423.pdf in 17.72 sec.
+2026-03-28 20:47:24,230 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 20:47:24,538 - INFO - Going to convert document batch...
+2026-03-28 20:47:24,539 - INFO - Processing document 2511_19575.pdf
+2026-03-28 20:49:54,804 - INFO - Finished converting document 2511_19575.pdf in 150.61 sec.
+2026-03-28 20:49:59,691 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 20:49:59,752 - INFO - Going to convert document batch...
+2026-03-28 20:49:59,752 - INFO - Processing document 2511_19757.pdf
+2026-03-28 20:50:19,496 - INFO - Finished converting document 2511_19757.pdf in 19.83 sec.
+2026-03-28 20:50:48,866 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 20:50:48,877 - INFO - Going to convert document batch...
+2026-03-28 20:50:48,878 - INFO - Processing document 2511_20297.pdf
+2026-03-28 20:51:17,330 - INFO - Finished converting document 2511_20297.pdf in 28.48 sec.
+2026-03-28 20:51:38,282 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 20:51:38,289 - INFO - Going to convert document batch...
+2026-03-28 20:51:38,290 - INFO - Processing document 2511_20347.pdf
+2026-03-28 20:51:47,882 - INFO - Finished converting document 2511_20347.pdf in 9.61 sec.
+2026-03-28 20:52:09,077 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 20:52:09,083 - INFO - Going to convert document batch...
+2026-03-28 20:52:09,083 - INFO - Processing document 2511_20471.pdf
+2026-03-28 20:52:29,556 - INFO - Finished converting document 2511_20471.pdf in 20.48 sec.
+2026-03-28 20:53:05,985 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 20:53:06,012 - INFO - Going to convert document batch...
+2026-03-28 20:53:06,013 - INFO - Processing document 2511_20478.pdf
+2026-03-28 20:54:11,944 - INFO - Finished converting document 2511_20478.pdf in 65.99 sec.
+2026-03-28 20:54:23,378 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 20:54:23,406 - INFO - Going to convert document batch...
+2026-03-28 20:54:23,409 - INFO - Processing document 2511_20561.pdf
+2026-03-28 20:54:53,556 - INFO - Finished converting document 2511_20561.pdf in 30.22 sec.
+2026-03-28 20:54:57,433 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 20:54:57,461 - INFO - Going to convert document batch...
+2026-03-28 20:54:57,463 - INFO - Processing document 2511_20639.pdf
+2026-03-28 20:55:45,050 - INFO - Finished converting document 2511_20639.pdf in 47.64 sec.
+2026-03-28 20:55:48,740 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 20:55:48,756 - INFO - Going to convert document batch...
+2026-03-28 20:55:48,758 - INFO - Processing document 2511_20693.pdf
+2026-03-28 20:56:11,672 - INFO - Finished converting document 2511_20693.pdf in 22.97 sec.
+2026-03-28 20:56:15,237 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 20:56:15,248 - INFO - Going to convert document batch...
+2026-03-28 20:56:15,252 - INFO - Processing document 2511_21686.pdf
+2026-03-28 20:56:31,282 - INFO - Finished converting document 2511_21686.pdf in 16.08 sec.
+2026-03-28 20:56:40,161 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 20:56:40,451 - INFO - Going to convert document batch...
+2026-03-28 20:56:40,454 - INFO - Processing document 2510_25976.pdf
+2026-03-28 20:57:52,845 - INFO - Finished converting document 2510_25976.pdf in 72.72 sec.
+2026-03-28 20:57:56,445 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 20:57:56,453 - INFO - Going to convert document batch...
+2026-03-28 20:57:56,453 - INFO - Processing document 2511_23319.pdf
+2026-03-28 20:58:21,635 - INFO - Finished converting document 2511_23319.pdf in 25.22 sec.
+2026-03-28 20:58:25,162 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 20:58:25,162 - INFO - Going to convert document batch...
+2026-03-28 20:58:25,170 - INFO - Processing document 2512_03377.pdf
+2026-03-28 20:58:41,479 - INFO - Finished converting document 2512_03377.pdf in 16.33 sec.
+2026-03-28 20:58:45,456 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 20:58:45,473 - INFO - Going to convert document batch...
+2026-03-28 20:58:45,474 - INFO - Processing document 2512_04957.pdf
+2026-03-28 20:59:26,453 - INFO - Finished converting document 2512_04957.pdf in 41.06 sec.
+2026-03-28 20:59:32,389 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 20:59:32,496 - INFO - Going to convert document batch...
+2026-03-28 20:59:32,498 - INFO - Processing document 2512_05117.pdf
+2026-03-28 21:03:04,890 - INFO - Finished converting document 2512_05117.pdf in 212.53 sec.
+2026-03-28 21:03:09,758 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 21:03:09,775 - INFO - Going to convert document batch...
+2026-03-28 21:03:09,777 - INFO - Processing document 2512_0547.pdf
+2026-03-28 21:03:26,272 - INFO - Finished converting document 2512_0547.pdf in 16.53 sec.
+2026-03-28 21:03:29,775 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 21:03:29,784 - INFO - Going to convert document batch...
+2026-03-28 21:03:29,786 - INFO - Processing document 2512_05765.pdf
+2026-03-28 21:03:40,515 - INFO - Finished converting document 2512_05765.pdf in 10.77 sec.
+2026-03-28 21:03:45,654 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 21:03:45,663 - INFO - Going to convert document batch...
+2026-03-28 21:03:45,670 - INFO - Processing document 2512_07461.pdf
+2026-03-28 21:04:07,454 - INFO - Finished converting document 2512_07461.pdf in 21.83 sec.
+2026-03-28 21:04:11,106 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 21:04:11,115 - INFO - Going to convert document batch...
+2026-03-28 21:04:11,116 - INFO - Processing document 2512_07611.pdf
+2026-03-28 21:04:31,287 - INFO - Finished converting document 2512_07611.pdf in 20.20 sec.
+2026-03-28 21:04:35,255 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 21:04:35,287 - INFO - Going to convert document batch...
+2026-03-28 21:04:35,291 - INFO - Processing document 2512_07796.pdf
+2026-03-28 21:05:14,058 - INFO - Finished converting document 2512_07796.pdf in 38.83 sec.
+2026-03-28 21:05:17,644 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 21:05:17,652 - INFO - Going to convert document batch...
+2026-03-28 21:05:17,652 - INFO - Processing document 2512_07805.pdf
+2026-03-28 21:05:45,028 - INFO - Finished converting document 2512_07805.pdf in 27.41 sec.
+2026-03-28 21:05:49,103 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 21:05:49,116 - INFO - Going to convert document batch...
+2026-03-28 21:05:49,116 - INFO - Processing document 2512_07832.pdf
+2026-03-28 21:06:38,129 - INFO - Finished converting document 2512_07832.pdf in 49.05 sec.
+2026-03-28 21:06:44,215 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 21:06:44,268 - INFO - Going to convert document batch...
+2026-03-28 21:06:44,268 - INFO - Processing document 2512_07921.pdf
+2026-03-28 21:07:19,535 - INFO - Finished converting document 2512_07921.pdf in 35.34 sec.
+2026-03-28 21:07:23,202 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 21:07:23,226 - INFO - Going to convert document batch...
+2026-03-28 21:07:23,227 - INFO - Processing document 2512_08296.pdf
+2026-03-28 21:08:08,599 - INFO - Finished converting document 2512_08296.pdf in 45.41 sec.
+2026-03-28 21:08:12,487 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 21:08:12,497 - INFO - Going to convert document batch...
+2026-03-28 21:08:12,498 - INFO - Processing document 2512_0856.pdf
+2026-03-28 21:08:31,676 - INFO - Finished converting document 2512_0856.pdf in 19.20 sec.
+2026-03-28 21:08:35,306 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 21:08:35,322 - INFO - Going to convert document batch...
+2026-03-28 21:08:35,323 - INFO - Processing document 2512_09443.pdf
+2026-03-28 21:08:51,509 - INFO - Finished converting document 2512_09443.pdf in 16.20 sec.
+2026-03-28 21:08:55,327 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 21:08:55,342 - INFO - Going to convert document batch...
+2026-03-28 21:08:55,342 - INFO - Processing document 2512_09914.pdf
+2026-03-28 21:09:26,335 - INFO - Finished converting document 2512_09914.pdf in 31.03 sec.
+2026-03-28 21:09:30,004 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 21:09:30,013 - INFO - Going to convert document batch...
+2026-03-28 21:09:30,014 - INFO - Processing document 2512_10317.pdf
+2026-03-28 21:10:04,118 - INFO - Finished converting document 2512_10317.pdf in 34.12 sec.
+2026-03-28 21:10:07,778 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 21:10:07,792 - INFO - Going to convert document batch...
+2026-03-28 21:10:07,793 - INFO - Processing document 2512_13898.pdf
+2026-03-28 21:10:44,091 - INFO - Finished converting document 2512_13898.pdf in 36.34 sec.
+2026-03-28 21:10:47,740 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 21:10:47,753 - INFO - Going to convert document batch...
+2026-03-28 21:10:47,753 - INFO - Processing document 2512_14012.pdf
+2026-03-28 21:11:22,053 - INFO - Finished converting document 2512_14012.pdf in 34.33 sec.
+2026-03-28 21:11:25,569 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 21:11:25,579 - INFO - Going to convert document batch...
+2026-03-28 21:11:25,580 - INFO - Processing document 2512_14693.pdf
+2026-03-28 21:11:45,732 - INFO - Finished converting document 2512_14693.pdf in 20.19 sec.
+2026-03-28 21:11:51,108 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 21:11:51,135 - INFO - Going to convert document batch...
+2026-03-28 21:11:51,135 - INFO - Processing document 2512_16301.pdf
+2026-03-28 21:14:25,581 - INFO - Finished converting document 2512_16301.pdf in 154.51 sec.
+2026-03-28 21:14:29,341 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 21:14:29,350 - INFO - Going to convert document batch...
+2026-03-28 21:14:29,351 - INFO - Processing document 2512_18202.pdf
+2026-03-28 21:14:56,292 - INFO - Finished converting document 2512_18202.pdf in 26.97 sec.
+2026-03-28 21:14:59,907 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 21:14:59,919 - INFO - Going to convert document batch...
+2026-03-28 21:14:59,919 - INFO - Processing document 2512_18552.pdf
+2026-03-28 21:15:13,794 - INFO - Finished converting document 2512_18552.pdf in 13.92 sec.
+2026-03-28 21:15:18,374 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 21:15:18,457 - INFO - Going to convert document batch...
+2026-03-28 21:15:18,462 - INFO - Processing document 2512_18746.pdf
+2026-03-28 21:16:19,521 - INFO - Finished converting document 2512_18746.pdf in 61.17 sec.
+2026-03-28 21:16:23,131 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 21:16:23,137 - INFO - Going to convert document batch...
+2026-03-28 21:16:23,138 - INFO - Processing document 2512_20237.pdf
+2026-03-28 21:16:42,500 - INFO - Finished converting document 2512_20237.pdf in 19.39 sec.
+2026-03-28 21:16:46,310 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 21:16:46,320 - INFO - Going to convert document batch...
+2026-03-28 21:16:46,320 - INFO - Processing document 2512_20491.pdf
+2026-03-28 21:17:39,117 - INFO - Finished converting document 2512_20491.pdf in 52.83 sec.
+2026-03-28 21:17:43,169 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 21:17:43,179 - INFO - Going to convert document batch...
+2026-03-28 21:17:43,180 - INFO - Processing document 2512_20612.pdf
+2026-03-28 21:18:21,427 - INFO - Finished converting document 2512_20612.pdf in 38.27 sec.
+2026-03-28 21:18:25,094 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 21:18:25,098 - INFO - Going to convert document batch...
+2026-03-28 21:18:25,104 - INFO - Processing document 2512_20854.pdf
+2026-03-28 21:19:25,728 - INFO - Finished converting document 2512_20854.pdf in 60.64 sec.
+2026-03-28 21:19:29,992 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 21:19:30,018 - INFO - Going to convert document batch...
+2026-03-28 21:19:30,019 - INFO - Processing document 2512_20957.pdf
+2026-03-28 21:20:06,717 - INFO - Finished converting document 2512_20957.pdf in 36.75 sec.
+2026-03-28 21:20:10,084 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 21:20:10,101 - INFO - Going to convert document batch...
+2026-03-28 21:20:10,102 - INFO - Processing document 2512_22106.pdf
+2026-03-28 21:20:23,716 - INFO - Finished converting document 2512_22106.pdf in 13.64 sec.
+2026-03-28 21:20:31,538 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 21:20:31,589 - INFO - Going to convert document batch...
+2026-03-28 21:20:31,590 - INFO - Processing document 2512_23343.pdf
+2026-03-28 21:21:28,557 - INFO - Finished converting document 2512_23343.pdf in 57.08 sec.
+2026-03-28 21:21:54,261 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 21:21:54,434 - INFO - Going to convert document batch...
+2026-03-28 21:21:54,434 - INFO - Processing document 2512_23676.pdf
+2026-03-28 21:25:07,270 - INFO - Finished converting document 2512_23676.pdf in 193.03 sec.
+2026-03-28 21:25:11,744 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 21:25:11,828 - INFO - Going to convert document batch...
+2026-03-28 21:25:11,829 - INFO - Processing document 2512_23707.pdf
+2026-03-28 21:27:45,609 - INFO - Finished converting document 2512_23707.pdf in 153.89 sec.
+2026-03-28 21:27:50,515 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 21:27:50,594 - INFO - Going to convert document batch...
+2026-03-28 21:27:50,595 - INFO - Processing document 2512_24601.pdf
+2026-03-28 21:30:08,967 - INFO - Finished converting document 2512_24601.pdf in 138.48 sec.
+2026-03-28 21:30:13,296 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 21:30:13,356 - INFO - Going to convert document batch...
+2026-03-28 21:30:13,357 - INFO - Processing document 2512_24618.pdf
+2026-03-28 21:31:32,961 - INFO - Finished converting document 2512_24618.pdf in 79.72 sec.
+2026-03-28 21:31:37,130 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 21:31:37,151 - INFO - Going to convert document batch...
+2026-03-28 21:31:37,151 - INFO - Processing document 2512_25026.pdf
+2026-03-28 21:32:10,105 - INFO - Finished converting document 2512_25026.pdf in 33.00 sec.
+2026-03-28 21:32:14,302 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 21:32:14,327 - INFO - Going to convert document batch...
+2026-03-28 21:32:14,329 - INFO - Processing document 2601_01576.pdf
+2026-03-28 21:33:23,509 - INFO - Finished converting document 2601_01576.pdf in 69.22 sec.
+2026-03-28 21:33:27,179 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 21:33:27,192 - INFO - Going to convert document batch...
+2026-03-28 21:33:27,192 - INFO - Processing document 2601_01609.pdf
+2026-03-28 21:34:05,856 - INFO - Finished converting document 2601_01609.pdf in 38.70 sec.
+2026-03-28 21:34:09,604 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 21:34:09,611 - INFO - Going to convert document batch...
+2026-03-28 21:34:09,612 - INFO - Processing document 2601_0201.pdf
+2026-03-28 21:34:13,699 - INFO - Finished converting document 2601_0201.pdf in 4.12 sec.
+2026-03-28 21:34:17,121 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 21:34:17,126 - INFO - Going to convert document batch...
+2026-03-28 21:34:17,126 - INFO - Processing document 2601_02553.pdf
+2026-03-28 21:34:51,346 - INFO - Finished converting document 2601_02553.pdf in 34.25 sec.
+2026-03-28 21:34:54,998 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 21:34:55,015 - INFO - Going to convert document batch...
+2026-03-28 21:34:55,017 - INFO - Processing document 2601_03052.pdf
+2026-03-28 21:35:18,835 - INFO - Finished converting document 2601_03052.pdf in 23.86 sec.
+2026-03-28 21:35:22,488 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 21:35:22,506 - INFO - Going to convert document batch...
+2026-03-28 21:35:22,507 - INFO - Processing document 2601_03236.pdf
+2026-03-28 21:35:46,993 - INFO - Finished converting document 2601_03236.pdf in 24.53 sec.
+2026-03-28 21:35:50,641 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 21:35:50,658 - INFO - Going to convert document batch...
+2026-03-28 21:35:50,659 - INFO - Processing document 2601_03315.pdf
+2026-03-28 21:36:49,054 - INFO - Finished converting document 2601_03315.pdf in 58.44 sec.
+2026-03-28 21:36:56,595 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 21:36:56,693 - INFO - Going to convert document batch...
+2026-03-28 21:36:56,695 - INFO - Processing document 2601_03425.pdf
+2026-03-28 21:40:22,533 - INFO - Finished converting document 2601_03425.pdf in 205.95 sec.
+2026-03-28 21:40:27,390 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 21:40:27,416 - INFO - Going to convert document batch...
+2026-03-28 21:40:27,417 - INFO - Processing document 2601_04633.pdf
+2026-03-28 21:48:28,596 - INFO - Finished converting document 2601_04633.pdf in 481.25 sec.
+2026-03-28 21:48:32,869 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 21:48:32,881 - INFO - Going to convert document batch...
+2026-03-28 21:48:32,881 - INFO - Processing document 2601_04767.pdf
+2026-03-28 21:49:00,206 - INFO - Finished converting document 2601_04767.pdf in 27.36 sec.
+2026-03-28 21:49:04,414 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 21:49:04,443 - INFO - Going to convert document batch...
+2026-03-28 21:49:04,443 - INFO - Processing document 2601_04878.pdf
+2026-03-28 21:49:45,165 - INFO - Finished converting document 2601_04878.pdf in 40.77 sec.
+2026-03-28 21:49:48,752 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 21:49:48,764 - INFO - Going to convert document batch...
+2026-03-28 21:49:48,765 - INFO - Processing document 2601_05076.pdf
+2026-03-28 21:50:11,098 - INFO - Finished converting document 2601_05076.pdf in 22.36 sec.
+2026-03-28 21:50:14,517 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 21:50:14,525 - INFO - Going to convert document batch...
+2026-03-28 21:50:14,528 - INFO - Processing document 2601_05104.pdf
+2026-03-28 21:50:28,721 - INFO - Finished converting document 2601_05104.pdf in 14.22 sec.
+2026-03-28 21:50:32,358 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 21:50:32,370 - INFO - Going to convert document batch...
+2026-03-28 21:50:32,370 - INFO - Processing document 2601_07055.pdf
+2026-03-28 21:51:03,578 - INFO - Finished converting document 2601_07055.pdf in 31.23 sec.
+2026-03-28 21:51:07,063 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 21:51:07,067 - INFO - Going to convert document batch...
+2026-03-28 21:51:07,068 - INFO - Processing document 2601_07136.pdf
+2026-03-28 21:51:19,000 - INFO - Finished converting document 2601_07136.pdf in 11.95 sec.
+2026-03-28 21:51:22,600 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 21:51:22,612 - INFO - Going to convert document batch...
+2026-03-28 21:51:22,612 - INFO - Processing document 2601_08808.pdf
+2026-03-28 21:51:44,323 - INFO - Finished converting document 2601_08808.pdf in 21.75 sec.
+2026-03-28 21:51:51,881 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 21:51:51,921 - INFO - Going to convert document batch...
+2026-03-28 21:51:51,922 - INFO - Processing document 2601_09113.pdf
+2026-03-28 21:53:05,186 - INFO - Finished converting document 2601_09113.pdf in 73.34 sec.
+2026-03-28 21:53:13,023 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 21:53:13,084 - INFO - Going to convert document batch...
+2026-03-28 21:53:13,084 - INFO - Processing document 2601_1081.pdf
+2026-03-28 21:54:09,890 - INFO - Finished converting document 2601_1081.pdf in 56.89 sec.
+2026-03-28 21:54:13,425 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 21:54:13,438 - INFO - Going to convert document batch...
+2026-03-28 21:54:13,439 - INFO - Processing document 2601_11888.pdf
+2026-03-28 21:54:42,142 - INFO - Finished converting document 2601_11888.pdf in 28.75 sec.
+2026-03-28 21:54:45,621 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 21:54:45,630 - INFO - Going to convert document batch...
+2026-03-28 21:54:45,631 - INFO - Processing document 2601_12307.pdf
+2026-03-28 21:55:16,971 - INFO - Finished converting document 2601_12307.pdf in 31.38 sec.
+2026-03-28 21:55:23,357 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 21:55:23,427 - INFO - Going to convert document batch...
+2026-03-28 21:55:23,428 - INFO - Processing document 2601_12542.pdf
+2026-03-28 21:59:36,855 - INFO - Finished converting document 2601_12542.pdf in 253.53 sec.
+2026-03-28 21:59:45,038 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 21:59:45,145 - INFO - Going to convert document batch...
+2026-03-28 21:59:45,147 - INFO - Processing document 2601_13548.pdf
+2026-03-28 22:00:14,601 - INFO - Finished converting document 2601_13548.pdf in 29.59 sec.
+2026-03-28 22:00:21,241 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 22:00:21,275 - INFO - Going to convert document batch...
+2026-03-28 22:00:21,275 - INFO - Processing document 2601_18779.pdf
+2026-03-28 22:01:55,534 - INFO - Finished converting document 2601_18779.pdf in 94.31 sec.
+2026-03-28 22:02:04,177 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 22:02:04,346 - INFO - Going to convert document batch...
+2026-03-28 22:02:04,347 - INFO - Processing document 2601_21192.pdf
+2026-03-28 22:03:38,414 - INFO - Finished converting document 2601_21192.pdf in 94.27 sec.
+2026-03-28 22:03:42,222 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 22:03:42,248 - INFO - Going to convert document batch...
+2026-03-28 22:03:42,248 - INFO - Processing document 2602_02751.pdf
+2026-03-28 22:05:10,223 - INFO - Finished converting document 2602_02751.pdf in 88.02 sec.
+2026-03-28 22:05:13,972 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 22:05:13,990 - INFO - Going to convert document batch...
+2026-03-28 22:05:13,991 - INFO - Processing document 2602_04118.pdf
+2026-03-28 22:05:32,250 - INFO - Finished converting document 2602_04118.pdf in 18.30 sec.
+2026-03-28 22:05:39,722 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 22:05:39,846 - INFO - Going to convert document batch...
+2026-03-28 22:05:39,848 - INFO - Processing document 2602_07755.pdf
+2026-03-28 22:06:44,613 - INFO - Finished converting document 2602_07755.pdf in 64.92 sec.
+2026-03-28 22:06:48,813 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 22:06:48,846 - INFO - Going to convert document batch...
+2026-03-28 22:06:48,847 - INFO - Processing document 2602_10099.pdf
+2026-03-28 22:07:20,591 - INFO - Finished converting document 2602_10099.pdf in 31.81 sec.
+2026-03-28 22:07:25,714 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 22:07:25,754 - INFO - Going to convert document batch...
+2026-03-28 22:07:25,755 - INFO - Processing document 2602_1243.pdf
+2026-03-28 22:07:40,332 - INFO - Finished converting document 2602_1243.pdf in 14.64 sec.
+2026-03-28 22:07:44,131 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 22:07:44,140 - INFO - Going to convert document batch...
+2026-03-28 22:07:44,141 - INFO - Processing document 2602_1353.pdf
+2026-03-28 22:07:57,710 - INFO - Finished converting document 2602_1353.pdf in 13.58 sec.
+2026-03-28 22:08:01,259 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 22:08:01,270 - INFO - Going to convert document batch...
+2026-03-28 22:08:01,271 - INFO - Processing document 2602_16313.pdf
+2026-03-28 22:08:44,414 - INFO - Finished converting document 2602_16313.pdf in 43.17 sec.
+2026-03-28 22:08:48,310 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 22:08:48,318 - INFO - Going to convert document batch...
+2026-03-28 22:08:48,318 - INFO - Processing document 2602_1932.pdf
+2026-03-28 22:09:05,176 - INFO - Finished converting document 2602_1932.pdf in 16.88 sec.
+2026-03-28 22:09:08,838 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 22:09:08,842 - INFO - Going to convert document batch...
+2026-03-28 22:09:08,842 - INFO - Processing document 2602_20133.pdf
+2026-03-28 22:09:34,711 - INFO - Finished converting document 2602_20133.pdf in 25.88 sec.
+2026-03-28 22:09:38,217 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 22:09:38,223 - INFO - Going to convert document batch...
+2026-03-28 22:09:38,223 - INFO - Processing document 2602_22193.pdf
+2026-03-28 22:09:51,244 - INFO - Finished converting document 2602_22193.pdf in 13.06 sec.
+2026-03-28 22:09:57,971 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 22:09:58,070 - INFO - Going to convert document batch...
+2026-03-28 22:09:58,072 - INFO - Processing document 2602_23152.pdf
+2026-03-28 22:12:45,641 - INFO - Finished converting document 2602_23152.pdf in 167.70 sec.
+2026-03-28 22:12:49,639 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 22:12:49,659 - INFO - Going to convert document batch...
+2026-03-28 22:12:49,660 - INFO - Processing document 2603_00578.pdf
+2026-03-28 22:13:25,182 - INFO - Finished converting document 2603_00578.pdf in 35.58 sec.
+2026-03-28 22:13:28,809 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 22:13:28,818 - INFO - Going to convert document batch...
+2026-03-28 22:13:28,818 - INFO - Processing document 2603_04257.pdf
+2026-03-28 22:13:43,275 - INFO - Finished converting document 2603_04257.pdf in 14.48 sec.
+2026-03-28 22:13:47,421 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 22:13:47,485 - INFO - Going to convert document batch...
+2026-03-28 22:13:47,486 - INFO - Processing document 2603_04448.pdf
+2026-03-28 22:14:10,031 - INFO - Finished converting document 2603_04448.pdf in 22.64 sec.
+2026-03-28 22:14:14,827 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 22:14:14,904 - INFO - Going to convert document batch...
+2026-03-28 22:14:14,905 - INFO - Processing document 2603_12372.pdf
+2026-03-28 22:16:38,074 - INFO - Finished converting document 2603_12372.pdf in 143.28 sec.
+2026-03-28 22:16:42,216 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 22:16:42,226 - INFO - Going to convert document batch...
+2026-03-28 22:16:42,227 - INFO - Processing document 2603_15255.pdf
+2026-03-28 22:17:01,497 - INFO - Finished converting document 2603_15255.pdf in 19.31 sec.
+2026-03-28 22:17:05,594 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 22:17:05,597 - INFO - Going to convert document batch...
+2026-03-28 22:17:05,597 - INFO - Processing document 2603_1528.pdf
+2026-03-28 22:17:16,607 - INFO - Finished converting document 2603_1528.pdf in 11.05 sec.
+2026-03-28 22:17:22,240 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 22:17:22,261 - INFO - Going to convert document batch...
+2026-03-28 22:17:22,262 - INFO - Processing document 2603_15381.pdf
+2026-03-28 22:17:52,959 - INFO - Finished converting document 2603_15381.pdf in 30.73 sec.
+2026-03-28 22:17:56,555 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 22:17:56,569 - INFO - Going to convert document batch...
+2026-03-28 22:17:56,570 - INFO - Processing document 2603_15726.pdf
+2026-03-28 22:18:20,225 - INFO - Finished converting document 2603_15726.pdf in 23.69 sec.
+2026-03-28 22:18:24,401 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 22:18:24,452 - INFO - Going to convert document batch...
+2026-03-28 22:18:24,453 - INFO - Processing document 2603_19461.pdf
+2026-03-28 22:19:26,046 - INFO - Finished converting document 2603_19461.pdf in 61.67 sec.
+2026-03-28 22:19:29,464 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 22:19:29,471 - INFO - Going to convert document batch...
+2026-03-28 22:19:29,471 - INFO - Processing document 2603_20639.pdf
+2026-03-28 22:19:32,320 - INFO - Finished converting document 2603_20639.pdf in 2.86 sec.
+2026-03-28 22:19:38,184 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 22:19:38,392 - INFO - Going to convert document batch...
+2026-03-28 22:19:38,393 - INFO - Processing document 2603_21786.pdf
+2026-03-28 22:20:01,573 - INFO - Finished converting document 2603_21786.pdf in 23.42 sec.
+2026-03-28 22:20:04,982 - INFO - detected formats: [<InputFormat.PDF: 'pdf'>]
+2026-03-28 22:20:04,988 - INFO - Going to convert document batch...
+2026-03-28 22:20:04,988 - INFO - Processing document 2603_22455.pdf
+2026-03-28 22:20:45,386 - INFO - Finished converting document 2603_22455.pdf in 40.42 sec.

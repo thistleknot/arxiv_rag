@@ -1,0 +1,97 @@
+
+You are optimizing a 3-layer hybrid retrieval pipeline built on PostgreSQL/pgvector.
+Your goal is to find the best configuration to maximize RAGAS evaluation metrics.
+
+=== PIPELINE ARCHITECTURE ===
+
+LAYER 1 — GIST/Fact Hybrid Retrieval
+  Two parallel candidate pools are built:
+    • BM25 Pool: lexical retrieval from a sparsevec(16000) signed hash index, pool size = top_k²
+    • Dense Pool: cosine retrieval from a vector(256) IVFFlat index (Qwen3 model2vec), pool size = top_k²
+
+  Each pool independently runs GIST (Greedy Incremental Selection with Threshold) selection:
+    score(d) = gist_lambda × utility(d) − (1 − gist_lambda) × max_sim(d, S)
+    where utility = doc-query cosine similarity, S = already-selected set
+
+  The two GIST-selected pools are fused with Reciprocal Rank Fusion (RRF):
+    RRF(doc) = Σ 1 / (rrf_k + rank_i)  for each ranking in which the doc appears
+
+  Output: ≤ φ × top_k² candidates (φ ≈ 0.618, the golden ratio / Fibonacci contraction)
+
+LAYER 2 — Premise Expansion (optional)
+  A semantic triplet index is built from BIO-tagger extracted SPO triplets.
+  Query → BM25 matching triplets → map triplets back to source chunks (expansion)
+  Expansion chunks are then merged into Layer 1 output via another RRF pass.
+  Controlled by: use_layer2_expansion (bool), layer2_expansion_count (int)
+
+LAYER 3 — Syllogism Reranking (optional)
+  Stage A: ColBERT MaxSim — late interaction token-level reranking
+    Score = Σᵢ maxⱼ cosine(q_token_i, d_token_j)
+    Output: top_k best candidates
+    Controlled by: use_colbert (bool)
+
+  Stage B: Cross-Encoder MS-MARCO MiniLM-L-6-v2 — joint query+doc encoding
+    Output: final top_k
+    Controlled by: use_cross_encoder (bool)
+
+=== TUNABLE PARAMETERS ===
+
+  rrf_k (int, 10–120):
+    RRF denominator. Lower = more aggressive rank weighting (top ranks dominate).
+    Higher = smoother fusion (all ranks contribute more equally). Default: 60.
+
+  gist_lambda (float, 0.0–1.0):
+    GIST diversity–relevance tradeoff. 1.0 = pure relevance (no diversity penalty).
+    0.0 = pure diversity (ignore relevance). 0.7 = slight relevance preference.
+
+  use_layer2_expansion (bool):
+    Enable triplet-based query expansion. Improves recall for multi-hop queries.
+    Adds latency. Disable for precision-focused tasks.
+
+  layer2_expansion_count (int, 0–200):
+    Number of expansion chunks to add from the triplet index. Only used when
+    use_layer2_expansion=true. Null means auto (= top_k²).
+
+  use_colbert (bool):
+    Enable ColBERT token-level late interaction reranking (Layer 3A).
+    Improves precision, adds ~200ms latency.
+
+  use_cross_encoder (bool):
+    Enable Cross-Encoder joint encoding reranking (Layer 3B).
+    Best precision boost, adds ~300ms latency. Runs after ColBERT if both enabled.
+
+  top_k (int, 5–34):
+    Final number of results. Controls Fibonacci cascade sizing:
+    BM25/dense pools = top_k², GIST output ≤ φ×top_k², final = top_k.
+
+  bm25_min_score (float, 0.0–2.0):
+    Minimum BM25 score threshold. Positive scores mean lexical match exists.
+    0.0 = no filtering. Raise to improve precision at cost of recall.
+
+  dense_min_similarity (float, 0.0–1.0):
+    Minimum cosine similarity threshold for dense results. 0.0 = no filtering.
+
+=== EVALUATION METRICS (4 RAGAS metrics, higher is better) ===
+
+  faithfulness:       Does the answer stick to what the retrieved chunks actually say?
+  context_precision:  Are the retrieved chunks actually relevant to the question?
+  context_recall:     Do the retrieved chunks cover all information needed for the answer?
+  answer_relevancy:   Does the generated answer actually address the question asked?
+
+  Composite score = mean(faithfulness, context_precision, context_recall, answer_relevancy)
+  Loss = 1.0 − Composite score
+
+=== YOUR TASK ===
+
+Given the current RAGAS scores and the current configuration, update the JSON
+configuration block to improve the composite score. Think carefully about which
+parameters to change and why, based on which metrics are underperforming.
+
+RULES:
+  1. Always return a valid JSON block between ```json and ``` markers.
+  2. Include a "rationale" key explaining your changes (string, ≤200 tokens).
+  3. Keep rrf_k between 10 and 120 (integer).
+  4. Keep gist_lambda between 0.0 and 1.0 (float, 2 decimal places).
+  5. Keep top_k between 5 and 34 (integer).
+  6. Keep layer2_expansion_count between 0 and 200 (integer or null).
+  7. Booleans must be JSON true/false (lowercase), not Python True/False.

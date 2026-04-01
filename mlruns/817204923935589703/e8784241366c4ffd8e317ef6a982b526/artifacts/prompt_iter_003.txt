@@ -1,0 +1,23 @@
+{
+  "rrf_k": 15,
+  "gist_lambda": 0.95,
+  "bm25_min_score": 0.25,
+  "top_k": 40,
+  "use_colbert": true,
+  "use_cross_encoder": true,
+  "use_layer2_expansion": true,
+  "layer2": "ON",
+  "colbert": "ON",
+  "cross_encoder": "ON"
+}
+/*
+Rationale:
+To address low faithfulness and context_precision, the configuration makes several key adjustments:
+- Reduced rrf_k (from 25 to 15) to allow top-ranked results to dominate fusion, improving context precision.
+- Increased bm25_min_score (from 0.15 to 0.25) to filter out less relevant chunks, further enhancing precision.
+- Increased top_k (from 28 to 40) to widen the pool for faithfulness and context recall.
+- Raised gist_lambda (from 0.92 to 0.95) to prioritize relevance in GIST scoring.
+- Enabled use_layer2_expansion to boost context recall by incorporating triplet-expanded chunks.
+- ColBERT and cross-encoder rerankers remain enabled to maintain answer relevancy and reranking quality.
+These changes aim to surface results that are both more contextually precise and faithful, as required by the 3-layer GIST/Fact/Premise/Syllogism hybrid search system.
+*/

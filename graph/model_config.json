@@ -1,0 +1,18 @@
+{
+  "in_channels": 515,
+  "hidden_channels": 128,
+  "out_channels": 128,
+  "heads": 2,
+  "dropout": 0.25,
+  "edge_dim": 512,
+  "val_auc": 0.677490234375,
+  "test_auc": 0.6323555555555556,
+  "full_epochs": 150,
+  "optuna_trials": 30,
+  "best_optuna_params": {
+    "hidden": 128,
+    "heads": 2,
+    "dropout": 0.25,
+    "lr": 0.0012399967836846098
+  }
+}

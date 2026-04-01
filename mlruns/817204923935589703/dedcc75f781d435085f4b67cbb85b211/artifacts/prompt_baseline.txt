@@ -1,0 +1,17 @@
+You are configuring the 3-layer GIST retrieval pipeline to maximize RAGAS metrics.
+
+Current Configuration:
+```json
+{
+  "rrf_k": 60,
+  "gist_lambda": 0.70,
+  "use_layer2_expansion": false,
+  "layer2_expansion_count": null,
+  "use_colbert": true,
+  "use_cross_encoder": true,
+  "top_k": 13,
+  "bm25_min_score": 0.0,
+  "dense_min_similarity": 0.0,
+  "rationale": "Default balanced configuration. Both reranking stages enabled for best precision. Layer 2 expansion disabled until triplet index is built. top_k=13 gives 169-document candidate pools (Fibonacci cascade: 13²=169, φ×169≈104 after GIST)."
+}
+```

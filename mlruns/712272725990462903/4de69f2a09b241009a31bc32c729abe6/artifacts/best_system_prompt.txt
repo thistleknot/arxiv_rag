@@ -1,0 +1,154 @@
+== PIPELINE ARCHITECTURE AND CODE WALKTHROUGH ==
+
+This is the full 3-layer academic paper retrieval pipeline (ArxivRetriever).
+Each layer is described with its code logic, data flow, and key parameters
+so you can reason about which config knobs affect which retrieval step.
+
+------------------------------------------------------------------------------
+ENTRY POINT: BaseGISTRetriever.search(query, top_k)
+------------------------------------------------------------------------------
+
+    def search(self, query, top_k=13):
+        retrieval_limit = top_k ** 2          # k^2 candidates fetched per arm
+        hybrid_seeds = prev_fibonacci(retrieval_limit)  # e.g. top_k=13 -> 169 -> 144 seeds
+
+        # Layer 1 ------------------------------------------------------------------
+        bm25_pool  = self._retrieve_bm25(query, retrieval_limit)   # L1-BM25 arm
+        dense_pool = self._retrieve_dense(query, retrieval_limit)  # L1-Dense arm
+
+        bm25_selected  = self._gist_select_pool(bm25_pool,  query, hybrid_seeds, 'bm25')
+        dense_selected = self._gist_select_pool(dense_pool, query, hybrid_seeds, 'dense')
+
+        hybrid_pool = self._rrf_fusion(bm25_selected, dense_selected)
+        hybrid_seeds_pool = hybrid_pool[:hybrid_seeds]  # exactly hybrid_seeds chunks
+
+        # Layer 2 ------------------------------------------------------------------
+        seed_scores = [doc.rrf_score for doc in hybrid_seeds_pool]
+        l2_bm25  = self._expand_layer2_bm25 (hybrid_seeds_pool, seed_scores, hybrid_seeds)
+        l2_dense = self._expand_layer2_dense(hybrid_seeds_pool, seed_scores, hybrid_seeds)
+        graph_expanded = self._rrf_fusion(l2_bm25, l2_dense)
+        documents = self._reconstruct_documents_from_chunks(graph_expanded, hybrid_seeds)
+
+        # Layer 3 ------------------------------------------------------------------
+        scored_documents = self._score_documents(query, documents, len(documents))
+        results = self._select_final_documents(scored_documents, top_k)
+        return results
+
+------------------------------------------------------------------------------
+LAYER 1 -- Sparse + Dense Seeding (layer1_bm25_sparse, layer1_embeddings_128d)
+------------------------------------------------------------------------------
+
+BM25 arm: PGVectorRetriever._retrieve_bm25(query, limit)
+  - Tokenise: query.lower().split() -> map to L1 vocab column indices
+  - SQL:  SELECT l.chunk_id, SUM((l.sparse_vector->>k)::float) AS score
+           FROM layer1_bm25_sparse l, unnest(term_ids) AS k
+           WHERE l.sparse_vector ? k
+           GROUP BY l.chunk_id
+           ORDER BY score DESC LIMIT limit
+  - Returns list[RetrievedDoc] with .bm25_score and .bm25_rank
+  - bm25_min_score (config): chunks with bm25_score < threshold filtered in L3.
+
+Dense arm: PGVectorRetriever._retrieve_dense(query, limit)
+  - Encode: Qwen3-256d model2vec -> PCA 256d->128d -> L2-normalise
+  - SQL:  SELECT l.chunk_id,
+                 1.0 - (l.embedding <=> query::vector) AS score
+           FROM layer1_embeddings_128d l
+           ORDER BY l.embedding <=> query::vector   -- HNSW ANN
+           LIMIT limit
+  - Returns list[RetrievedDoc] with .dense_score and .dense_rank
+  - dense_min_similarity (config): chunks with dense_score < threshold filtered in L3.
+
+GIST selection per arm (gist_select formula):
+  score(doc_i) = lambda * normalize(corr(doc_i, query))
+               - (1 - lambda) * mean_corr(doc_i, selected_set_S)
+
+  Greedy forward selection:
+    First pick = highest utility (most relevant to query).
+    Each next pick trades off relevance vs mean collinearity to selected docs.
+    mean_corr(d, S) = sum_sim_to_selected[d] / |S|   -- updated incrementally.
+
+  gist_lambda (config key):
+    1.0 = pure relevance (identical to top-k)
+    0.0 = pure diversity (maximum marginal relevance)
+    0.7 = default (slight relevance preference)
+
+RRF fusion: _rrf_fusion(pool_a, pool_b, k=rrf_k)
+  score(d) = sum_over_arms( 1 / (rrf_k + rank(d, arm)) )
+  rrf_k (config key): higher = flatter distribution; lower = top-rank advantage.
+  Results deduplicated, sorted by combined RRF score descending.
+
+------------------------------------------------------------------------------
+LAYER 2 -- ECDF-weighted Dual Arm Expansion
+           (layer2_triplet_bm25, layer2_embeddings_256d)
+------------------------------------------------------------------------------
+
+BM25 expansion arm: _expand_layer2_bm25(seed_docs, seed_scores, top_k)
+  1. ECDF weights: midpoint_ecdf(seed_rrf_scores) -> weight[i] per seed
+  2. Weighted TF profile: weighted average of seed TF vectors using ecdf_w
+  3. Build IDF-weighted sparsevec from bm25_l2_stats / bm25_l2_term_df tables
+  4. SQL:  -(layer2_triplet_bm25 <#> q_sv) ORDER BY neg-inner-product;
+           exclude seeds; LIMIT top_k new candidates
+  5. Combined pool = seed_docs + new_candidates
+  6. TF coverage matrix: term-frequency L2-norms over query vocab
+     coverage[i,j] = cos(tf_vec_i, tf_vec_j)
+  7. Utility y_scores = tf_norm @ q_norm  (TF alignment with query terms)
+  8. GIST-rank(coverage, y_scores) -> diverse & relevant selection
+
+Dense expansion arm: _expand_layer2_dense(seed_docs, seed_scores, top_k)
+  1. ECDF weights -> weighted centroid of seed Qwen3-256d embeddings (L2-norm)
+     centroid = sum(ecdf_w[i] * seed_emb[i]) / ||sum||
+  2. ANN on layer2_embeddings_256d with centroid; exclude seeds; LIMIT new
+  3. Combined pool = seed_docs + new_candidates
+  4. Cosine coverage matrix: emb_norm @ emb_norm.T
+  5. Utility y_scores = emb_norm @ centroid_norm
+  6. GIST-rank(coverage, y_scores) -> diverse & relevant
+
+Layer 2 RRF + section reconstruction:
+  graph_expanded = _rrf_fusion(l2_bm25_result, l2_dense_result)
+  Walk RRF-sorted chunks; collect chunks per unique section_idx; stop when
+  hybrid_seeds unique sections accumulated -> documents list for L3.
+
+------------------------------------------------------------------------------
+LAYER 3 -- ColBERT + Cross-Encoder Re-ranking -> Final top_k
+------------------------------------------------------------------------------
+
+ColBERT scoring (late interaction, bert-base-uncased -> 128d):
+  Score(Q,D) = sum_i  max_j  sim(q_token_i, d_token_j)
+  Each query token finds its best-matching doc token; sum of maxima.
+  colbert_min_score (config): below threshold ColBERT score excluded.
+
+Cross-encoder scoring (MS-MARCO-MiniLM-L-6-v2):
+  Relevance logit from concatenated [query, doc_text].
+  cross_encoder_min_score (config): below threshold CE score excluded.
+
+Final selection: _select_final_documents(scored, top_k)
+  Combine L1 rrf_score + L2 gist_score + L3 colbert_score + L3 ce_score
+  Apply all min-score filters; sort by final_score DESC; return top_k.
+
+------------------------------------------------------------------------------
+PGVectorConfig -- TUNABLE PARAMETERS (what you are optimizing)
+------------------------------------------------------------------------------
+
+  top_k                   [3-20   int ] Final results count.  Higher = more recall.
+  rrf_k                   [10-120 int ] RRF smoothing.  Higher = flatter rank blending.
+  gist_lambda             [0.0-1.0    ] Relevance/diversity tradeoff in GIST selection.
+  bm25_min_score          [0.0-2.0    ] L1 BM25 score filter.
+  dense_min_similarity    [0.0-2.0    ] L1 dense cosine score filter.
+  colbert_min_score       [0.0-2.0    ] L3 ColBERT MaxSim score filter.
+  cross_encoder_min_score [0.0-2.0    ] L3 cross-encoder relevance filter.
+
+== CURRENT CONFIG ==
+top_k: 5
+rrf_k: 60
+gist_lambda: 0.7000
+bm25_min_score: 0.0000
+dense_min_similarity: 0.0000
+colbert_min_score: 0.0000
+cross_encoder_min_score: 0.0000
+
+OPTIMIZATION TASK:
+Adjust ONLY the numeric values in == CURRENT CONFIG == to improve the mean
+of 4 RAGAS metrics: context_precision, context_recall, faithfulness, answer_relevancy.
+Do not rename or add keys.  Respect range constraints:
+  top_k: 3-20 (integer)  |  rrf_k: 10-120 (integer)  |  gist_lambda: 0.0-1.0
+  all min_score / min_similarity: 0.0-2.0

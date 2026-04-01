@@ -1,0 +1,52 @@
+[
+  {
+    "question": "What is contrastive learning and how is it applied in self-supervised representation learning?",
+    "ground_truth": "Contrastive learning is a self-supervised technique that learns representations by contrasting similar (positive) pairs against dissimilar (negative) pairs. It applies augmentation-based views of the same sample as positives and maximizes agreement between them while pushing apart negatives, enabling representation learning without labeled data.",
+    "question_type": "factoid"
+  },
+  {
+    "question": "How does the transformer attention mechanism work and what are its computational complexity properties?",
+    "ground_truth": "The transformer attention mechanism computes scaled dot-product attention: Attention(Q,K,V) = softmax(QK\u1d40/\u221ad)V. Self-attention has O(n\u00b2d) time and space complexity in the sequence length n, which becomes a bottleneck for long sequences. Multi-head attention runs h parallel attention heads and concatenates their outputs.",
+    "question_type": "factoid"
+  },
+  {
+    "question": "What is the difference between BERT and GPT pretraining objectives?",
+    "ground_truth": "BERT uses masked language modeling (MLM) — randomly masking 15% of tokens and predicting them — plus next sentence prediction (NSP). This enables bidirectional context. GPT uses causal (autoregressive) language modeling, predicting each token from all preceding tokens, which is unidirectional but naturally suited for generation tasks.",
+    "question_type": "comparative"
+  },
+  {
+    "question": "How do graph neural networks aggregate node features across neighborhoods?",
+    "ground_truth": "Graph neural networks use message passing: each node collects features from its neighbors, combines them with its own features, and applies a neural update. Common aggregations include sum, mean, or max pooling. GCN uses normalized mean aggregation; GraphSAGE allows sampling; GAT uses attention weights over neighbors.",
+    "question_type": "mechanism"
+  },
+  {
+    "question": "What is zero-shot chain-of-thought prompting and how does it improve reasoning?",
+    "ground_truth": "Zero-shot chain-of-thought prompting appends 'Let's think step by step' to a prompt, eliciting intermediate reasoning steps from LLMs without any examples. This improves accuracy on arithmetic, commonsense, and symbolic reasoning by allowing the model to decompose the problem before giving a final answer.",
+    "question_type": "factoid"
+  },
+  {
+    "question": "What are diffusion models and how do they generate images?",
+    "ground_truth": "Diffusion models are generative models that learn to reverse a gradual noising process. During training, Gaussian noise is progressively added to data (forward process). The model learns to predict and subtract the noise at each step (reverse process). At inference, the model starts from pure noise and iteratively denoises it to generate a sample.",
+    "question_type": "mechanism"
+  },
+  {
+    "question": "How does retrieval-augmented generation (RAG) improve LLM factual accuracy?",
+    "ground_truth": "RAG augments LLM generation by first retrieving relevant documents from an external knowledge base, then conditioning the LLM response on those retrieved contexts. This allows the model to access up-to-date or domain-specific information not captured in its parameters, reducing hallucination and improving factual grounding.",
+    "question_type": "factoid"
+  },
+  {
+    "question": "What is the role of the KL divergence term in variational autoencoders?",
+    "ground_truth": "In VAEs, the KL divergence term in the evidence lower bound (ELBO) acts as a regularizer that constrains the learned latent distribution to stay close to a standard normal prior. This prevents the model from encoding each input to a collapsed point mass and ensures the latent space is smooth and continuous, enabling interpolation and sampling.",
+    "question_type": "mechanism"
+  },
+  {
+    "question": "What is reward hacking in reinforcement learning from human feedback (RLHF)?",
+    "ground_truth": "Reward hacking in RLHF occurs when the model finds ways to maximize the learned reward model score that do not correspond to genuine quality improvements. The reward model is an imperfect proxy for human preferences, so the policy can exploit its weaknesses — generating text that scores highly without being factually accurate or genuinely helpful.",
+    "question_type": "factoid"
+  },
+  {
+    "question": "How does mixture of experts (MoE) architecture improve transformer efficiency?",
+    "ground_truth": "MoE replaces dense feed-forward layers with a set of expert networks and a gating mechanism that routes each token to only a subset (typically top-2) of experts. This increases total parameter count (capacity) while keeping per-token computation constant, achieving better performance per FLOP compared to dense equivalents of the same size.",
+    "question_type": "mechanism"
+  }
+]

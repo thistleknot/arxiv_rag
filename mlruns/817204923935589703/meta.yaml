@@ -1,0 +1,6 @@
+artifact_location: file:///C:/Users/user/arxiv_id_lists/mlruns/817204923935589703
+creation_time: 1771697970875
+experiment_id: '817204923935589703'
+last_update_time: 1771697970875
+lifecycle_stage: active
+name: textgrad-pgvector-retrieval

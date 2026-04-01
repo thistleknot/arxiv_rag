@@ -1,0 +1,24 @@
+You are configuring the 3-layer GIST retrieval pipeline to maximize faithfulness and context precision, addressing the observed weaknesses in the latest evaluation.
+
+```json
+{
+  "rrf_k": 35,
+  "gist_lambda": 0.85,
+  "layer2": "ON",
+  "use_layer2_expansion": true,
+  "bm25_min_score": 0.20,
+  "colbert": true,
+  "cross_encoder": true,
+  "top_k": 21
+}
+```
+
+Rationale:
+- Lowered `rrf_k` to 35 (from 60) to let top-ranking results dominate the fusion, boosting context precision.
+- Increased `gist_lambda` to 0.85 to prioritize retrieval relevance, addressing both faithfulness and answer relevancy.
+- Enabled `layer2` and `use_layer2_expansion` to introduce triplet-expanded chunks, improving context recall and supporting more faithful answers.
+- Slightly raised `bm25_min_score` to 0.20 to filter out less relevant passages, improving context precision without sacrificing recall.
+- Increased `top_k` to 21 (from 13) to include more potentially relevant candidates, aiding faithfulness and recall.
+- Kept both `colbert` and `cross_encoder` enabled for strong reranking, supporting answer relevancy and overall ranking quality.
+
+This configuration should yield a more precise and faithful candidate pool, striking a balance between recall and the quality of evidence surfaced by the pipeline. The updated settings are expected to improve both context precision and faithfulness, directly targeting the observed deficiencies.

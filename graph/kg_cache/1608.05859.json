@@ -1,0 +1,97 @@
+{
+ "entities": [
+  {
+   "name": "Perplexity",
+   "type": "Metric"
+  },
+  {
+   "name": "Neural Network Language Models",
+   "type": "Model/Architecture"
+  },
+  {
+   "name": "Tying Embeddings",
+   "type": "Technique/Method"
+  },
+  {
+   "name": "New Regularization Method",
+   "type": "Algorithm/Method"
+  },
+  {
+   "name": "Output Embedding",
+   "type": "Component/Concept"
+  },
+  {
+   "name": "Natural Language Processing Tasks",
+   "type": "Task/Application"
+  },
+  {
+   "name": "Text Classification",
+   "type": "Task"
+  },
+  {
+   "name": "Machine Translation",
+   "type": "Task"
+  },
+  {
+   "name": "Sentiment Analysis",
+   "type": "Task"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Neural Network Language Models",
+   "target": "Perplexity",
+   "relation_type": "Target of reduction"
+  },
+  {
+   "source": "Neural Network Language Models",
+   "target": "Tying Embeddings",
+   "relation_type": "Uses"
+  },
+  {
+   "source": "Neural Network Language Models",
+   "target": "New Regularization Method",
+   "relation_type": "Uses"
+  },
+  {
+   "source": "Perplexity",
+   "target": "Tying Embeddings",
+   "relation_type": "Reduced by"
+  },
+  {
+   "source": "Perplexity",
+   "target": "New Regularization Method",
+   "relation_type": "Reduced by"
+  },
+  {
+   "source": "Output Embedding",
+   "target": "Tying Embeddings",
+   "relation_type": "Target of tying"
+  },
+  {
+   "source": "Output Embedding",
+   "target": "New Regularization Method",
+   "relation_type": "Target of regularization"
+  },
+  {
+   "source": "Natural Language Processing Tasks",
+   "target": "Neural Network Language Models",
+   "relation_type": "Evaluated on / Applied in"
+  },
+  {
+   "source": "Text Classification",
+   "target": "Natural Language Processing Tasks",
+   "relation_type": "Specific example of"
+  },
+  {
+   "source": "Machine Translation",
+   "target": "Natural Language Processing Tasks",
+   "relation_type": "Specific example of"
+  },
+  {
+   "source": "Sentiment Analysis",
+   "target": "Natural Language Processing Tasks",
+   "relation_type": "Specific example of"
+  }
+ ]
+}

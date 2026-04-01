@@ -1,0 +1,69 @@
+{
+ "entities": [
+  {
+   "name": "Variational inference",
+   "type": "Method"
+  },
+  {
+   "name": "Amortized variational approaches",
+   "type": "Method/Model"
+  },
+  {
+   "name": "Finite flows",
+   "type": "Algorithm"
+  },
+  {
+   "name": "Infinitesimal flows",
+   "type": "Algorithm"
+  },
+  {
+   "name": "Approximate posterior distributions",
+   "type": "Concept"
+  },
+  {
+   "name": "True posterior",
+   "type": "Concept"
+  },
+  {
+   "name": "Rich posterior approximations",
+   "type": "Concept"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Variational inference",
+   "target": "performance and applicability",
+   "relation_type": "evaluated on"
+  },
+  {
+   "source": "Amortized variational approaches",
+   "target": "theoretical advantages",
+   "relation_type": "combines with"
+  },
+  {
+   "source": "Amortized variational approaches",
+   "target": "scalability",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Finite flows",
+   "target": "constructing rich posterior approximations",
+   "relation_type": "used in"
+  },
+  {
+   "source": "Infinitesimal flows",
+   "target": "constructing rich posterior approximations",
+   "relation_type": "used in"
+  },
+  {
+   "source": "Approximate posterior distributions",
+   "target": "True posterior",
+   "relation_type": "matches"
+  },
+  {
+   "source": "True posterior",
+   "target": "Variational inference",
+   "relation_type": "approximated by"
+  }
+ ]
+}

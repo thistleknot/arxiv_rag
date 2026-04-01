@@ -1,0 +1,30 @@
+Traceback (most recent call last):
+  File "C:\Users\user\arxiv_id_lists\graph\train_gat.py", line 412, in <module>
+    main(
+  File "C:\Users\user\arxiv_id_lists\graph\train_gat.py", line 343, in main
+    loss = train_epoch(model, predictor, data, optimizer)
+  File "C:\Users\user\arxiv_id_lists\graph\train_gat.py", line 185, in train_epoch
+    z = model(data.x, data.train_pos_edge_index, data.train_pos_edge_attr)
+  File "C:\users\user\py310\lib\site-packages\torch\nn\modules\module.py", line 1773, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "C:\users\user\py310\lib\site-packages\torch\nn\modules\module.py", line 1784, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "C:\Users\user\arxiv_id_lists\graph\train_gat.py", line 132, in forward
+    x    = F.elu(self.conv1(x, edge_index, edge_attr=ea))
+  File "C:\users\user\py310\lib\site-packages\torch\nn\modules\module.py", line 1773, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "C:\users\user\py310\lib\site-packages\torch\nn\modules\module.py", line 1784, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "C:\users\user\py310\lib\site-packages\torch_geometric\nn\conv\gatv2_conv.py", line 325, in forward
+    alpha = self.edge_updater(edge_index, x=(x_l, x_r),
+  File "C:\Users\user\AppData\Local\Temp\torch_geometric.nn.conv.gatv2_conv_GATv2Conv_edge_updater_edxxl2zs.py", line 176, in edge_updater
+    out = self.edge_update(
+  File "C:\users\user\py310\lib\site-packages\torch_geometric\nn\conv\gatv2_conv.py", line 364, in edge_update
+    edge_attr = self.lin_edge(edge_attr)
+  File "C:\users\user\py310\lib\site-packages\torch\nn\modules\module.py", line 1773, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "C:\users\user\py310\lib\site-packages\torch\nn\modules\module.py", line 1784, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "C:\users\user\py310\lib\site-packages\torch_geometric\nn\dense\linear.py", line 127, in forward
+    return F.linear(x, self.weight, self.bias)
+RuntimeError: mat1 and mat2 shapes cannot be multiplied (3107x256 and 512x256)

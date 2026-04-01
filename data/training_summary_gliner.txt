@@ -1,0 +1,29 @@
+
+TRAINING SUMMARY
+================
+
+Data:
+  Total examples: 416
+  Train: 332 (80%)
+  Eval: 84 (20%)
+
+Model:
+  Architecture: Frozen BERT + Linear classifier
+  Device: cuda
+
+Hyperparameters:
+  Learning rate: 1e-5
+  Weight decay: 0.01
+  Batch size: 8
+  Threshold: 0.3
+  Max epochs: 30
+  Patience: 5
+
+Results:
+  Best F1: 0.0453
+  Model saved: bio_tagger_gliner_best.pt
+
+Notes:
+- All 416 examples converted from GLiNER span format to token-level BIO labels
+- "deep learning models" correctly labeled B-SUBJ, I-SUBJ, I-SUBJ (not separate B-S tokens)
+- Training with proper contiguous entity annotations should improve over 0.1764 baseline

@@ -1,0 +1,64 @@
+{
+ "entities": [
+  {
+   "name": "Transformer Architecture",
+   "type": "Architecture"
+  },
+  {
+   "name": "Self-attention mechanism",
+   "type": "Algorithm/Concept"
+  },
+  {
+   "name": "BERT",
+   "type": "Model"
+  },
+  {
+   "name": "GPT",
+   "type": "Model"
+  },
+  {
+   "name": "Masked language modeling",
+   "type": "Method/Objective"
+  },
+  {
+   "name": "Autoregressive language modeling",
+   "type": "Method/Objective"
+  },
+  {
+   "name": "Vaswani et al.",
+   "type": "Author"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Transformer Architecture",
+   "target": "Vaswani et al.",
+   "relation_type": "Introduced by"
+  },
+  {
+   "source": "Self-attention mechanism",
+   "target": "Model",
+   "relation_type": "Allows to attend to all positions in input sequence simultaneously"
+  },
+  {
+   "source": "BERT",
+   "target": "Masked language modeling",
+   "relation_type": "Uses as pre-training objective"
+  },
+  {
+   "source": "GPT",
+   "target": "Autoregressive language modeling",
+   "relation_type": "Uses instead of BERT's approach"
+  },
+  {
+   "source": "BERT",
+   "target": "Transformer Architecture",
+   "relation_type": "Builds on"
+  },
+  {
+   "source": "GPT",
+   "target": "Transformer Architecture",
+   "relation_type": "Builds on"
+  }
+ ]
+}

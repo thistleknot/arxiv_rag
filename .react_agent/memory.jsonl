@@ -1,0 +1,15 @@
+{"outcome": "success", "batch": 20, "total_done": 30, "ts": "2026-03-28T12:43:24"}
+{"outcome": "success", "batch": 20, "total_done": 50, "ts": "2026-03-28T12:49:52"}
+{"outcome": "success", "batch": 20, "total_done": 70, "ts": "2026-03-28T12:57:46"}
+{"outcome": "success", "batch": 20, "total_done": 90, "ts": "2026-03-28T13:02:29"}
+{"outcome": "success", "batch": 20, "total_done": 110, "ts": "2026-03-28T13:06:26"}
+{"outcome": "success", "batch": 20, "total_done": 130, "ts": "2026-03-28T13:16:27"}
+{"outcome": "success", "batch": 20, "total_done": 150, "ts": "2026-03-28T13:19:58"}
+{"outcome": "success", "batch": 20, "total_done": 170, "ts": "2026-03-28T13:29:12"}
+{"outcome": "success", "batch": 20, "total_done": 190, "ts": "2026-03-28T13:39:33"}
+{"outcome": "success", "batch": 20, "total_done": 210, "ts": "2026-03-28T13:50:05"}
+{"outcome": "success", "batch": 20, "total_done": 230, "ts": "2026-03-28T14:01:21"}
+{"outcome": "success", "batch": 20, "total_done": 250, "ts": "2026-03-28T14:06:49"}
+{"outcome": "success", "batch": 20, "total_done": 270, "ts": "2026-03-28T14:11:48"}
+{"outcome": "success", "batch": 13, "total_done": 283, "ts": "2026-03-28T14:14:59"}
+{"outcome": "success", "summary": "All 283 papers complete", "ts": "2026-03-28T14:15:01"}

@@ -1,0 +1,8 @@
+﻿Active labels: ['B-SUBJ', 'I-SUBJ', 'B-PRED', 'I-PRED', 'B-OBJ', 'I-OBJ']
+
+Loading chunks from C:\Users\user\arxiv_id_lists\checkpoints\chunks.msgpack ...
+Loaded 161,389 chunks
+
+Found checkpoint — resuming from C:\Users\user\arxiv_id_lists\checkpoints\bio_triplets_checkpoint.msgpack ...
+Resuming from chunk 5,000 / 161,389
+

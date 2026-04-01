@@ -1,0 +1,14 @@
+artifact_uri: file:///C:/Users/user/arxiv_id_lists/mlruns/817204923935589703/e7ec59a590454b46ac63b221346e5935/artifacts
+end_time: null
+entry_point_name: ''
+experiment_id: '817204923935589703'
+lifecycle_stage: active
+run_id: e7ec59a590454b46ac63b221346e5935
+run_name: smoke-test
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1771708199995
+status: 1
+tags: []
+user_id: user

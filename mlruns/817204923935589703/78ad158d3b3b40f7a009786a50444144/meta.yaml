@@ -1,0 +1,14 @@
+artifact_uri: file:///C:/Users/user/arxiv_id_lists/mlruns/817204923935589703/78ad158d3b3b40f7a009786a50444144/artifacts
+end_time: null
+entry_point_name: ''
+experiment_id: '817204923935589703'
+lifecycle_stage: active
+run_id: 78ad158d3b3b40f7a009786a50444144
+run_name: gpt4.1-layer2-run1
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1771715834761
+status: 1
+tags: []
+user_id: user
