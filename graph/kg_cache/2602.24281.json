@@ -1,0 +1,51 @@
+{
+ "entities": [
+  {
+   "name": "Recurrent Models",
+   "type": "Model"
+  },
+  {
+   "name": "Language Modeling Tasks",
+   "type": "Task"
+  },
+  {
+   "name": "Long-Context Understanding",
+   "type": "Task"
+  },
+  {
+   "name": "In-context Recall Performance",
+   "type": "Metric"
+  },
+  {
+   "name": "Transformer",
+   "type": "Model"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Improves recurrent models for language modeling tasks",
+   "target": "Recurrent Models",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Enhances recurrent models for long-context understanding",
+   "target": "Recurrent Models",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Provides a flexible trade-off between memory capacity and computational complexity",
+   "target": "Recurrent Models",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Improves in-context recall performance of recurrent models",
+   "target": "Recurrent Models",
+   "relation_type": "evaluates on"
+  },
+  {
+   "source": "Offers competitive performance with Transformers in recall-intensive tasks",
+   "target": "Transformer",
+   "relation_type": "outperforms"
+  }
+ ]
+}

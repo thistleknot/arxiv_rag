@@ -1,0 +1,51 @@
+{
+ "entities": [
+  {
+   "name": "Rediscovering fundamental physical formulas with high accuracy and interpretability",
+   "type": "Method"
+  },
+  {
+   "name": "Classifying two-dimensional materials and perovskite synthesizability",
+   "type": "Task"
+  },
+  {
+   "name": "Determining Green's function and screened Coulomb interaction bandgaps",
+   "type": "Metric"
+  },
+  {
+   "name": "Predicting ionic conductivity in lithium solid-state electrolytes",
+   "type": "Model"
+  },
+  {
+   "name": "Automating the discovery of generalizable scientific formulas and theories across disciplines",
+   "type": "Task"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Rediscovering fundamental physical formulas with high accuracy and interpretability",
+   "target": "Method",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Classifying two-dimensional materials and perovskite synthesizability",
+   "target": "Task",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Determining Green's function and screened Coulomb interaction bandgaps",
+   "target": "Metric",
+   "relation_type": "evaluates on"
+  },
+  {
+   "source": "Predicting ionic conductivity in lithium solid-state electrolytes",
+   "target": "Model",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Automating the discovery of generalizable scientific formulas and theories across disciplines",
+   "target": "Task",
+   "relation_type": "uses"
+  }
+ ]
+}

@@ -1,0 +1,51 @@
+{
+ "entities": [
+  {
+   "name": "Automatically solving competitive programming tasks at a superhuman level.",
+   "type": "Task"
+  },
+  {
+   "name": "Outperforming human grandmasters in live competitive programming contests.",
+   "type": "Performance"
+  },
+  {
+   "name": "Providing a framework for multi-agent reinforcement learning in complex problem-solving scenarios.",
+   "type": "Framework"
+  },
+  {
+   "name": "Enabling improvements in agentic modules through post-training and online test-time RL.",
+   "type": "Improvement"
+  },
+  {
+   "name": "Handling delayed rewards and off-policy drift in multi-stage agent rollouts.",
+   "type": "Drift"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Automatically solving competitive programming tasks at a superhuman level.",
+   "target": "Task",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Outperforming human grandmasters in live competitive programming contests.",
+   "target": "Performance",
+   "relation_type": "outperforms"
+  },
+  {
+   "source": "Providing a framework for multi-agent reinforcement learning in complex problem-solving scenarios.",
+   "target": "Framework",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Enabling improvements in agentic modules through post-training and online test-time RL.",
+   "target": "Improvement",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Handling delayed rewards and off-policy drift in multi-stage agent rollouts.",
+   "target": "Drift",
+   "relation_type": "uses"
+  }
+ ]
+}

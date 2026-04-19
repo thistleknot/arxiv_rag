@@ -1,0 +1,71 @@
+{
+ "entities": [
+  {
+   "name": "Efficient Reasoning Transfer",
+   "type": "Method"
+  },
+  {
+   "name": "Multimodal Large Language Models (MLLMs)",
+   "type": "Model"
+  },
+  {
+   "name": "Improves Reasoning Performance",
+   "type": "Metric"
+  },
+  {
+   "name": "MathVista and MathVerse",
+   "type": "Dataset"
+  },
+  {
+   "name": "Resource Intensity",
+   "type": "Metric"
+  },
+  {
+   "name": "Supervised Fine-tuning",
+   "type": "Method"
+  },
+  {
+   "name": "Reinforcement Learning",
+   "type": "Method"
+  },
+  {
+   "name": "Multimodal Alignment",
+   "type": "Concept"
+  },
+  {
+   "name": "Reasoning Capabilities",
+   "type": "Concept"
+  },
+  {
+   "name": "Lightweight Fine-tuning",
+   "type": "Method"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Efficient Reasoning Transfer",
+   "target": "MLLMs",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Improves Reasoning Performance",
+   "target": "MathVista and MathVerse",
+   "relation_type": "evaluates on"
+  },
+  {
+   "source": "Reduces Resource Intensity",
+   "target": "MLLMs",
+   "relation_type": "outperforms"
+  },
+  {
+   "source": "Maintains Multimodal Alignment",
+   "target": "MLLMs",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Simplifies the Integration of Reasoning Knowledge into MLLMs through Lightweight Fine-tuning",
+   "target": "MLLMs",
+   "relation_type": "uses"
+  }
+ ]
+}

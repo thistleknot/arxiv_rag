@@ -1,0 +1,63 @@
+{
+ "entities": [
+  {
+   "name": "Comparison",
+   "type": "Task"
+  },
+  {
+   "name": "Single-Agent Systems",
+   "type": "System"
+  },
+  {
+   "name": "Multi-agent Systems",
+   "type": "System"
+  },
+  {
+   "name": "Controlled Computation Budgets",
+   "type": "Constraint"
+  },
+  {
+   "name": "Theoretical Framework",
+   "type": "Model"
+  },
+  {
+   "name": "Information Efficiency",
+   "type": "Metric"
+  },
+  {
+   "name": "Reasoning Tasks",
+   "type": "Task"
+  },
+  {
+   "name": "Evaluation Artifacts",
+   "type": "Artifact"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Comparison",
+   "target": "Single-Agent Systems",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Comparison",
+   "target": "Multi-agent Systems",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Theoretical Framework",
+   "target": "Reasoning Tasks",
+   "relation_type": "evaluates on"
+  },
+  {
+   "source": "Information Efficiency",
+   "target": "Reasoning Tasks",
+   "relation_type": "evaluates on"
+  },
+  {
+   "source": "Comparison",
+   "target": "Evaluation Artifacts",
+   "relation_type": "evaluates on"
+  }
+ ]
+}

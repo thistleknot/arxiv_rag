@@ -1,0 +1,50 @@
+{
+ "entities": [
+  {
+   "name": "text embeddings",
+   "type": "Dataset"
+  },
+  {
+   "name": "vector spaces",
+   "type": "Model"
+  },
+  {
+   "name": "paired data",
+   "type": "Task"
+  },
+  {
+   "name": "embeddings from different models",
+   "type": "Concept"
+  },
+  {
+   "name": "semantic geometry",
+   "type": "Metric"
+  },
+  {
+   "name": "compatibility of embeddings",
+   "type": "Architecture"
+  }
+ ],
+ "relations": [
+  {
+   "source": "text embeddings",
+   "target": "vector spaces",
+   "relation_type": "uses"
+  },
+  {
+   "source": "embeddings from different models",
+   "target": "text embeddings",
+   "relation_type": "is based on"
+  },
+  {
+   "source": "embeddings from different models",
+   "target": "vector spaces",
+   "relation_type": "evaluates on"
+  },
+  {
+   "source": "text embeddings",
+   "target": "semantic geometry",
+   "relation_type": "preserves"
+  }
+ ]
+}

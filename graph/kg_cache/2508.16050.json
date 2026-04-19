@@ -1,0 +1,46 @@
+{
+ "entities": [
+  {
+   "name": "Knowledge distillation",
+   "type": "Method"
+  },
+  {
+   "name": "Top-1 accuracy",
+   "type": "Metric"
+  },
+  {
+   "name": "Average precision (AP)",
+   "type": "Metric"
+  },
+  {
+   "name": "Computer vision tasks",
+   "type": "Task"
+  },
+  {
+   "name": "Large-scale models",
+   "type": "Model"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Knowledge distillation",
+   "target": "Top-1 accuracy",
+   "relation_type": "evaluates on"
+  },
+  {
+   "source": "Knowledge distillation",
+   "target": "Average precision (AP)",
+   "relation_type": "evaluates on"
+  },
+  {
+   "source": "Large-scale models",
+   "target": "Top-1 accuracy",
+   "relation_type": "outperforms"
+  },
+  {
+   "source": "Large-scale models",
+   "target": "Average precision (AP)",
+   "relation_type": "outperforms"
+  }
+ ]
+}

@@ -1,0 +1,63 @@
+{
+ "entities": [
+  {
+   "name": "Long-term reasoning",
+   "type": "Concept"
+  },
+  {
+   "name": "Multimodal agents",
+   "type": "Task"
+  },
+  {
+   "name": "Structured reasoning",
+   "type": "Concept"
+  },
+  {
+   "name": "Explicit symbolic rules",
+   "type": "Concept"
+  },
+  {
+   "name": "Real-world decision making",
+   "type": "Concept"
+  },
+  {
+   "name": "Neural and symbolic memory",
+   "type": "Concept"
+  },
+  {
+   "name": "Automatically consolidates structured knowledge",
+   "type": "Task"
+  },
+  {
+   "name": "Multimodal benchmarks",
+   "type": "Dataset"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Enables long-term reasoning for multimodal agents",
+   "target": "Long-term reasoning",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Supports structured reasoning with explicit symbolic rules",
+   "target": "Structured reasoning",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Improves real-world decision making by combining neural and symbolic memory",
+   "target": "Real-world decision making",
+   "relation_type": "outperforms"
+  },
+  {
+   "source": "Automatically consolidates structured knowledge from multimodal experiences",
+   "target": "Structured knowledge",
+   "relation_type": "evaluates on"
+  },
+  {
+   "source": "Enhances reasoning accuracy on multimodal benchmarks",
+   "target": "Multimodal benchmarks",
+   "relation_type": "evaluates on"
+  }
+ ]
+}

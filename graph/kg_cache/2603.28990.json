@@ -1,0 +1,46 @@
+{
+ "entities": [
+  {
+   "name": "Agents",
+   "type": "Concept"
+  },
+  {
+   "name": "Spontaneous invention",
+   "type": "Method"
+  },
+  {
+   "name": "Voluntary abstention",
+   "type": "Method"
+  },
+  {
+   "name": "Shallow hierarchies",
+   "type": "Architecture"
+  },
+  {
+   "name": "Hybrid protocols",
+   "type": "Concept"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Agents",
+   "target": "Spontaneous invention",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Agents",
+   "target": "Voluntary abstention",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Agents",
+   "target": "Shallow hierarchies",
+   "relation_type": "facilitates"
+  },
+  {
+   "source": "Hybrid protocols",
+   "target": "Agents",
+   "relation_type": "outperforms"
+  }
+ ]
+}

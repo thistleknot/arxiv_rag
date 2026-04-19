@@ -1,0 +1,51 @@
+{
+ "entities": [
+  {
+   "name": "High-quality image reconstructions",
+   "type": "Method"
+  },
+  {
+   "name": "Semantically rich latent spaces for generative modeling",
+   "type": "Model"
+  },
+  {
+   "name": "Scalable transformer-based architectures in diffusion models",
+   "type": "Architecture"
+  },
+  {
+   "name": "Faster convergence without auxiliary losses",
+   "type": "Metric"
+  },
+  {
+   "name": "Strong image generation results on ImageNet",
+   "type": "Metric"
+  }
+ ],
+ "relations": [
+  {
+   "source": "High-quality image reconstructions",
+   "target": "Model",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Semantically rich latent spaces for generative modeling",
+   "target": "Model",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Scalable transformer-based architectures in diffusion models",
+   "target": "Architecture",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Faster convergence without auxiliary losses",
+   "target": "Model",
+   "relation_type": "evaluates on"
+  },
+  {
+   "source": "Strong image generation results on ImageNet",
+   "target": "Model",
+   "relation_type": "evaluates on"
+  }
+ ]
+}

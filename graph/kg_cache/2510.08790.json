@@ -1,0 +1,51 @@
+{
+ "entities": [
+  {
+   "name": "Improves accuracy",
+   "type": "Metric"
+  },
+  {
+   "name": "Enables better management of extended histories",
+   "type": "Metric"
+  },
+  {
+   "name": "Facilitates hierarchical reasoning",
+   "type": "Concept"
+  },
+  {
+   "name": "Enhances efficiency",
+   "type": "Metric"
+  },
+  {
+   "name": "Provides scalable test-time extensions",
+   "type": "Metric"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Improves accuracy",
+   "target": "long-horizon tasks requiring sustained reasoning and multiple tool interactions",
+   "relation_type": "evaluates on"
+  },
+  {
+   "source": "Enables better management of extended histories",
+   "target": "extended histories to avoid overlooking critical evidence or becoming distracted",
+   "relation_type": "outperforms"
+  },
+  {
+   "source": "Facilitates hierarchical reasoning",
+   "target": "tactical execution, strategic oversight, and context organization",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Enhances efficiency",
+   "target": "post-training pipeline that delegates context management to smaller models",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Provides scalable test-time extensions",
+   "target": "performance of established agents",
+   "relation_type": "evaluates on"
+  }
+ ]
+}

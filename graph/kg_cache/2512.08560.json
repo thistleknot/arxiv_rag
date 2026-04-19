@@ -1,0 +1,46 @@
+{
+ "entities": [
+  {
+   "name": "Large-scale discovery",
+   "type": "Task"
+  },
+  {
+   "name": "Natural-language descriptions",
+   "type": "Method"
+  },
+  {
+   "name": "Fine-grained visual representations",
+   "type": "Concept"
+  },
+  {
+   "name": "Candidate explanations for brain activity",
+   "type": "Concept"
+  },
+  {
+   "name": "Complex fMRI data",
+   "type": "Dataset"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Large-scale discovery",
+   "target": "Natural-language descriptions",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Large-scale discovery",
+   "target": "Fine-grained visual representations",
+   "relation_type": "evaluates on"
+  },
+  {
+   "source": "Large-scale discovery",
+   "target": "Candidate explanations for brain activity",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Large-scale discovery",
+   "target": "Complex fMRI data",
+   "relation_type": "evaluates on"
+  }
+ ]
+}

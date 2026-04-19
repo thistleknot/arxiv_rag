@@ -1,0 +1,99 @@
+{
+ "entities": [
+  {
+   "name": "Efficient reasoning",
+   "type": "Method"
+  },
+  {
+   "name": "Autonomous evolution",
+   "type": "Method"
+  },
+  {
+   "name": "Open-world scenarios",
+   "type": "Task"
+  },
+  {
+   "name": "Enhanced cooperation",
+   "type": "Task"
+  },
+  {
+   "name": "Planning and execution agents",
+   "type": "Agent"
+  },
+  {
+   "name": "Continuous test-time learning",
+   "type": "Method"
+  },
+  {
+   "name": "On-the-fly updates during inference",
+   "type": "Method"
+  },
+  {
+   "name": "Efficient memory evolution",
+   "type": "Method"
+  },
+  {
+   "name": "Bidirectional conversion loops",
+   "type": "Architecture"
+  },
+  {
+   "name": "Improved reasoning and self-evolution",
+   "type": "Method"
+  },
+  {
+   "name": "Reflection",
+   "type": "Mechanism"
+  },
+  {
+   "name": "Unsupervised judgment mechanisms",
+   "type": "Mechanism"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Efficient reasoning",
+   "target": "Open-world scenarios",
+   "relation_type": "is used for"
+  },
+  {
+   "source": "Enhanced cooperation",
+   "target": "Planning and execution agents",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Continuous test-time learning",
+   "target": "Inference",
+   "relation_type": "evaluates on"
+  },
+  {
+   "source": "On-the-fly updates during inference",
+   "target": "Inference",
+   "relation_type": "evaluates on"
+  },
+  {
+   "source": "Efficient memory evolution",
+   "target": "Memory",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Bidirectional conversion loops",
+   "target": "Architecture",
+   "relation_type": "is based on"
+  },
+  {
+   "source": "Improved reasoning and self-evolution",
+   "target": "Self-evaluation",
+   "relation_type": "evaluates on"
+  },
+  {
+   "source": "Reflection",
+   "target": "Agent",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Unsupervised judgment mechanisms",
+   "target": "Agent",
+   "relation_type": "uses"
+  }
+ ]
+}

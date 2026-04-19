@@ -1,0 +1,37 @@
+{
+ "entities": [
+  {
+   "name": "LLM agent",
+   "type": "Model"
+  },
+  {
+   "name": "Supports long-horizon reasoning",
+   "type": "Method"
+  },
+  {
+   "name": "Enables personalization beyond fixed context windows",
+   "type": "Method"
+  },
+  {
+   "name": "Facilitates maintaining state across long interactions",
+   "type": "Method"
+  }
+ ],
+ "relations": [
+  {
+   "source": "LLM agent",
+   "target": "Supports long-horizon reasoning",
+   "relation_type": "uses"
+  },
+  {
+   "source": "LLM agent",
+   "target": "Enables personalization beyond fixed context windows",
+   "relation_type": "uses"
+  },
+  {
+   "source": "LLM agent",
+   "target": "Facilitates maintaining state across long interactions",
+   "relation_type": "uses"
+  }
+ ]
+}

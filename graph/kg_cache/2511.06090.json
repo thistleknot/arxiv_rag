@@ -1,0 +1,67 @@
+{
+ "entities": [
+  {
+   "name": "Evaluates",
+   "type": "Metric"
+  },
+  {
+   "name": "repository-level performance optimization",
+   "type": "Task"
+  },
+  {
+   "name": "real workloads",
+   "type": "Dataset"
+  },
+  {
+   "name": "agents",
+   "type": "Agent"
+  },
+  {
+   "name": "bottlenecks and relevant tests in codebases",
+   "type": "Test"
+  },
+  {
+   "name": "performance-improving patches",
+   "type": "Patch"
+  },
+  {
+   "name": "expert speedup",
+   "type": "Speedup"
+  },
+  {
+   "name": "benchmark for long-horizon software reasoning and automated performance engineering",
+   "type": "Benchmark"
+  },
+  {
+   "name": "automated pipeline combining multiple tools",
+   "type": "Pipeline"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Evaluates",
+   "target": "repository-level performance optimization",
+   "relation_type": "evaluates on"
+  },
+  {
+   "source": "Enables agents to localize bottlenecks and relevant tests in codebases",
+   "target": "agents",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Facilitates the creation of performance-improving patches that match or exceed expert speedup",
+   "target": "patches",
+   "relation_type": "is based on"
+  },
+  {
+   "source": "Provides a benchmark for long-horizon software reasoning and automated performance engineering",
+   "target": "benchmark",
+   "relation_type": "evaluates on"
+  },
+  {
+   "source": "Validates performance improvements using an automated pipeline combining multiple tools",
+   "target": "pipeline",
+   "relation_type": "uses"
+  }
+ ]
+}

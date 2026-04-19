@@ -384,19 +384,23 @@ class GraphRetriever:
         if self._client is None:
             return None
         try:
-            resp = self._client.chat(
+            is_qwen3 = "qwen3" in self._model.lower()
+            kwargs: dict = dict(
                 model=self._model,
                 messages=[{
                     "role": "user",
                     "content": _EXTRACTION_PROMPT.format(chunk=chunk),
                 }],
                 format=_EXTRACTION_SCHEMA,
-                options={"num_predict": 8192, "temperature": 0.1},
+                options={"num_predict": 1024, "temperature": 0.1},
             )
+            if is_qwen3:
+                kwargs["think"] = False
+            resp = self._client.chat(**kwargs)
             raw = resp.message.content
-            # Strip think blocks before JSON parse (Qwen3 chain-of-thought)
+            # Strip any residual think blocks before JSON parse
             raw = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL)
-            raw = re.sub(r"<think>.*", "", raw, flags=re.DOTALL)  # unclosed think block
+            raw = re.sub(r"<think>.*", "", raw, flags=re.DOTALL)
             raw = re.sub(r"</?think>", "", raw).strip()
             return json.loads(raw)
         except Exception:

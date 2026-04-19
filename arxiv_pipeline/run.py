@@ -104,7 +104,7 @@ def run_warmup(limit: int = 0, dry_run: bool = False) -> None:
     gr = GraphRetriever(
         ollama_host="http://127.0.0.1:11434",
         model="qwen3.5:2b",
-        cache_dir=str(_KG_DIR),
+        cache_dir=_KG_DIR,
     )
 
     n_total  = len(uncached)

@@ -1,0 +1,83 @@
+{
+ "entities": [
+  {
+   "name": "Generative AI",
+   "type": "Model"
+  },
+  {
+   "name": "Trustworthy reasoning",
+   "type": "Concept"
+  },
+  {
+   "name": "External knowledge",
+   "type": "Data"
+  },
+  {
+   "name": "Memory",
+   "type": "Data"
+  },
+  {
+   "name": "Tools",
+   "type": "Data"
+  },
+  {
+   "name": "Human input",
+   "type": "Data"
+  },
+  {
+   "name": "Persistent and governed infrastructure",
+   "type": "Architecture"
+  },
+  {
+   "name": "Context artefacts",
+   "type": "Data"
+  },
+  {
+   "name": "Heterogeneous context artefacts",
+   "type": "Data"
+  },
+  {
+   "name": "Token constraints",
+   "type": "Constraint"
+  },
+  {
+   "name": "Industry-ready generative AI systems",
+   "type": "Model"
+  },
+  {
+   "name": "Agent with memory",
+   "type": "Model"
+  },
+  {
+   "name": "GitHub assistant",
+   "type": "Model"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Enables trustworthy reasoning in generative AI systems by managing external knowledge, memory, tools, and human input.",
+   "target": "Generative AI",
+   "relation_type": "is based on"
+  },
+  {
+   "source": "Provides a persistent and governed infrastructure for managing heterogeneous context artefacts.",
+   "target": "Generative AI",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Supports verifiable and maintainable context-engineering pipelines under token constraints.",
+   "target": "Generative AI",
+   "relation_type": "supports"
+  },
+  {
+   "source": "Facilitates the development of industry-ready generative AI systems.",
+   "target": "Generative AI",
+   "relation_type": "supports"
+  },
+  {
+   "source": "Demonstrates practical applications such as an agent with memory and a GitHub assistant.",
+   "target": "Generative AI",
+   "relation_type": "uses"
+  }
+ ]
+}

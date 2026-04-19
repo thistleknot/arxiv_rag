@@ -1,0 +1,37 @@
+{
+ "entities": [
+  {
+   "name": "LLM",
+   "type": "Model"
+  },
+  {
+   "name": "Task",
+   "type": "Concept"
+  },
+  {
+   "name": "Organization",
+   "type": "Concept"
+  },
+  {
+   "name": "Society",
+   "type": "Concept"
+  }
+ ],
+ "relations": [
+  {
+   "source": "LLM",
+   "target": "Task",
+   "relation_type": "uses"
+  },
+  {
+   "source": "LLM",
+   "target": "Organization",
+   "relation_type": "evaluates on"
+  },
+  {
+   "source": "LLM",
+   "target": "Society",
+   "relation_type": "evaluates on"
+  }
+ ]
+}

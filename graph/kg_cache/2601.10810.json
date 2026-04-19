@@ -1,0 +1,55 @@
+{
+ "entities": [
+  {
+   "name": "Decentralized Multi-Agent Workflows",
+   "type": "Task"
+  },
+  {
+   "name": "Synthetic Data Generation",
+   "type": "Method"
+  },
+  {
+   "name": "Scales to Tens of Thousands of Concurrent Workflows",
+   "type": "Model"
+  },
+  {
+   "name": "Modular and Configurable Adaptation",
+   "type": "Algorithm"
+  },
+  {
+   "name": "Throughput in Multi-Agent Collaboration Scenarios",
+   "type": "Metric"
+  },
+  {
+   "name": "Tool Use Trajectory Generation",
+   "type": "Dataset"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Decentralized Multi-Agent Workflows",
+   "target": "Synthetic Data Generation",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Synthetic Data Generation",
+   "target": "Scales to Tens of Thousands of Concurrent Workflows",
+   "relation_type": "is based on"
+  },
+  {
+   "source": "Decentralized Multi-Agent Workflows",
+   "target": "Modular and Configurable Adaptation",
+   "relation_type": "supports"
+  },
+  {
+   "source": "Synthetic Data Generation",
+   "target": "Throughput in Multi-Agent Collaboration Scenarios",
+   "relation_type": "improves"
+  },
+  {
+   "source": "Decentralized Multi-Agent Workflows",
+   "target": "Tool Use Trajectory Generation",
+   "relation_type": "supports"
+  }
+ ]
+}

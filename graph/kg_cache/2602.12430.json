@@ -1,0 +1,41 @@
+{
+ "entities": [
+  {
+   "name": "Dynamic capability extension of large language models without retraining",
+   "type": "Method"
+  },
+  {
+   "name": "Reinforcement learning with skill libraries for autonomous skill discovery",
+   "type": "Method"
+  },
+  {
+   "name": "Deployment of skill-equipped agents at scale with the computer-use agent stack",
+   "type": "Method"
+  },
+  {
+   "name": "Improved GUI grounding and benchmarking on OSWorld and SWE-bench",
+   "type": "Method"
+  },
+  {
+   "name": "Proposing a Skill Trust and Lifecycle Governance Framework for secure skill deployment",
+   "type": "Method"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Dynamic capability extension of large language models without retraining",
+   "target": "Reinforcement learning with skill libraries for autonomous skill discovery",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Reinforcement learning with skill libraries for autonomous skill discovery",
+   "target": "Deployment of skill-equipped agents at scale with the computer-use agent stack",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Improved GUI grounding and benchmarking on OSWorld and SWE-bench",
+   "target": "Proposing a Skill Trust and Lifecycle Governance Framework for secure skill deployment",
+   "relation_type": "uses"
+  }
+ ]
+}

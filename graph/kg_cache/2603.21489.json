@@ -1,0 +1,75 @@
+{
+ "entities": [
+  {
+   "name": "Improves accuracy",
+   "type": "Metric"
+  },
+  {
+   "name": "single-agent baselines",
+   "type": "Model"
+  },
+  {
+   "name": "Python library development tasks",
+   "type": "Task"
+  },
+  {
+   "name": "long-horizon software engineering tasks",
+   "type": "Task"
+  },
+  {
+   "name": "dependency-aware task planning",
+   "type": "Task"
+  },
+  {
+   "name": "executable test-based verification",
+   "type": "Task"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Improves accuracy",
+   "target": "single-agent baselines",
+   "relation_type": "evaluates on"
+  },
+  {
+   "source": "Improves accuracy",
+   "target": "Python library development tasks",
+   "relation_type": "evaluates on"
+  },
+  {
+   "source": "Improves accuracy",
+   "target": "long-horizon software engineering tasks",
+   "relation_type": "evaluates on"
+  },
+  {
+   "source": "Facilitates dependency-aware task planning",
+   "target": "single-agent baselines",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Facilitates dependency-aware task planning",
+   "target": "Python library development tasks",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Facilitates dependency-aware task planning",
+   "target": "long-horizon software engineering tasks",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Provides structured integration with executable test-based verification",
+   "target": "single-agent baselines",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Provides structured integration with executable test-based verification",
+   "target": "Python library development tasks",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Provides structured integration with executable test-based verification",
+   "target": "long-horizon software engineering tasks",
+   "relation_type": "uses"
+  }
+ ]
+}

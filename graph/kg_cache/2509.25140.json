@@ -1,0 +1,37 @@
+{
+ "entities": [
+  {
+   "name": "Agents",
+   "type": "Concept"
+  },
+  {
+   "name": "Interaction history",
+   "type": "Dataset"
+  },
+  {
+   "name": "Reasoning strategies",
+   "type": "Model"
+  },
+  {
+   "name": "Memory-aware test-time scaling (MaTTS)",
+   "type": "Method"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Agents",
+   "target": "Interaction history",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Agents",
+   "target": "Reasoning strategies",
+   "relation_type": "outperforms"
+  },
+  {
+   "source": "Agents",
+   "target": "Memory-aware test-time scaling (MaTTS)",
+   "relation_type": "evaluates on"
+  }
+ ]
+}

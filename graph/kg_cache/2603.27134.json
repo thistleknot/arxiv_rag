@@ -1,0 +1,46 @@
+{
+ "entities": [
+  {
+   "name": "Framework",
+   "type": "Concept"
+  },
+  {
+   "name": "Cognitive Gridworld",
+   "type": "Model"
+  },
+  {
+   "name": "Semantic Interaction Information (SII)",
+   "type": "Metric"
+  },
+  {
+   "name": "Recurrent Compositional Contextual Representation (RCCs)",
+   "type": "Concept"
+  },
+  {
+   "name": "Training goal-directed generalist agents",
+   "type": "Task"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Framework",
+   "target": "Cognitive Gridworld",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Framework",
+   "target": "Semantic Interaction Information (SII)",
+   "relation_type": "evaluates on"
+  },
+  {
+   "source": "Framework",
+   "target": "Recurrent Compositional Contextual Representation (RCCs)",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Cognitive Gridworld",
+   "target": "Training goal-directed generalist agents",
+   "relation_type": "is based on"
+  }
+ ]
+}

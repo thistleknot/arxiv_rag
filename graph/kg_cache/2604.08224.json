@@ -1,0 +1,46 @@
+{
+ "entities": [
+  {
+   "name": "Transforms hard cognitive burdens into solvable forms for models",
+   "type": "Task"
+  },
+  {
+   "name": "Externalizes state across time through memory",
+   "type": "Method"
+  },
+  {
+   "name": "Externalizes procedural expertise through reusable skills",
+   "type": "Method"
+  },
+  {
+   "name": "Externalizes interaction structure through protocols",
+   "type": "Method"
+  },
+  {
+   "name": "Coordinates external components into governed execution via harness engineering",
+   "type": "Method"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Transforms hard cognitive burdens into solvable forms for models",
+   "target": "Externalizes state across time through memory",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Transforms hard cognitive burdens into solvable forms for models",
+   "target": "Externalizes procedural expertise through reusable skills",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Transforms hard cognitive burdens into solvable forms for models",
+   "target": "Externalizes interaction structure through protocols",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Transforms hard cognitive burdens into solvable forms for models",
+   "target": "Coordinates external components into governed execution via harness engineering",
+   "relation_type": "uses"
+  }
+ ]
+}

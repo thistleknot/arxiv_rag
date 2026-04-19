@@ -1,0 +1,54 @@
+{
+ "entities": [
+  {
+   "name": "Sensorimotor experiences",
+   "type": "Dataset"
+  },
+  {
+   "name": "Visual judgment tasks",
+   "type": "Task"
+  },
+  {
+   "name": "Hierarchical gating control of concepts",
+   "type": "Architecture"
+  },
+  {
+   "name": "Cross-network knowledge transfer",
+   "type": "Architecture"
+  },
+  {
+   "name": "Conceptual communication",
+   "type": "Architecture"
+  },
+  {
+   "name": "Mechanistic insights into human conceptual cognition",
+   "type": "Concept"
+  },
+  {
+   "name": "Artificial systems with human-like conceptual intelligence",
+   "type": "System"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Sensorimotor experiences",
+   "target": "Visual judgment tasks",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Hierarchical gating control of concepts",
+   "target": "Visual judgment tasks",
+   "relation_type": "outperforms"
+  },
+  {
+   "source": "Cross-network knowledge transfer",
+   "target": "Conceptual communication",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Mechanistic insights into human conceptual cognition",
+   "target": "Artificial systems with human-like conceptual intelligence",
+   "relation_type": "aids in"
+  }
+ ]
+}

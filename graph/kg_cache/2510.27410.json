@@ -1,0 +1,41 @@
+{
+ "entities": [
+  {
+   "name": "Facilitates efficient human-AI collaboration",
+   "type": "Method"
+  },
+  {
+   "name": "Reduces reliance on costly human preference annotations or external reward models",
+   "type": "Method"
+  },
+  {
+   "name": "Improves efficiency and output quality in tasks like scientific diagram generation",
+   "type": "Model"
+  },
+  {
+   "name": "Adapts to users with varying levels of expertise",
+   "type": "Model"
+  },
+  {
+   "name": "Provides a systematic methodology for resolving intention expression gaps in complex tasks",
+   "type": "Method"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Facilitates efficient human-AI collaboration",
+   "target": "Improves efficiency and output quality in tasks like scientific diagram generation",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Facilitates efficient human-AI collaboration",
+   "target": "Adapts to users with varying levels of expertise",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Facilitates efficient human-AI collaboration",
+   "target": "Provides a systematic methodology for resolving intention expression gaps in complex tasks",
+   "relation_type": "uses"
+  }
+ ]
+}

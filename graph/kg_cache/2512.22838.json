@@ -1,0 +1,67 @@
+{
+ "entities": [
+  {
+   "name": "Approximate Nearest Neighbor Search (ANNS)",
+   "type": "Method"
+  },
+  {
+   "name": "Billion-scale",
+   "type": "Dataset"
+  },
+  {
+   "name": "Out-of-core Constraints",
+   "type": "Constraint"
+  },
+  {
+   "name": "Query per Second (QPS)",
+   "type": "Metric"
+  },
+  {
+   "name": "Latency Performance",
+   "type": "Metric"
+  },
+  {
+   "name": "SSD Accesses",
+   "type": "Metric"
+  },
+  {
+   "name": "Skewed Semantic Embeddings",
+   "type": "Concept"
+  },
+  {
+   "name": "Adaptive Query-Aware Navigation",
+   "type": "Method"
+  },
+  {
+   "name": "Multi-level Pruning",
+   "type": "Algorithm"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Enables approximate nearest neighbor search (ANNS)",
+   "target": "Billion-scale",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Improves query per second (QPS) and latency performance compared to existing systems.",
+   "target": "Approximate Nearest Neighbor Search (ANNS)",
+   "relation_type": "evaluates on"
+  },
+  {
+   "source": "Reduces SSD accesses while maintaining accuracy.",
+   "target": "Approximate Nearest Neighbor Search (ANNS)",
+   "relation_type": "evaluates on"
+  },
+  {
+   "source": "Handles skewed semantic embeddings with adaptive query-aware navigation.",
+   "target": "Approximate Nearest Neighbor Search (ANNS)",
+   "relation_type": "evaluates on"
+  },
+  {
+   "source": "Applies multi-level pruning to optimize cluster and vector filtering before SSD reads.",
+   "target": "Approximate Nearest Neighbor Search (ANNS)",
+   "relation_type": "uses"
+  }
+ ]
+}

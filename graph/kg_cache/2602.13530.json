@@ -1,0 +1,55 @@
+{
+ "entities": [
+  {
+   "name": "Hybrid Memory Graph",
+   "type": "Concept"
+  },
+  {
+   "name": "Episodic Memory",
+   "type": "Concept"
+  },
+  {
+   "name": "Iterative Retrieval Tools",
+   "type": "Method"
+  },
+  {
+   "name": "State-of-the-art Memory Systems",
+   "type": "Model"
+  },
+  {
+   "name": "Unanswerable Questions",
+   "type": "Concept"
+  },
+  {
+   "name": "Time-Aware Event Modeling and Reasoning",
+   "type": "Task"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Hybrid Memory Graph",
+   "target": "Episodic Memory",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Iterative Retrieval Tools",
+   "target": "Episodic Memory",
+   "relation_type": "supports"
+  },
+  {
+   "source": "Hybrid Memory Graph",
+   "target": "State-of-the-art Memory Systems",
+   "relation_type": "outperforms"
+  },
+  {
+   "source": "Unanswerable Questions",
+   "target": "Hybrid Memory Graph",
+   "relation_type": "supports"
+  },
+  {
+   "source": "Time-Aware Event Modeling and Reasoning",
+   "target": "Hybrid Memory Graph",
+   "relation_type": "supports"
+  }
+ ]
+}

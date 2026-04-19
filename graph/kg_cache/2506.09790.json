@@ -1,0 +1,63 @@
+{
+ "entities": [
+  {
+   "name": "ComfyUI",
+   "type": "Platform"
+  },
+  {
+   "name": "Creative workflows",
+   "type": "Task"
+  },
+  {
+   "name": "Customization of intricate creative pipelines",
+   "type": "Task"
+  },
+  {
+   "name": "Workflow synthesis",
+   "type": "Task"
+  },
+  {
+   "name": "Node-level fidelity",
+   "type": "Metric"
+  },
+  {
+   "name": "Graph-level fidelity",
+   "type": "Metric"
+  },
+  {
+   "name": "Code representation and usability",
+   "type": "Metric"
+  },
+  {
+   "name": "AI art creation",
+   "type": "Task"
+  }
+ ],
+ "relations": [
+  {
+   "source": "ComfyUI",
+   "target": "Automates the generation of creative workflows on platforms like ComfyUI",
+   "relation_type": "uses"
+  },
+  {
+   "source": "ComfyUI",
+   "target": "Enables customization of intricate creative pipelines with reduced manual effort",
+   "relation_type": "supports"
+  },
+  {
+   "source": "ComfyUI",
+   "target": "Achieves high accuracy in workflow synthesis with node-level and graph-level fidelity",
+   "relation_type": "evaluates on"
+  },
+  {
+   "source": "ComfyUI",
+   "target": "Transforms workflows into code for better representation and usability",
+   "relation_type": "supports"
+  },
+  {
+   "source": "ComfyUI",
+   "target": "Supports AI art creation through long chain-of-thought reasoning",
+   "relation_type": "uses"
+  }
+ ]
+}

@@ -1,0 +1,51 @@
+{
+ "entities": [
+  {
+   "name": "Multi-step Reasoning",
+   "type": "Task"
+  },
+  {
+   "name": "Dynamic Adaptation",
+   "type": "Method"
+  },
+  {
+   "name": "Agent Topology",
+   "type": "Concept"
+  },
+  {
+   "name": "Shared Workspace",
+   "type": "Architecture"
+  },
+  {
+   "name": "Model Level Reasoning Enhancements",
+   "type": "Metric"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Enables improved multi-step reasoning performance in language tasks",
+   "target": "Multi-step Reasoning",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Allows dynamic adaptation of agent topologies for specific tasks",
+   "target": "Agent Topology",
+   "relation_type": "is based on"
+  },
+  {
+   "source": "Enhances coordination among specialized LLM agents using a shared workspace",
+   "target": "Shared Workspace",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Outperforms existing multi-agent reasoning baselines like ReAct and Tree of Thoughts",
+   "target": "Multi-step Reasoning",
+   "relation_type": "outperforms"
+  },
+  {
+   "source": "Provides complementary gains to model-level reasoning enhancements",
+   "target": "Model Level Reasoning Enhancements",
+   "relation_type": "is based on"
+  }
+ ]
+}
