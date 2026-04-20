@@ -508,11 +508,62 @@ class SyllogismRetriever:
 
         return docs, utilities_map
 
-    def retrieve(self, query: str, top_k: int = 8, n_papers: int = 50) -> SyllogismRetrievalResult:
+    def _build_candidates_from_ids(
+        self,
+        pre_selected: List[Tuple[str, float]],
+    ) -> Tuple[List[Any], Dict[str, str]]:
+        """Build candidates and utility map from pre-selected (arxiv_id, score) pairs.
+
+        Used when the 3-layer φ-scaled retriever has already produced a ranked
+        candidate set (L3 output → top_k=13 papers).  Skips the cosine search and
+        preserves the upstream scorer's score as the retrieval_blend_norm signal.
+
+        Precondition: self._rows is loaded.
+        Guarantee: only IDs present in the CSV are returned; unknown IDs are skipped.
+        """
+        id_to_row = {r["arxiv_id"]: r for r in self._rows}
+        docs: List[Any] = []
+        utilities_map: Dict[str, str] = {}
+        seen: set = set()
+        for arxiv_id, score in pre_selected:
+            arxiv_id = arxiv_id.strip()
+            if not arxiv_id or arxiv_id in seen:
+                continue
+            seen.add(arxiv_id)
+            row = id_to_row.get(arxiv_id)
+            if row is None:
+                continue
+            norm = float(score)
+            doc = RetrievedDoc(
+                doc_id=arxiv_id,
+                content=row["utility"] or row["abstract"] or row["title"],
+                metadata={
+                    "paper_id": arxiv_id,
+                    "title": row["title"],
+                    "abstract": row["abstract"],
+                    "utility": row["utility"],
+                    "retrieval_blend_raw": norm,
+                    "retrieval_blend_norm": norm,
+                },
+                final_score=norm,
+            )
+            docs.append(doc)
+            utilities_map[arxiv_id] = row["utility"]
+        return docs, utilities_map
+
+    def retrieve(
+        self,
+        query: str,
+        top_k: int = 8,
+        n_papers: int = 13,
+        pre_selected: Optional[List[Tuple[str, float]]] = None,
+    ) -> SyllogismRetrievalResult:
         """Execute full 9-stage syllogism retrieval pipeline.
-        
+
         Stage 0: Extract intent from query (goal, domain, requirements).
-        Stage 1: Semantic search intent against cached utility embeddings.
+        Stage 1: Candidate selection — either from pre-selected upstream results
+                 (3-layer φ retriever output) or via cosine search over utility
+                 embeddings (standalone fallback with n_papers candidates).
         Stage 2: Build utility ranking map (maintain order).
         Stage 3: NLI scoring — LLM judge ranks papers by utility relevance.
         Stage 4: Form syllogism — reason over entailed utilities.
@@ -520,6 +571,16 @@ class SyllogismRetriever:
         Stage 6: Load paper markdowns from disk.
         Stage 7: Graph retriever context (optional, if available).
         Stage 8: LLM through-line synthesis over top papers.
+
+        Args:
+            query: Natural language retrieval query.
+            top_k: Final number of papers to return after reranking.
+            n_papers: Candidate pool size for standalone cosine search.
+                      Ignored when pre_selected is provided.
+                      Default 13 matches the φ-scaled L3 output (top_k=13).
+            pre_selected: Optional list of (arxiv_id, score) pairs from an
+                          upstream 3-layer retriever (L3 output).  When provided,
+                          Stage 1 cosine search is skipped entirely.
         """
         result = SyllogismRetrievalResult(query=query)
         
@@ -537,19 +598,25 @@ class SyllogismRetriever:
                 print(f"[stage 0] Intent extraction failed: {e}")
             result.objective = query
 
-        # ── Stage 1: Semantic search (empty stub for now) ──
-        if self._verbose:
-            print(f"[stage 1] Semantic search over utility index...")
+        # ── Stage 1: Candidate selection ──
         candidates: List[Any] = []
         utilities_map: Dict[str, str] = {}
         try:
-            stage1_intent = result.objective or query
-            candidates, utilities_map = self._semantic_search_blend(stage1_intent, n_papers)
+            if pre_selected is not None:
+                if self._verbose:
+                    print(f"[stage 1] Using {len(pre_selected)} pre-selected candidates "
+                          f"from upstream 3-layer retriever")
+                candidates, utilities_map = self._build_candidates_from_ids(pre_selected)
+            else:
+                if self._verbose:
+                    print(f"[stage 1] Cosine search over utility index (n_papers={n_papers})...")
+                stage1_intent = result.objective or query
+                candidates, utilities_map = self._semantic_search_blend(stage1_intent, n_papers)
             if self._verbose:
-                print(f"[stage 1] Retrieved {len(candidates)} candidates")
+                print(f"[stage 1] {len(candidates)} candidates ready")
         except Exception as e:
             if self._verbose:
-                print(f"[stage 1] Semantic search failed: {e}")
+                print(f"[stage 1] Candidate selection failed: {e}")
             candidates = []
             utilities_map = {}
 

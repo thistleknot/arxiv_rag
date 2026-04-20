@@ -58,7 +58,7 @@ _OUTPUT_JSON   = _ROOT / "best_retriever_params.json"
 
 _MRR_K            = 20
 _L1_TRIALS        = 50
-_DEFAULT_N_PAPERS = 50
+_DEFAULT_N_PAPERS = 13   # φ-spec: L3 outputs exactly top_k=13 papers to SyllogismRetriever
 _TUNE_N_QUERIES   = 20   # subsample for Layer 3 speed; holdout always uses full set
 
 # Layer 3 structured search: 2 params × 2 probes + 1 joint + 5 refinements = 11 evals
@@ -495,8 +495,9 @@ class CachedRetriever:
     """Retriever backed by in-memory blend scores and the SQLite judge cache.
 
     Used during Layer 3 and holdout to avoid re-running the Qwen3-1.7B judge.
-    Replicates production EntailmentRanker partition:
-      chain papers (judge_score > 0) sorted by blend DESC, then non-chain by blend DESC.
+    All candidates are ranked by pure blend score (no hard chain/nonchain partition):
+        blend = ew * judge_score + rw * sem_norm
+    Papers not in judge_cache get judge_score=0.0 and rank by semantic score alone.
 
     Precondition: judge_cache populated for judge_config_hash (Layer 2 complete).
     Guarantee: .search(question, top_k) returns at most top_k _ResultDoc objects.
@@ -551,15 +552,7 @@ class CachedRetriever:
         def _blend(aid: str) -> float:
             return self._ew * judge_scores.get(aid, 0.0) + self._rw * sem_norm.get(aid, 0.0)
 
-        chain    = sorted(
-            [(aid, _blend(aid)) for aid in cand_ids if judge_scores.get(aid, 0.0) > 0.0],
-            key=lambda x: x[1], reverse=True,
-        )
-        nonchain = sorted(
-            [(aid, _blend(aid)) for aid in cand_ids if judge_scores.get(aid, 0.0) == 0.0],
-            key=lambda x: x[1], reverse=True,
-        )
-        ranked = [aid for aid, _ in (chain + nonchain)][:top_k]
+        ranked = sorted(cand_ids, key=lambda aid: _blend(aid), reverse=True)[:top_k]
         return [_ResultDoc(self._rows[self._id_to_idx[aid]]) for aid in ranked if aid in self._id_to_idx]
 
 
@@ -687,7 +680,7 @@ def run_layer3_structured(
 
     def _eval(ew: float, tk: int) -> float:
         ew = round(float(np.clip(ew, 0.0, 1.0)), 4)
-        tk = int(np.clip(tk, 3, 15))
+        tk = int(np.clip(tk, 3, n_papers))
         if (ew, tk) in eval_cache:
             return eval_cache[(ew, tk)]
         cfg = {
@@ -728,9 +721,9 @@ def run_layer3_structured(
 
     winner_tk = _L3_CENTER_TK
     if probe_scores["tk+"] >= probe_scores["tk-"] and probe_scores["tk+"] > baseline:
-        winner_tk = int(np.clip(_L3_CENTER_TK + _L3_SIGMA_TK, 3, 15))
+        winner_tk = int(np.clip(_L3_CENTER_TK + _L3_SIGMA_TK, 3, n_papers))
     elif probe_scores["tk-"] > baseline:
-        winner_tk = int(np.clip(_L3_CENTER_TK - _L3_SIGMA_TK, 3, 15))
+        winner_tk = int(np.clip(_L3_CENTER_TK - _L3_SIGMA_TK, 3, n_papers))
 
     # Joint candidate
     print(f"  [L3] joint: ew={winner_ew:.2f} top_k={winner_tk}", flush=True)
@@ -744,7 +737,7 @@ def run_layer3_structured(
     print(f"  [L3] refinements ×{n_refinements} around ew={best_ew:.3f} top_k={best_tk}", flush=True)
     for _ in range(n_refinements):
         ew_r = round(float(np.clip(best_ew + rng.uniform(-_L3_SIGMA_EW / 2, _L3_SIGMA_EW / 2), 0.0, 1.0)), 4)
-        tk_r = int(np.clip(best_tk + int(rng.integers(-2, 3)), 3, 15))
+        tk_r = int(np.clip(best_tk + int(rng.integers(-2, 3)), 3, n_papers))
         s = _eval(ew_r, tk_r)
         if s > best_score:
             best_score = s

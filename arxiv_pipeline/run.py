@@ -15,7 +15,8 @@ Usage:
 Flags:
     query           Retrieval query (required unless --dry_run is used)
     --top_k         Number of papers to return (default: 13)
-    --n_papers      Candidate pool size — 0 = all (default: 0)
+    --n_papers      Standalone fallback candidate pool size (default: 13).
+                    Only used when the 3-layer pgvector retriever is unavailable.
     --output        Path for the markdown report (default: _report.md)
     --warmup_limit  Max uncached papers to process before retrieval (default: 0 = all)
     --skip_warmup   Skip the KG cache warmup stage entirely
@@ -143,20 +144,59 @@ def run_warmup(limit: int = 0, dry_run: bool = False) -> None:
 
 
 # ── Stage 2: Retrieval report ─────────────────────────────────────────────────
+def _try_pgvector_retrieval(query: str, top_k: int):
+    """Attempt to retrieve top_k papers via the 3-layer φ-scaled pgvector pipeline.
+
+    Returns list of (arxiv_id, score) tuples if successful, None if unavailable.
+    Only falls back on availability errors; unexpected exceptions are re-raised.
+    """
+    try:
+        sys.path.insert(0, str(_ROOT / "retrieval"))
+        from pgvector_retriever import PGVectorConfig  # type: ignore
+        from arxiv_retriever import ArxivRetriever     # type: ignore
+        config = PGVectorConfig(
+            db_host="localhost",
+            db_port=5432,
+            db_name="langchain",
+            db_user="langchain",
+            db_password="langchain",
+            table_name="arxiv_chunks",
+        )
+        retriever = ArxivRetriever(config)
+        results = retriever.search(query, top_k=top_k)
+        return [(r.doc_id, float(getattr(r, "final_score", None) or 0.5)) for r in results]
+    except (ImportError, ModuleNotFoundError) as e:
+        print(f"  [L1-L3] Modules unavailable — using standalone fallback: {e}")
+        return None
+    except Exception as e:
+        err_type = type(e).__name__
+        _availability = {"OperationalError", "InterfaceError", "DatabaseError", "ProgrammingError"}
+        if err_type in _availability or "connect" in str(e).lower() or "refused" in str(e).lower():
+            print(f"  [L1-L3] Database unavailable — using standalone fallback: {e}")
+            return None
+        raise
+
+
 def run_retrieval(query: str, n_papers: int, top_k: int, output: str) -> None:
     """Run the 9-stage syllogism retriever and write the markdown report."""
     print("\n" + "=" * 60)
     print("STAGE 2 — Syllogism retrieval")
     print("=" * 60)
     print(f"  Query    : {query}")
-    print(f"  n_papers : {'all' if n_papers == 0 else n_papers}")
     print(f"  top_k    : {top_k}")
     print(f"  output   : {output}\n")
+
+    pre_selected = _try_pgvector_retrieval(query, top_k)
+    if pre_selected:
+        print(f"  Source   : 3-layer pgvector retriever ({len(pre_selected)} papers)")
+    else:
+        print(f"  Source   : standalone cosine search (n_papers={n_papers})")
 
     from arxiv_pipeline.syllogism_retriever import SyllogismRetriever
 
     retriever = SyllogismRetriever()
-    result    = retriever.retrieve(query, n_papers=n_papers, top_k=top_k)
+    result    = retriever.retrieve(query, n_papers=n_papers, top_k=top_k,
+                                   pre_selected=pre_selected)
 
     md = result.to_markdown()
     out_path = Path(output)
@@ -176,8 +216,9 @@ def main() -> None:
                     help="Retrieval query (required unless --dry_run)")
     ap.add_argument("--top_k",        type=int,   default=13,
                     help="Papers to return (default: 13)")
-    ap.add_argument("--n_papers",     type=int,   default=0,
-                    help="Candidate pool size; 0 = all (default: 0)")
+    ap.add_argument("--n_papers",     type=int,   default=13,
+                    help="Standalone fallback candidate pool size (default: 13). "
+                         "Ignored when pgvector 3-layer retriever is available.")
     ap.add_argument("--output",       type=str,   default="_report.md",
                     help="Output markdown file (default: _report.md)")
     ap.add_argument("--warmup_limit", type=int,   default=0,
