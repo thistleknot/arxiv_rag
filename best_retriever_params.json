@@ -4,13 +4,13 @@
     "abstract": 0.5803,
     "utility": 0.096
   },
-  "n_papers": 50,
+  "n_papers": 13,
   "entailment_weight": 0.5,
   "retrieval_weight": 0.5,
-  "top_k": 8,
+  "top_k": 5,
   "tune_sem_mrr20": 0.3246,
-  "tune_fit_score": 0.3792,
-  "holdout_fit_score": 0.4891,
-  "holdout_precision": 0.42,
-  "holdout_recall": 0.5581
+  "tune_fit_score": 0.3833,
+  "holdout_fit_score": 0.4622,
+  "holdout_precision": 0.4128,
+  "holdout_recall": 0.5116
 }
