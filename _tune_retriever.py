@@ -406,15 +406,18 @@ def run_layer2_cache(
     train_pairs: List[dict],
     n_papers: int,
     conn: sqlite3.Connection,
+    n_workers: int = 3,
 ) -> None:
     """Run Qwen3-1.7B judge for all train queries and cache scores to SQLite.
 
     Resumable: queries already cached for this config_hash are skipped.
-    Precondition: conn must be open with the new judge_cache schema (config_hash in PK).
+    Runs up to n_workers=3 judge calls concurrently (each call = one full query
+    with n_papers utility strings).  SQLite writes are serialized on main thread.
+    Precondition: conn must be open with the new judge_cache schema.
     """
+    import concurrent.futures
     from reasoning.nli_entailment import NLIEntailmentScorer
 
-    nli = NLIEntailmentScorer(verbose=False)
     config_hash = _judge_config_hash(best_blend_weights, n_papers)
 
     done_set: set = set(
@@ -429,10 +432,11 @@ def run_layer2_cache(
         print("  All queries already cached.")
         return
 
-    for i, pair in enumerate(pending, 1):
+    def _score_one(pair: dict):
+        """Score a single query; pure compute, no SQLite. Thread-safe."""
+        nli = NLIEntailmentScorer(verbose=False)
         q     = pair["question"]
         qhash = _query_hash(q)
-        t0    = time.time()
 
         q_emb = embedder.encode(
             [q], convert_to_numpy=True, normalize_embeddings=True, show_progress_bar=False,
@@ -451,31 +455,50 @@ def run_layer2_cache(
         try:
             _entailed, rank_scores = nli.rank_utilities(q, utilities_map)
         except Exception as exc:
-            print(f"  [warn] judge failed for query {i}: {exc}", flush=True)
+            print(f"  [warn] judge failed: {exc}", flush=True)
             rank_scores = {}
 
-        conn.executemany(
-            "INSERT OR REPLACE INTO judge_cache VALUES (?,?,?,?,?)",
-            [
-                (qhash, config_hash, aid,
-                 float(rank_scores.get(aid, 0.0)),
-                 float(sem_norm.get(aid, 0.0)))
-                for aid in cand_ids
-            ],
-        )
-        conn.execute(
-            "INSERT OR IGNORE INTO completed_queries VALUES (?,?)", (qhash, config_hash)
-        )
-        conn.commit()
+        return qhash, cand_ids, rank_scores, sem_norm
 
-        elapsed = time.time() - t0
-        done_n  = len(done_set) + i
-        eta     = elapsed * (len(train_pairs) - done_n)
-        print(
-            f"  [{done_n}/{len(train_pairs)}] {elapsed:.1f}s  "
-            f"judge selected {len(rank_scores)} papers  ETA {eta/60:.1f}min",
-            flush=True,
-        )
+    total  = len(train_pairs)
+    done_n = len(done_set)
+    t_start = time.time()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=n_workers) as pool:
+        futures = {pool.submit(_score_one, pair): pair for pair in pending}
+        for fut in concurrent.futures.as_completed(futures):
+            t0 = time.time()
+            try:
+                qhash, cand_ids, rank_scores, sem_norm = fut.result()
+            except Exception as exc:
+                print(f"  [warn] worker exception: {exc}", flush=True)
+                done_n += 1
+                continue
+
+            conn.executemany(
+                "INSERT OR REPLACE INTO judge_cache VALUES (?,?,?,?,?)",
+                [
+                    (qhash, config_hash, aid,
+                     float(rank_scores.get(aid, 0.0)),
+                     float(sem_norm.get(aid, 0.0)))
+                    for aid in cand_ids
+                ],
+            )
+            conn.execute(
+                "INSERT OR IGNORE INTO completed_queries VALUES (?,?)", (qhash, config_hash)
+            )
+            conn.commit()
+
+            done_n += 1
+            elapsed_q = time.time() - t0
+            elapsed_total = time.time() - t_start
+            rate = elapsed_total / done_n if done_n else 1
+            eta  = rate * (total - done_n)
+            print(
+                f"  [{done_n}/{total}] {elapsed_q:.1f}s  "
+                f"judge selected {len(rank_scores)} papers  ETA {eta/60:.1f}min",
+                flush=True,
+            )
 
     print("[Layer 2] Caching complete.")
 
