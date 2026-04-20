@@ -2,12 +2,18 @@
 
 Protocol (hyper-param tuning skill):
   Tune split  : train (99 QA pairs from eval/data/qa_pairs.json, filtered to CSV)
-  Holdout     : test  (43 QA pairs)
-  Scalar obj  : RAGAS fit_score = (context_precision + context_recall) / 2
-                averaged over 3 named sampler takes:
-                  conservative (temp=0.0), balanced (temp=0.3), creative (temp=0.7)
-                Each (query, config, sampler_take) result is cached in ragas_cache
-                for full resumability.
+                subsampled to _TUNE_N_QUERIES=20 for Layer 3 speed (seed=42)
+  Holdout     : test  (43 QA pairs, full set)
+  Scalar obj  : fit_score = (context_precision + context_recall) / 2
+
+  Precision: rank-sensitive ID-based context precision@K — rewards the correct
+             paper being ranked near the top of the retrieved list.
+             Same formula as LLMContextPrecisionWithReference but uses exact
+             arxiv_id matching instead of LLM judgment (deterministic, instant).
+  Recall:    binary per query — 1.0 if the correct paper_id appears anywhere in
+             the top_k retrieved set, else 0.0.
+  No LLM calls required for evaluation. Each "chunk" is a full paper
+  (title + abstract) identified by its arxiv_id.
 
 Tuning order (layerwise):
   Layer 1 — Semantic blend weights (title / abstract / utility) + n_papers.
@@ -15,8 +21,8 @@ Tuning order (layerwise):
   Layer 2 — Cache Qwen3-1.7B judge scores for all train queries (~41 min,
              resumable). Keyed by (query_hash, config_hash, paper_id) where
              config_hash encodes blend_weights + n_papers.
-  Layer 3 — Entailment weight + top_k; structured search (2×2+7 = 11 evals)
-             with RAGAS fit_score objective and 3 sampler takes.
+  Layer 3 — Entailment weight + top_k; structured search (11 evals),
+             ID-based fit_score objective (instant, no LLM).
 
 Output: best_retriever_params.json
 """
@@ -34,7 +40,6 @@ import re
 import sqlite3
 import sys
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -62,19 +67,6 @@ _L3_SIGMA_EW    = 0.2
 _L3_CENTER_TK   = 5
 _L3_SIGMA_TK    = 3
 _L3_REFINEMENTS = 5
-
-# Named sampler takes — fixed across ALL trials (hyper-parm-tuning skill)
-SAMPLERS: Dict[str, float] = {
-    "conservative": 0.0,
-    "balanced":     0.3,
-    "creative":     0.7,
-}
-
-COPILOT_PROXY = os.environ.get("LLM_PROXY_URL", "http://127.0.0.1:8069/v1")
-RAGAS_MODEL   = os.environ.get("RAGAS_MODEL",   "gpt-4.1")
-
-os.environ.setdefault("OPENAI_API_KEY",  "copilot")
-os.environ.setdefault("OPENAI_BASE_URL", COPILOT_PROXY)
 
 # ── ID normalisation ──────────────────────────────────────────────────────────
 
@@ -176,21 +168,6 @@ def _judge_config_hash(blend_weights: Dict[str, float], n_papers: int) -> str:
     key = json.dumps({"blend": blend_weights, "n": n_papers}, sort_keys=True)
     return hashlib.sha1(key.encode()).hexdigest()[:16]
 
-
-def _ragas_config_hash(
-    blend_weights: Dict[str, float],
-    n_papers: int,
-    entailment_weight: float,
-    top_k: int,
-) -> str:
-    """Cache key for ragas_cache — identifies the full retrieval config."""
-    key = json.dumps({
-        "blend": blend_weights,
-        "n":     n_papers,
-        "ew":    round(entailment_weight, 4),
-        "k":     top_k,
-    }, sort_keys=True)
-    return hashlib.sha1(key.encode()).hexdigest()[:16]
 
 
 # ── Database ──────────────────────────────────────────────────────────────────
@@ -507,10 +484,11 @@ def run_layer2_cache(
 
 class _ResultDoc:
     """Minimal document object returned by CachedRetriever.search()."""
-    __slots__ = ("content",)
+    __slots__ = ("content", "arxiv_id")
 
     def __init__(self, row: Dict[str, str]) -> None:
-        self.content = f"{row['title']}\n\n{row['abstract']}"
+        self.content   = f"{row['title']}\n\n{row['abstract']}"
+        self.arxiv_id  = row["arxiv_id"]
 
 
 class CachedRetriever:
@@ -585,86 +563,22 @@ class CachedRetriever:
         return [_ResultDoc(self._rows[self._id_to_idx[aid]]) for aid in ranked if aid in self._id_to_idx]
 
 
-# ── RAGAS evaluation ──────────────────────────────────────────────────────────
+# ── ID-based evaluation (no LLM) ──────────────────────────────────────────────
 
-def _run_ragas_eval(
-    retriever: CachedRetriever,
-    qa_pairs: List[dict],
-    top_k: int,
-    temperature: float,
-) -> List[Optional[Dict[str, float]]]:
-    """Run LLMContextPrecisionWithReference + LLMContextRecall on qa_pairs.
+def _rank_sensitive_precision(retrieved_ids: List[str], reference_id: str) -> float:
+    """Rank-sensitive context precision@K for a single reference document.
 
-    Returns list of {cp, cr} or None (LLM call failed) in the same order as
-    qa_pairs.  Pairs with no contexts return {cp:0.0, cr:0.0}.
+    Implements the RAGAS formula with exact ID matching:
+        precision@K = sum_{k=1}^{K}(precision@k * v_k) / total_relevant_in_top_K
+    For a single reference document:
+        score = 1/rank  if reference_id found at 1-indexed rank r, else 0.0
 
-    Precondition: Copilot proxy reachable at COPILOT_PROXY.
-    Guarantee: len(output) == len(qa_pairs).
-    Failure mode: proxy 503/circuit-breaker → affected entries return None;
-        callers must skip None entries to avoid caching partial results.
+    Precondition: retrieved_ids are already normalised (dots, not underscores).
     """
-    import math
-
-    from langchain_openai import ChatOpenAI
-    from ragas import EvaluationDataset, SingleTurnSample, evaluate
-    from ragas.llms import LangchainLLMWrapper
-    from ragas.metrics import LLMContextPrecisionWithReference, LLMContextRecall
-    from ragas.run_config import RunConfig
-
-    langchain_llm = ChatOpenAI(
-        model=RAGAS_MODEL,
-        openai_api_key=os.environ.get("OPENAI_API_KEY", "copilot"),
-        openai_api_base=COPILOT_PROXY,
-        temperature=temperature,
-        request_timeout=180,
-        max_retries=3,
-    )
-    ragas_llm  = LangchainLLMWrapper(langchain_llm)
-    metrics    = [LLMContextPrecisionWithReference(), LLMContextRecall()]
-    # None = failed LLM call; 0.0/0.0 = no contexts retrieved
-    result_map: Dict[int, Optional[Dict[str, float]]] = {
-        i: {"cp": 0.0, "cr": 0.0} for i in range(len(qa_pairs))
-    }
-    valid_idx: List[int] = []
-    samples: List = []
-
-    for i, pair in enumerate(qa_pairs):
-        docs     = retriever.search(pair["question"], top_k=top_k)
-        contexts = [d.content for d in docs if d.content]
-        if not contexts:
-            continue
-        samples.append(SingleTurnSample(
-            user_input=pair["question"],
-            reference=pair["answer"],
-            response="[tuning placeholder]",
-            retrieved_contexts=contexts,
-        ))
-        valid_idx.append(i)
-
-    if not samples:
-        return [result_map[i] for i in range(len(qa_pairs))]
-
-    # max_workers=3: 3 concurrent RAGAS calls per take; 3 takes run in parallel
-    # → up to 9 concurrent LLM calls total, well within Copilot proxy limits.
-    run_cfg  = RunConfig(max_workers=3, max_retries=5, max_wait=60)
-    result   = evaluate(
-        EvaluationDataset(samples=samples),
-        metrics=metrics,
-        llm=ragas_llm,
-        batch_size=1,
-        run_config=run_cfg,
-    )
-    scores_df = result.to_pandas()
-
-    for j, orig_i in enumerate(valid_idx):
-        if j < len(scores_df):
-            cp = scores_df["llm_context_precision_with_reference"].iloc[j]
-            cr = scores_df["context_recall"].iloc[j]
-            if math.isnan(cp) or math.isnan(cr):
-                result_map[orig_i] = None  # mark LLM failure; caller will skip
-            else:
-                result_map[orig_i] = {"cp": float(cp), "cr": float(cr)}
-    return [result_map[i] for i in range(len(qa_pairs))]
+    for rank, rid in enumerate(retrieved_ids, start=1):
+        if rid == reference_id:
+            return 1.0 / rank
+    return 0.0
 
 
 def _persist_trial(
@@ -679,7 +593,7 @@ def _persist_trial(
         (
             layer,
             datetime.now(timezone.utc).isoformat(),
-            json.dumps({k: v for k, v in config.items() if k != "config_hash"}),
+            json.dumps(config),
             result.get("precision"),
             result.get("recall"),
             result.get("fit_score"),
@@ -688,113 +602,64 @@ def _persist_trial(
     conn.commit()
 
 
-def eval_ragas_3takes(
+def eval_retrieval_config(
     config: dict,
     qa_pairs: List[dict],
-    conn: sqlite3.Connection,
     rows: List[Dict[str, str]],
     id_to_idx: Dict[str, int],
     field_embeddings: Dict[str, np.ndarray],
     embedder,
+    conn: sqlite3.Connection,
     verbose: bool = True,
 ) -> Dict[str, object]:
-    """Evaluate a retrieval config using RAGAS over 3 named sampler takes in parallel.
+    """Evaluate a retrieval config using ID-based precision and recall.
 
-    The 3 takes (conservative / balanced / creative) run concurrently via
-    ThreadPoolExecutor.  Each thread opens its own SQLite connection (WAL mode)
-    and its own CachedRetriever to avoid cross-thread state sharing.
-    Within each take, RAGAS processes 3 queries concurrently (RunConfig.max_workers=3).
+    No LLM calls required. Each query's ground-truth is the paper_id field
+    of the QA pair. Precision is rank-sensitive (1/rank if found); recall is
+    binary (1 if paper found anywhere in top_k, else 0).
 
-    Each (query, config_hash, sampler_take) result is cached in ragas_cache so
-    interrupted runs resume without re-calling the LLM.
+    fit_score = (mean_precision + mean_recall) / 2
 
-    Args:
-        config: must include blend_weights, n_papers, entailment_weight, top_k, config_hash.
-
-    Returns:
-        {precision, recall, fit_score, per_take: {take: {precision, recall, fit}}}
+    Precondition: qa_pairs have normalised paper_id fields (dots, not underscores).
+    Guarantee: deterministic; calling twice with same config returns same result.
     """
-    config_hash       = config["config_hash"]
     top_k             = config["top_k"]
     blend_weights     = config["blend_weights"]
     n_papers          = config["n_papers"]
     entailment_weight = config["entailment_weight"]
     judge_hash        = _judge_config_hash(blend_weights, n_papers)
 
-    def _eval_take(take_name: str, temperature: float) -> Tuple[str, Dict[str, float]]:
-        take_conn = sqlite3.connect(str(_CACHE_DB), timeout=30)
-        take_conn.execute("PRAGMA journal_mode=WAL")
-        try:
-            retriever = CachedRetriever(
-                rows=rows,
-                id_to_idx=id_to_idx,
-                field_embeddings=field_embeddings,
-                embedder=embedder,
-                blend_weights=blend_weights,
-                n_papers=n_papers,
-                entailment_weight=entailment_weight,
-                judge_config_hash=judge_hash,
-                conn=take_conn,
-            )
-            cached_set = {
-                r[0] for r in take_conn.execute(
-                    "SELECT query_hash FROM ragas_cache WHERE config_hash=? AND sampler_take=?",
-                    (config_hash, take_name),
-                ).fetchall()
-            }
-            missing = [p for p in qa_pairs if _query_hash(p["question"]) not in cached_set]
+    retriever = CachedRetriever(
+        rows=rows,
+        id_to_idx=id_to_idx,
+        field_embeddings=field_embeddings,
+        embedder=embedder,
+        blend_weights=blend_weights,
+        n_papers=n_papers,
+        entailment_weight=entailment_weight,
+        judge_config_hash=judge_hash,
+        conn=conn,
+    )
 
-            if missing:
-                if verbose:
-                    print(f"  [RAGAS] take={take_name} temp={temperature}  {len(missing)} uncached", flush=True)
-                per_pair = _run_ragas_eval(retriever, missing, top_k, temperature)
-                good = [(p, s) for p, s in zip(missing, per_pair) if s is not None]
-                failed = len(missing) - len(good)
-                if failed and verbose:
-                    print(f"    {take_name}: {failed} failed — will retry next run", flush=True)
-                if good:
-                    take_conn.executemany(
-                        "INSERT OR REPLACE INTO ragas_cache VALUES (?,?,?,?,?)",
-                        [
-                            (_query_hash(p["question"]), config_hash, take_name, s["cp"], s["cr"])
-                            for p, s in good
-                        ],
-                    )
-                    take_conn.commit()
-            else:
-                if verbose:
-                    print(f"  [RAGAS] take={take_name} — fully cached", flush=True)
+    precisions: List[float] = []
+    recalls: List[float]    = []
+    for pair in qa_pairs:
+        ref_id = normalize_paper_id(pair["paper_id"])
+        docs   = retriever.search(pair["question"], top_k=top_k)
+        retrieved_ids = [normalize_paper_id(d.arxiv_id) for d in docs]
+        precisions.append(_rank_sensitive_precision(retrieved_ids, ref_id))
+        recalls.append(1.0 if ref_id in retrieved_ids else 0.0)
 
-            all_scores = take_conn.execute(
-                "SELECT context_precision, context_recall FROM ragas_cache "
-                "WHERE config_hash=? AND sampler_take=? "
-                "AND context_precision IS NOT NULL AND context_recall IS NOT NULL",
-                (config_hash, take_name),
-            ).fetchall()
-            n_scored = len(all_scores)
-            cp = sum(r[0] for r in all_scores) / n_scored if n_scored else 0.0
-            cr = sum(r[1] for r in all_scores) / n_scored if n_scored else 0.0
-            if verbose:
-                print(
-                    f"    {take_name}: prec={cp:.4f} rec={cr:.4f} fit={(cp+cr)/2:.4f}  (n={n_scored})",
-                    flush=True,
-                )
-            return take_name, {"precision": cp, "recall": cr, "fit": (cp + cr) / 2}
-        finally:
-            take_conn.close()
-
-    per_take: Dict[str, Dict[str, float]] = {}
-    with ThreadPoolExecutor(max_workers=3) as pool:
-        futures = {pool.submit(_eval_take, name, temp): name for name, temp in SAMPLERS.items()}
-        for fut in as_completed(futures):
-            name, scores = fut.result()
-            per_take[name] = scores
-
-    mean_p    = sum(t["precision"] for t in per_take.values()) / len(per_take)
-    mean_r    = sum(t["recall"]    for t in per_take.values()) / len(per_take)
+    mean_p    = sum(precisions) / len(precisions) if precisions else 0.0
+    mean_r    = sum(recalls)    / len(recalls)    if recalls    else 0.0
     fit_score = (mean_p + mean_r) / 2
 
-    return {"precision": mean_p, "recall": mean_r, "fit_score": fit_score, "per_take": per_take}
+    if verbose:
+        print(
+            f"    prec={mean_p:.4f} rec={mean_r:.4f} fit={fit_score:.4f}  (n={len(precisions)})",
+            flush=True,
+        )
+    return {"precision": mean_p, "recall": mean_r, "fit_score": fit_score}
 
 
 # ── Layer 3: Structured search over entailment_weight + top_k ────────────────
@@ -812,8 +677,8 @@ def run_layer3_structured(
 ) -> Tuple[float, int, float]:
     """Structured search (2×2+7 = 11 evals) over (entailment_weight, top_k).
 
-    Objective: RAGAS fit_score = (context_precision + context_recall) / 2
-    averaged over 3 named sampler takes (conservative, balanced, creative).
+    Objective: ID-based fit_score = (rank_sensitive_precision + binary_recall) / 2.
+    Deterministic — no LLM calls, no sampler takes.
 
     Returns (best_entailment_weight, best_top_k, best_fit_score).
     """
@@ -830,9 +695,8 @@ def run_layer3_structured(
             "n_papers":          n_papers,
             "entailment_weight": ew,
             "top_k":             tk,
-            "config_hash":       _ragas_config_hash(best_blend, n_papers, ew, tk),
         }
-        result = eval_ragas_3takes(cfg, train_pairs, conn, rows, id_to_idx, field_embeddings, embedder)
+        result = eval_retrieval_config(cfg, train_pairs, rows, id_to_idx, field_embeddings, embedder, conn)
         _persist_trial(conn, layer=3, config=cfg, result=result)
         score = result["fit_score"]
         eval_cache[(ew, tk)] = score
@@ -905,10 +769,9 @@ def run_holdout_eval(
     field_embeddings: Dict[str, np.ndarray],
     embedder,
 ) -> Dict[str, object]:
-    """Evaluate the final config on holdout using RAGAS 3-take objective.
+    """Evaluate the final config on holdout using the ID-based objective.
 
     Holdout is evaluated once, after all tuning layers are frozen.
-    Results are written to ragas_cache using the same config_hash as Layer 3.
     """
     print(f"\n[Holdout] Evaluating {len(holdout_pairs)} queries...")
     config = {
@@ -916,9 +779,8 @@ def run_holdout_eval(
         "n_papers":          n_papers,
         "entailment_weight": round(best_ew, 4),
         "top_k":             best_tk,
-        "config_hash":       _ragas_config_hash(best_blend, n_papers, round(best_ew, 4), best_tk),
     }
-    result = eval_ragas_3takes(config, holdout_pairs, conn, rows, id_to_idx, field_embeddings, embedder)
+    result = eval_retrieval_config(config, holdout_pairs, rows, id_to_idx, field_embeddings, embedder, conn)
     print(f"  Holdout fit_score:   {result['fit_score']:.4f}")
     print(f"  Holdout precision:   {result['precision']:.4f}")
     print(f"  Holdout recall:      {result['recall']:.4f}")

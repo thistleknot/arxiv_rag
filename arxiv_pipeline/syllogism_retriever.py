@@ -98,9 +98,9 @@ _UTIL_EMB_PATH     = _ROOT / "papers" / "utility_embeddings.npy"
 _UTIL_CATALOG_PATH = _ROOT / "papers" / "utility_catalog.json"
 
 _BLEND_WEIGHTS = {
-    "title": 0.4,
-    "abstract": 0.3,
-    "utility": 0.3,
+    "title": 0.3237,
+    "abstract": 0.5803,
+    "utility": 0.096,
 }
 
 OLLAMA_BASE            = "http://127.0.0.1:11434"
@@ -508,7 +508,7 @@ class SyllogismRetriever:
 
         return docs, utilities_map
 
-    def retrieve(self, query: str, top_k: int = 5, n_papers: int = 50) -> SyllogismRetrievalResult:
+    def retrieve(self, query: str, top_k: int = 8, n_papers: int = 50) -> SyllogismRetrievalResult:
         """Execute full 9-stage syllogism retrieval pipeline.
         
         Stage 0: Extract intent from query (goal, domain, requirements).
