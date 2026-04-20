@@ -29,10 +29,12 @@ import csv
 import hashlib
 import json
 import os
+import random
 import re
 import sqlite3
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -52,6 +54,7 @@ _OUTPUT_JSON   = _ROOT / "best_retriever_params.json"
 _MRR_K            = 20
 _L1_TRIALS        = 50
 _DEFAULT_N_PAPERS = 50
+_TUNE_N_QUERIES   = 20   # subsample for Layer 3 speed; holdout always uses full set
 
 # Layer 3 structured search: 2 params × 2 probes + 1 joint + 5 refinements = 11 evals
 _L3_CENTER_EW   = 0.5
@@ -243,8 +246,9 @@ def _init_cache_db(db_path: Path, l2_config_hash: str = "") -> sqlite3.Connectio
     coexist without overwriting each other.
     """
     conn = sqlite3.connect(db_path)
+    conn.execute("PRAGMA journal_mode=WAL")
 
-    jc_cols = [r[1] for r in conn.execute("PRAGMA table_info(judge_cache)").fetchall()]
+    jc_cols= [r[1] for r in conn.execute("PRAGMA table_info(judge_cache)").fetchall()]
     if jc_cols and "config_hash" not in jc_cols:
         _migrate_judge_cache(conn, l2_config_hash)
 
@@ -640,9 +644,9 @@ def _run_ragas_eval(
     if not samples:
         return [result_map[i] for i in range(len(qa_pairs))]
 
-    # max_workers=2 prevents overwhelming the Copilot proxy circuit breaker;
-    # max_retries/max_wait let tenacity back off on 503s before giving up.
-    run_cfg  = RunConfig(max_workers=2, max_retries=5, max_wait=60)
+    # max_workers=3: 3 concurrent RAGAS calls per take; 3 takes run in parallel
+    # → up to 9 concurrent LLM calls total, well within Copilot proxy limits.
+    run_cfg  = RunConfig(max_workers=3, max_retries=5, max_wait=60)
     result   = evaluate(
         EvaluationDataset(samples=samples),
         metrics=metrics,
@@ -694,10 +698,15 @@ def eval_ragas_3takes(
     embedder,
     verbose: bool = True,
 ) -> Dict[str, object]:
-    """Evaluate a retrieval config using RAGAS over 3 named sampler takes.
+    """Evaluate a retrieval config using RAGAS over 3 named sampler takes in parallel.
+
+    The 3 takes (conservative / balanced / creative) run concurrently via
+    ThreadPoolExecutor.  Each thread opens its own SQLite connection (WAL mode)
+    and its own CachedRetriever to avoid cross-thread state sharing.
+    Within each take, RAGAS processes 3 queries concurrently (RunConfig.max_workers=3).
 
     Each (query, config_hash, sampler_take) result is cached in ragas_cache so
-    trials can be resumed without re-calling the LLM.
+    interrupted runs resume without re-calling the LLM.
 
     Args:
         config: must include blend_weights, n_papers, entailment_weight, top_k, config_hash.
@@ -712,63 +721,74 @@ def eval_ragas_3takes(
     entailment_weight = config["entailment_weight"]
     judge_hash        = _judge_config_hash(blend_weights, n_papers)
 
-    retriever = CachedRetriever(
-        rows=rows,
-        id_to_idx=id_to_idx,
-        field_embeddings=field_embeddings,
-        embedder=embedder,
-        blend_weights=blend_weights,
-        n_papers=n_papers,
-        entailment_weight=entailment_weight,
-        judge_config_hash=judge_hash,
-        conn=conn,
-    )
+    def _eval_take(take_name: str, temperature: float) -> Tuple[str, Dict[str, float]]:
+        take_conn = sqlite3.connect(str(_CACHE_DB), timeout=30)
+        take_conn.execute("PRAGMA journal_mode=WAL")
+        try:
+            retriever = CachedRetriever(
+                rows=rows,
+                id_to_idx=id_to_idx,
+                field_embeddings=field_embeddings,
+                embedder=embedder,
+                blend_weights=blend_weights,
+                n_papers=n_papers,
+                entailment_weight=entailment_weight,
+                judge_config_hash=judge_hash,
+                conn=take_conn,
+            )
+            cached_set = {
+                r[0] for r in take_conn.execute(
+                    "SELECT query_hash FROM ragas_cache WHERE config_hash=? AND sampler_take=?",
+                    (config_hash, take_name),
+                ).fetchall()
+            }
+            missing = [p for p in qa_pairs if _query_hash(p["question"]) not in cached_set]
 
-    per_take: Dict[str, Dict[str, float]] = {}
+            if missing:
+                if verbose:
+                    print(f"  [RAGAS] take={take_name} temp={temperature}  {len(missing)} uncached", flush=True)
+                per_pair = _run_ragas_eval(retriever, missing, top_k, temperature)
+                good = [(p, s) for p, s in zip(missing, per_pair) if s is not None]
+                failed = len(missing) - len(good)
+                if failed and verbose:
+                    print(f"    {take_name}: {failed} failed — will retry next run", flush=True)
+                if good:
+                    take_conn.executemany(
+                        "INSERT OR REPLACE INTO ragas_cache VALUES (?,?,?,?,?)",
+                        [
+                            (_query_hash(p["question"]), config_hash, take_name, s["cp"], s["cr"])
+                            for p, s in good
+                        ],
+                    )
+                    take_conn.commit()
+            else:
+                if verbose:
+                    print(f"  [RAGAS] take={take_name} — fully cached", flush=True)
 
-    for take_name, temperature in SAMPLERS.items():
-        if verbose:
-            print(f"  [RAGAS] take={take_name} temp={temperature}  config={config_hash}", flush=True)
-
-        cached_set = {
-            r[0] for r in conn.execute(
-                "SELECT query_hash FROM ragas_cache WHERE config_hash=? AND sampler_take=?",
+            all_scores = take_conn.execute(
+                "SELECT context_precision, context_recall FROM ragas_cache "
+                "WHERE config_hash=? AND sampler_take=? "
+                "AND context_precision IS NOT NULL AND context_recall IS NOT NULL",
                 (config_hash, take_name),
             ).fetchall()
-        }
-        missing = [p for p in qa_pairs if _query_hash(p["question"]) not in cached_set]
-
-        if missing:
+            n_scored = len(all_scores)
+            cp = sum(r[0] for r in all_scores) / n_scored if n_scored else 0.0
+            cr = sum(r[1] for r in all_scores) / n_scored if n_scored else 0.0
             if verbose:
-                print(f"    {len(missing)} uncached — calling RAGAS...", flush=True)
-            per_pair = _run_ragas_eval(retriever, missing, top_k, temperature)
-            good = [(p, s) for p, s in zip(missing, per_pair) if s is not None]
-            failed = len(missing) - len(good)
-            if failed and verbose:
-                print(f"    {failed} pairs failed LLM call — will retry next run", flush=True)
-            if good:
-                conn.executemany(
-                    "INSERT OR REPLACE INTO ragas_cache VALUES (?,?,?,?,?)",
-                    [
-                        (_query_hash(p["question"]), config_hash, take_name, s["cp"], s["cr"])
-                        for p, s in good
-                    ],
+                print(
+                    f"    {take_name}: prec={cp:.4f} rec={cr:.4f} fit={(cp+cr)/2:.4f}  (n={n_scored})",
+                    flush=True,
                 )
-                conn.commit()
+            return take_name, {"precision": cp, "recall": cr, "fit": (cp + cr) / 2}
+        finally:
+            take_conn.close()
 
-        all_scores = conn.execute(
-            "SELECT context_precision, context_recall FROM ragas_cache "
-            "WHERE config_hash=? AND sampler_take=? "
-            "AND context_precision IS NOT NULL AND context_recall IS NOT NULL",
-            (config_hash, take_name),
-        ).fetchall()
-
-        n_scored = len(all_scores)
-        cp = sum(r[0] for r in all_scores) / n_scored if n_scored else 0.0
-        cr = sum(r[1] for r in all_scores) / n_scored if n_scored else 0.0
-        per_take[take_name] = {"precision": cp, "recall": cr, "fit": (cp + cr) / 2}
-        if verbose:
-            print(f"    {take_name}: prec={cp:.4f} rec={cr:.4f} fit={(cp+cr)/2:.4f}  (n={n_scored})", flush=True)
+    per_take: Dict[str, Dict[str, float]] = {}
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        futures = {pool.submit(_eval_take, name, temp): name for name, temp in SAMPLERS.items()}
+        for fut in as_completed(futures):
+            name, scores = fut.result()
+            per_take[name] = scores
 
     mean_p    = sum(t["precision"] for t in per_take.values()) / len(per_take)
     mean_r    = sum(t["recall"]    for t in per_take.values()) / len(per_take)
@@ -954,9 +974,12 @@ def main() -> None:
         print("[Layer 2] Skipped (--skip_layer2)")
 
     # ── Layer 3: Structured search — entailment_weight + top_k ──
+    random.seed(42)
+    tune_pairs = random.sample(train_pairs, min(_TUNE_N_QUERIES, len(train_pairs)))
+    print(f"[Layer 3] Tuning on {len(tune_pairs)}/{len(train_pairs)} queries (seed=42)")
     if not args.skip_layer3:
         best_ew, best_tk, l3_fit = run_layer3_structured(
-            best_blend, args.n_papers, train_pairs, conn,
+            best_blend, args.n_papers, tune_pairs, conn,
             rows, id_to_idx, field_embeddings, embedder,
         )
     else:
