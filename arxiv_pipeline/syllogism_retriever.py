@@ -107,63 +107,41 @@ OLLAMA_BASE            = "http://127.0.0.1:11434"
 _THROUGHLINE_MODEL     = "hf.co/unsloth/Qwen3-4B-128K-GGUF:Qwen3-4B-128K-Q6_K.gguf"
 
 _PAPER_ANGLE_SYSTEM = """\
-You are extracting implementation intelligence from a research paper for a software engineering agent.
+You are extracting pseudocode and concrete algorithmic methods from a research paper for a software \
+engineering agent that needs to implement this work.
 
-Produce a structured extraction using these exact headings:
+Reproduce the core algorithm(s) from this paper in pseudocode. Use indented pseudocode notation — \
+not Python syntax, not LaTeX, not natural language prose. Preserve variable names and notation \
+exactly as used in the paper wherever possible.
 
-MECHANISM: Name the core algorithm or method precisely (e.g. "sparse top-k attention routing", \
-"DPO reward-free preference optimization", "multi-agent hierarchical task decomposition"). \
-Explain it in 2-3 sentences — what it does, why it works.
+Use this structure for each algorithm:
 
-INNOVATION: What this paper contributes that prior work does not. Be specific about the technical delta \
-— name the prior technique and state exactly what is improved or replaced.
+ALGORITHM: <exact name from the paper>
+PURPOSE: <one sentence — what computational problem does this solve>
 
-KEY COMPONENTS: List 2-4 concrete modules, data structures, or computational steps an implementer would \
-build. For each, name it and state its function (e.g. "rollout buffer: stores (state, action, reward) \
-tuples for off-policy updates; enables decoupling collection from training").
+PSEUDOCODE:
+<indented pseudocode, 10-40 lines, reproducing the paper's core method step by step>
 
-INTEGRATION INTERFACE: Describe the primary input/output contract — what data goes in, what comes out, \
-what assumptions are made about the surrounding system or environment.
+VARIABLES:
+<each variable from the pseudocode: name — type and role>
 
-FAILURE MODES: 2-3 known or implied limitations with specific conditions \
-(e.g. "requires >10k labeled preference pairs — breaks on low-resource domains", \
-"compute scales quadratically with context length — impractical beyond 8k tokens").
+PRECONDITIONS: <what must hold before calling this algorithm>
+POSTCONDITIONS: <what is guaranteed after it completes>
+COMPLEXITY: <time and space complexity, if stated or derivable from the paper>
 
-REUSE: One specific module or algorithm from this paper that could be directly lifted into a new system \
-with minimal modification — name it and describe its interface.
+If the paper presents multiple distinct algorithms (e.g. training loop + inference loop, or \
+two complementary methods), extract each one using the same structure, separated by a blank line.
 
-Write in dense, specific prose. Minimum 250 words total. No hedging. No meta-commentary."""
-
-_THROUGHLINE_SYSTEM = """\
-You are synthesizing multiple research paper extractions into an implementation brief for a software \
-engineering agent. Produce a comprehensive brief using these exact headings:
-
-THROUGH-LINE: State the shared mathematical or algorithmic principle across all papers. \
-What unified problem do they address and why does this class of approach work? \
-Name the shared mechanism type. Minimum 3 sentences.
-
-CONVERGENCE POINTS: Where do the approaches agree on data structures, interfaces, or design patterns? \
-These are stable foundations to build on first. Be specific — name the structures.
-
-DIVERGENCE POINTS: Where do the approaches disagree or offer complementary alternatives? \
-Frame each as a concrete design decision the implementer must make \
-(e.g. "synchronous vs. asynchronous inter-agent messaging").
-
-IMPLEMENTATION ROADMAP: A prioritized sequence of 5-7 steps for building a system that captures \
-the best ideas from these papers. Each step: name a specific component, explain why it comes before \
-the next, and cite which paper(s) it draws from.
-
-RISK REGISTER: 4-5 specific failure modes across the combined approaches. \
-For each: (1) the risk, (2) the condition that triggers it, (3) a mitigation strategy.
-
-Write minimum 500 words. Dense, specific, implementable. Every sentence must contain a concrete claim \
-or actionable guidance. No hedging. No meta-commentary."""
+Be literal. Do not invent steps. Do not paraphrase into prose. If the paper shows an equation \
+that is a computational step, render it as a pseudocode assignment. Minimum 200 words of content."""
 
 _DECISION_TREE_SYSTEM = """\
 You are recommending which approach to use for a given task based on research papers.
-Based on the synthesis provided, write a decision tree with 4-6 yes/no questions that guide selection.
-Each leaf node must name a specific method and cite the arXiv ID it comes from.
-Each branch must state what condition triggers it (resource constraint, data availability, latency budget, etc.).
+Based on the pseudocode extractions provided, write a decision tree with 4-6 yes/no questions that guide \
+selection of which paper's algorithm to implement.
+Each leaf node must name a specific algorithm and cite the arXiv ID it comes from.
+Each branch must state what condition triggers it (resource constraint, data availability, latency budget, \
+scale of input, etc.).
 Write in plain text. No pseudocode. No equations. Minimum 150 words."""
 
 _THINK_RE = re.compile(r'<think>.*?</think>', re.DOTALL | re.IGNORECASE)
@@ -198,7 +176,7 @@ class SyllogismRetrievalResult:
     papers_content: Dict[str, str]      = field(default_factory=dict)   # arxiv_id → markdown
     nli_scores:     Dict[str, float]    = field(default_factory=dict)   # arxiv_id → NLI score
     graph_context:  str                 = ""                            # KG triplets from GraphRetriever
-    through_line:   str                 = ""                            # LLM-synthesised through-line
+    through_line:   str                 = ""                            # unused — capstone = Synthesis section concatenation
     paper_angles:   Dict[str, str]      = field(default_factory=dict)   # arxiv_id → "Philosophy\nApplication"
     decision_tree:  str                 = ""                            # LLM-generated decision tree
 
@@ -764,29 +742,18 @@ class SyllogismRetriever:
                 angle = _strip_think(resp.json().get("response", ""))
                 result.paper_angles[pid] = angle
 
-            # Capstone through-line synthesis (REDUCE phase: concatenated extractions → 2048 tokens)
+            # Capstone: literal concatenation of per-paper pseudocode extractions (no LLM call)
             if result.paper_angles:
                 angles_text = "\n\n---\n\n".join(
                     f"[{pid}]\n{angle}" for pid, angle in result.paper_angles.items()
                 )
-                payload = {
-                    "model":   _THROUGHLINE_MODEL,
-                    "system":  _THROUGHLINE_SYSTEM,
-                    "prompt":  f"/no_think\n\nQuery: {result.query}\n\nPer-paper extractions:\n\n{angles_text}",
-                    "stream":  False,
-                    "think":   False,
-                    "options": {"num_predict": 2048, "temperature": 0.2},
-                }
-                resp = self._llm_client.post("/api/generate", json=payload)
-                resp.raise_for_status()
-                result.through_line = _strip_think(resp.json().get("response", ""))
 
-            # Decision tree from capstone (512 tokens)
-            if result.through_line:
+            # Decision tree from concatenated pseudocode (512 tokens)
+            if result.paper_angles:
                 payload = {
                     "model":   _THROUGHLINE_MODEL,
                     "system":  _DECISION_TREE_SYSTEM,
-                    "prompt":  f"/no_think\n\nQuery: {result.query}\n\nSynthesis:\n{result.through_line}",
+                    "prompt":  f"/no_think\n\nQuery: {result.query}\n\nPseudocode extractions:\n{angles_text}",
                     "stream":  False,
                     "think":   False,
                     "options": {"num_predict": 512, "temperature": 0.2},
