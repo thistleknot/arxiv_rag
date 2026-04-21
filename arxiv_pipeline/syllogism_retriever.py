@@ -106,42 +106,83 @@ _BLEND_WEIGHTS = {
 OLLAMA_BASE            = "http://127.0.0.1:11434"
 _THROUGHLINE_MODEL     = "hf.co/unsloth/Qwen3-4B-128K-GGUF:Qwen3-4B-128K-Q6_K.gguf"
 
-_THROUGHLINE_SYSTEM = """\
-You are a systems engineer extracting implementable knowledge from research papers.
-
-Your output has two parts:
-
-PART 1 — Core Idea (2-3 sentences max):
-State the shared mathematical or algorithmic principle across the papers in plain language. \
-What problem does it solve and why does the approach work? Be specific, not generic.
-
-PART 2 — Shared Mechanism (2-3 sentences):
-State the common algorithmic approach across papers in plain English. \
-Name the specific mechanism type (e.g., sparse attention, parameter distillation, agent decomposition). \
-Identify one failure mode shared or implied across methods. \
-No pseudocode. No equations. No variable names. Only output PART 1 and PART 2."""
-
 _PAPER_ANGLE_SYSTEM = """\
-You are extracting the core implementable idea from a single research paper.
-Answer in exactly 2 lines. No preamble, no markdown, no explanation.
+You are extracting implementation intelligence from a research paper for a software engineering agent.
 
-Line 1: Philosophy: <one sentence — what mathematical or algorithmic principle \
-does this paper contribute? Name the mechanism, not the application domain.>
-Line 2: Application: <one sentence — the primary mechanism or algorithm, ≤30 tokens; \
-reproduce notation exactly as it appears in the paper; do not invent notation>"""
+Produce a structured extraction using these exact headings:
+
+MECHANISM: Name the core algorithm or method precisely (e.g. "sparse top-k attention routing", \
+"DPO reward-free preference optimization", "multi-agent hierarchical task decomposition"). \
+Explain it in 2-3 sentences — what it does, why it works.
+
+INNOVATION: What this paper contributes that prior work does not. Be specific about the technical delta \
+— name the prior technique and state exactly what is improved or replaced.
+
+KEY COMPONENTS: List 2-4 concrete modules, data structures, or computational steps an implementer would \
+build. For each, name it and state its function (e.g. "rollout buffer: stores (state, action, reward) \
+tuples for off-policy updates; enables decoupling collection from training").
+
+INTEGRATION INTERFACE: Describe the primary input/output contract — what data goes in, what comes out, \
+what assumptions are made about the surrounding system or environment.
+
+FAILURE MODES: 2-3 known or implied limitations with specific conditions \
+(e.g. "requires >10k labeled preference pairs — breaks on low-resource domains", \
+"compute scales quadratically with context length — impractical beyond 8k tokens").
+
+REUSE: One specific module or algorithm from this paper that could be directly lifted into a new system \
+with minimal modification — name it and describe its interface.
+
+Write in dense, specific prose. Minimum 250 words total. No hedging. No meta-commentary."""
+
+_THROUGHLINE_SYSTEM = """\
+You are synthesizing multiple research paper extractions into an implementation brief for a software \
+engineering agent. Produce a comprehensive brief using these exact headings:
+
+THROUGH-LINE: State the shared mathematical or algorithmic principle across all papers. \
+What unified problem do they address and why does this class of approach work? \
+Name the shared mechanism type. Minimum 3 sentences.
+
+CONVERGENCE POINTS: Where do the approaches agree on data structures, interfaces, or design patterns? \
+These are stable foundations to build on first. Be specific — name the structures.
+
+DIVERGENCE POINTS: Where do the approaches disagree or offer complementary alternatives? \
+Frame each as a concrete design decision the implementer must make \
+(e.g. "synchronous vs. asynchronous inter-agent messaging").
+
+IMPLEMENTATION ROADMAP: A prioritized sequence of 5-7 steps for building a system that captures \
+the best ideas from these papers. Each step: name a specific component, explain why it comes before \
+the next, and cite which paper(s) it draws from.
+
+RISK REGISTER: 4-5 specific failure modes across the combined approaches. \
+For each: (1) the risk, (2) the condition that triggers it, (3) a mitigation strategy.
+
+Write minimum 500 words. Dense, specific, implementable. Every sentence must contain a concrete claim \
+or actionable guidance. No hedging. No meta-commentary."""
 
 _DECISION_TREE_SYSTEM = """\
 You are recommending which approach to use for a given task based on research papers.
-Based on the synthesis provided, write a decision tree with 3-4 yes/no questions that guide selection.
-Each leaf node must name a specific method or paper (use the arXiv IDs provided).
-Write in plain text. No pseudocode. No equations. Max 200 words."""
+Based on the synthesis provided, write a decision tree with 4-6 yes/no questions that guide selection.
+Each leaf node must name a specific method and cite the arXiv ID it comes from.
+Each branch must state what condition triggers it (resource constraint, data availability, latency budget, etc.).
+Write in plain text. No pseudocode. No equations. Minimum 150 words."""
 
 _THINK_RE = re.compile(r'<think>.*?</think>', re.DOTALL | re.IGNORECASE)
+_THINK_OPEN_RE = re.compile(r'<think>', re.IGNORECASE)
 
 
 def _strip_think(text: str) -> str:
-    """Strip Qwen3 chain-of-thought <think>…</think> blocks from LLM responses."""
-    return _THINK_RE.sub('', text).strip()
+    """Strip Qwen3 chain-of-thought <think>…</think> blocks.
+
+    Handles both complete blocks (open + close tag) and incomplete blocks where
+    the model hit its token limit mid-think and never emitted the closing tag.
+    """
+    # Strip complete blocks first
+    text = _THINK_RE.sub('', text)
+    # Strip any remaining incomplete block (no closing tag)
+    m = _THINK_OPEN_RE.search(text)
+    if m:
+        text = text[:m.start()]
+    return text.strip()
 
 
 # ── Result dataclass ──────────────────────────────────────────────────────────
@@ -398,7 +439,7 @@ class SyllogismRetriever:
                 self._graph = None
 
         # httpx client for through-line LLM call
-        self._llm_client = httpx.Client(base_url=OLLAMA_BASE, timeout=240.0)
+        self._llm_client = httpx.Client(base_url=OLLAMA_BASE, timeout=600.0)
 
         # Sentence-transformer for semantic utility index search (lazy)
         self._embedder = None
@@ -703,48 +744,52 @@ class SyllogismRetriever:
         if self._verbose:
             print(f"[stage 8] LLM through-line synthesis ({len(result.papers)} papers)...")
         try:
-            # Per-paper angle extraction
+            # Per-paper angle extraction (MAP phase: 1024 tokens each)
             for doc in result.papers[:top_k]:
                 pid      = doc.metadata.get("paper_id", doc.doc_id)
                 title    = doc.metadata.get("title", "")
-                abstract = doc.metadata.get("abstract", "")[:800]
-                user_msg = f"Title: {title}\n\nAbstract: {abstract}"
+                abstract = doc.metadata.get("abstract", "")
+                utility  = doc.metadata.get("utility", "")
+                user_msg = f"/no_think\n\nTitle: {title}\n\nAbstract: {abstract}\n\nUtility: {utility}"
                 payload  = {
                     "model":   _THROUGHLINE_MODEL,
                     "system":  _PAPER_ANGLE_SYSTEM,
                     "prompt":  user_msg,
                     "stream":  False,
-                    "options": {"num_predict": 120, "temperature": 0.0},
+                    "think":   False,
+                    "options": {"num_predict": 1024, "temperature": 0.0},
                 }
                 resp = self._llm_client.post("/api/generate", json=payload)
                 resp.raise_for_status()
                 angle = _strip_think(resp.json().get("response", ""))
                 result.paper_angles[pid] = angle
 
-            # Through-line synthesis from all per-paper angles
+            # Capstone through-line synthesis (REDUCE phase: concatenated extractions → 2048 tokens)
             if result.paper_angles:
-                angles_text = "\n\n".join(
+                angles_text = "\n\n---\n\n".join(
                     f"[{pid}]\n{angle}" for pid, angle in result.paper_angles.items()
                 )
                 payload = {
                     "model":   _THROUGHLINE_MODEL,
                     "system":  _THROUGHLINE_SYSTEM,
-                    "prompt":  f"Query: {result.query}\n\nPaper summaries:\n{angles_text}",
+                    "prompt":  f"/no_think\n\nQuery: {result.query}\n\nPer-paper extractions:\n\n{angles_text}",
                     "stream":  False,
-                    "options": {"num_predict": 400, "temperature": 0.2},
+                    "think":   False,
+                    "options": {"num_predict": 2048, "temperature": 0.2},
                 }
                 resp = self._llm_client.post("/api/generate", json=payload)
                 resp.raise_for_status()
                 result.through_line = _strip_think(resp.json().get("response", ""))
 
-            # Decision tree from through-line
+            # Decision tree from capstone (512 tokens)
             if result.through_line:
                 payload = {
                     "model":   _THROUGHLINE_MODEL,
                     "system":  _DECISION_TREE_SYSTEM,
-                    "prompt":  f"Query: {result.query}\n\nSynthesis:\n{result.through_line}",
+                    "prompt":  f"/no_think\n\nQuery: {result.query}\n\nSynthesis:\n{result.through_line}",
                     "stream":  False,
-                    "options": {"num_predict": 400, "temperature": 0.2},
+                    "think":   False,
+                    "options": {"num_predict": 512, "temperature": 0.2},
                 }
                 resp = self._llm_client.post("/api/generate", json=payload)
                 resp.raise_for_status()
