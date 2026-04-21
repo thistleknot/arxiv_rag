@@ -86,13 +86,18 @@ def normalize_paper_id(pid: str) -> str:
 
 # ── Data loading ──────────────────────────────────────────────────────────────
 
-def load_qa_pairs(csv_ids: Optional[set] = None) -> Tuple[List[dict], List[dict]]:
-    """Load train and holdout QA pairs from eval/data/qa_pairs.json.
+def load_qa_pairs(
+    csv_ids: Optional[set] = None,
+    qa_path: Optional[Path] = None,
+) -> Tuple[List[dict], List[dict]]:
+    """Load train and holdout QA pairs.
 
-    Normalises paper_id in every entry.  If csv_ids is provided, only pairs
-    whose paper_id is in the CSV are returned (unreachable pairs are dropped).
+    Args:
+        csv_ids:  If provided, only pairs whose paper_id is in the CSV are returned.
+        qa_path:  Override default QA file (e.g. eval/data/qa_pairs_v2.json).
     """
-    with open(_QA_PATH, encoding="utf-8") as fh:
+    path = qa_path or _QA_PATH
+    with open(path, encoding="utf-8") as fh:
         data = json.load(fh)
     train   = [dict(p, paper_id=normalize_paper_id(p["paper_id"])) for p in data["train"]]
     holdout = [dict(p, paper_id=normalize_paper_id(p["paper_id"])) for p in data["test"]]
@@ -935,14 +940,19 @@ def main() -> None:
                          "deterministically (ew=0). Completes in ~2-5 min.")
     ap.add_argument("--n_papers",  type=int, default=_DEFAULT_N_PAPERS)
     ap.add_argument("--l1_trials", type=int, default=_L1_TRIALS)
+    ap.add_argument("--qa_file",   default=None,
+                    help="Path to QA pairs JSON (default: eval/data/qa_pairs.json). "
+                         "Use eval/data/qa_pairs_v2.json for abstract/utility-sourced pairs.")
     args = ap.parse_args()
 
     print("[init] Loading QA pairs and CSV...")
     rows = load_rows()
     csv_ids = {r["arxiv_id"] for r in rows}
-    train_pairs, holdout_pairs = load_qa_pairs(csv_ids=csv_ids)
+    qa_path = Path(args.qa_file) if args.qa_file else None
+    train_pairs, holdout_pairs = load_qa_pairs(csv_ids=csv_ids, qa_path=qa_path)
     id_to_idx = {r["arxiv_id"]: i for i, r in enumerate(rows)}
-    print(f"  {len(rows)} papers  train={len(train_pairs)}  holdout={len(holdout_pairs)}")
+    qa_label  = Path(args.qa_file).name if args.qa_file else "qa_pairs.json"
+    print(f"  {len(rows)} papers  train={len(train_pairs)}  holdout={len(holdout_pairs)}  ({qa_label})")
 
     print("[init] Loading embedder and building field embeddings...")
     from sentence_transformers import SentenceTransformer
