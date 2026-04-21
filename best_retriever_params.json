@@ -1,16 +1,16 @@
 {
   "blend_weights": {
-    "title": 0.3237,
-    "abstract": 0.5803,
-    "utility": 0.096
+    "title": 0.2012,
+    "abstract": 0.3981,
+    "utility": 0.4008
   },
   "n_papers": 13,
-  "entailment_weight": 0.5,
-  "retrieval_weight": 0.5,
-  "top_k": 5,
-  "tune_sem_mrr20": 0.3246,
-  "tune_fit_score": 0.3833,
-  "holdout_fit_score": 0.4622,
-  "holdout_precision": 0.4128,
+  "entailment_weight": 0.0,
+  "retrieval_weight": 1.0,
+  "top_k": 7,
+  "tune_sem_mrr20": 0.0,
+  "tune_fit_score": 0.4604,
+  "holdout_fit_score": 0.4554,
+  "holdout_precision": 0.3992,
   "holdout_recall": 0.5116
 }

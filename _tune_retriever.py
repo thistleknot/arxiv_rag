@@ -8,25 +8,30 @@ Protocol (hyper-param tuning skill):
 
   Precision: rank-sensitive ID-based context precision@K — rewards the correct
              paper being ranked near the top of the retrieved list.
-             Same formula as LLMContextPrecisionWithReference but uses exact
-             arxiv_id matching instead of LLM judgment (deterministic, instant).
+             1/rank if reference found at rank r, else 0.0.
+             Higher concentration of correct papers near rank 1 → higher score.
   Recall:    binary per query — 1.0 if the correct paper_id appears anywhere in
              the top_k retrieved set, else 0.0.
   No LLM calls required for evaluation. Each "chunk" is a full paper
   (title + abstract) identified by its arxiv_id.
 
-Tuning order (layerwise):
-  Layer 1 — Semantic blend weights (title / abstract / utility) + n_papers.
-             MRR@20 proxy (pure embedding math, no LLM). Optuna TPE, 50 trials.
-  Layer 2 — Cache Qwen3-1.7B judge scores for all train queries (~41 min,
-             resumable). Keyed by (query_hash, config_hash, paper_id) where
-             config_hash encodes blend_weights + n_papers.
-  Layer 3 — Entailment weight + top_k; structured search (11 evals),
-             ID-based fit_score objective (instant, no LLM).
+Tuning modes:
+
+  Standard (default):
+    Layer 1 — Semantic blend weights (title / abstract / utility).
+               MRR@20 proxy (pure embedding math, no LLM). Optuna TPE, 50 trials.
+    Layer 2 — Cache Qwen3-1.7B judge scores for all train queries (~28 min,
+               resumable, 3-concurrent workers). Keyed by config_hash.
+    Layer 3 — Entailment weight + top_k; structured search (11 evals),
+               ID-based fit_score objective (instant, no LLM).
+
+  Judge-free (--disable_judge):
+    Single Optuna pass over {title_w, abstract_w, utility_w, top_k}.
+    Objective: fit_score directly (no MRR proxy, no LLM).
+    entailment_weight fixed to 0.0. Completes in ~2-5 min.
 
 Output: best_retriever_params.json
 """
-
 from __future__ import annotations
 
 import argparse
@@ -771,6 +776,120 @@ def run_layer3_structured(
     return best_ew, best_tk, best_score
 
 
+# ── Deterministic tuning (--disable_judge) ───────────────────────────────────
+
+def run_deterministic_tuning(
+    rows: List[Dict[str, str]],
+    id_to_idx: Dict[str, int],
+    field_embeddings: Dict[str, np.ndarray],
+    embedder,
+    tune_pairs: List[dict],
+    n_papers: int,
+    conn: sqlite3.Connection,
+    n_trials: int = 50,
+    warm_start: Optional[Dict[str, float]] = None,
+) -> Tuple[Dict[str, float], int, float]:
+    """Tune blend weights + top_k without LLM judge (ew=0, pure semantic).
+
+    Pre-encodes all query embeddings once outside the trial loop, then runs
+    Optuna TPE over:
+        title_w, abstract_w  (utility_w = 1 - title_w - abstract_w, must be ≥0.05)
+        top_k                (3 .. n_papers)
+    Objective: fit_score = (rank_sensitive_precision + binary_recall) / 2
+
+    Rank-sensitive precision rewards concentration of correct papers near rank 1:
+        score = 1/rank  if reference found at rank r, else 0.0
+
+    No SQL queries, no LLM calls — fully deterministic embedding math.
+    Completes in ~2-5 min for 20 queries × 50 trials.
+
+    Args:
+        warm_start: Optional dict with saved blend_weights to enqueue as first trial.
+    Returns:
+        (best_blend_weights, best_top_k, best_fit_score)
+    """
+    import optuna
+    optuna.logging.set_verbosity(optuna.logging.WARNING)
+
+    # Pre-encode query embeddings and normalise reference IDs once
+    print(f"[Det. Tuning] Pre-encoding {len(tune_pairs)} query embeddings...", flush=True)
+    questions = [p["question"] for p in tune_pairs]
+    query_embs = embedder.encode(
+        questions, convert_to_numpy=True, normalize_embeddings=True, show_progress_bar=False,
+    )
+    ref_ids = [normalize_paper_id(p["paper_id"]) for p in tune_pairs]
+    csv_ids_set = {r["arxiv_id"] for r in rows}
+    # Filter to pairs whose reference paper is actually in the CSV
+    valid = [(q_emb, ref_id) for q_emb, ref_id in zip(query_embs, ref_ids) if ref_id in csv_ids_set]
+    if not valid:
+        print("[Det. Tuning] No valid pairs — aborting.")
+        return {"title": 0.3237, "abstract": 0.5803, "utility": 0.096}, 5, 0.0
+    q_embs_arr = np.array([v[0] for v in valid])
+    valid_refs  = [v[1] for v in valid]
+
+    def _fast_fit(title_w: float, abstract_w: float, top_k: int) -> float:
+        utility_w = 1.0 - title_w - abstract_w
+        blend = {"title": title_w, "abstract": abstract_w, "utility": utility_w}
+        precisions, recalls = [], []
+        for q_emb, ref_id in zip(q_embs_arr, valid_refs):
+            scores = semantic_blend_scores(q_emb, field_embeddings, blend)
+            order  = np.argsort(-scores)[:n_papers]
+            ranked = [rows[i]["arxiv_id"] for i in order[:top_k]]
+            precisions.append(_rank_sensitive_precision(ranked, ref_id))
+            recalls.append(1.0 if ref_id in ranked else 0.0)
+        prec = float(np.mean(precisions))
+        rec  = float(np.mean(recalls))
+        return (prec + rec) / 2.0
+
+    def objective(trial: "optuna.Trial") -> float:
+        title_w    = trial.suggest_float("title",    0.05, 0.70)
+        abstract_w = trial.suggest_float("abstract", 0.20, 0.75)
+        utility_w  = 1.0 - title_w - abstract_w
+        if utility_w < 0.05 or utility_w > 0.50:
+            raise optuna.exceptions.TrialPruned()
+        top_k = trial.suggest_int("top_k", 3, n_papers)
+        score = _fast_fit(title_w, abstract_w, top_k)
+        print(
+            f"  [trial {trial.number:>3}] title={title_w:.3f} abs={abstract_w:.3f} "
+            f"util={utility_w:.3f} tk={top_k}  fit={score:.4f}",
+            flush=True,
+        )
+        return score
+
+    study = optuna.create_study(
+        direction="maximize",
+        sampler=optuna.samplers.TPESampler(seed=42),
+    )
+    if warm_start and "blend_weights" in warm_start:
+        bw = warm_start["blend_weights"]
+        study.enqueue_trial({
+            "title":    bw.get("title",    0.3237),
+            "abstract": bw.get("abstract", 0.5803),
+            "top_k":    warm_start.get("top_k", 5),
+        })
+
+    print(f"[Det. Tuning] Optuna TPE — {n_trials} trials × {len(valid)} queries...", flush=True)
+    study.optimize(objective, n_trials=n_trials, show_progress_bar=False)
+
+    best = study.best_trial
+    title_w    = best.params["title"]
+    abstract_w = best.params["abstract"]
+    utility_w  = 1.0 - title_w - abstract_w
+    best_blend = {
+        "title":    round(title_w,    4),
+        "abstract": round(abstract_w, 4),
+        "utility":  round(utility_w,  4),
+    }
+    best_tk  = best.params["top_k"]
+    best_fit = best.value
+
+    cfg = {"blend_weights": best_blend, "n_papers": n_papers, "entailment_weight": 0.0, "top_k": best_tk}
+    _persist_trial(conn, layer=1, config=cfg, result={"precision": 0.0, "recall": 0.0, "fit_score": best_fit})
+
+    print(f"\n[Det. Tuning] Best: blend={best_blend}  top_k={best_tk}  fit_score={best_fit:.4f}")
+    return best_blend, best_tk, best_fit
+
+
 # ── Holdout evaluation ────────────────────────────────────────────────────────
 
 def run_holdout_eval(
@@ -807,10 +926,13 @@ def run_holdout_eval(
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Tune SyllogismRetriever hyperparameters")
-    ap.add_argument("--skip_layer1",  action="store_true")
-    ap.add_argument("--skip_layer2",  action="store_true")
-    ap.add_argument("--skip_layer3",  action="store_true")
-    ap.add_argument("--skip_holdout", action="store_true")
+    ap.add_argument("--skip_layer1",     action="store_true")
+    ap.add_argument("--skip_layer2",     action="store_true")
+    ap.add_argument("--skip_layer3",     action="store_true")
+    ap.add_argument("--skip_holdout",    action="store_true")
+    ap.add_argument("--disable_judge",   action="store_true",
+                    help="Skip LLM judge entirely. Tune blend weights + top_k "
+                         "deterministically (ew=0). Completes in ~2-5 min.")
     ap.add_argument("--n_papers",  type=int, default=_DEFAULT_N_PAPERS)
     ap.add_argument("--l1_trials", type=int, default=_L1_TRIALS)
     args = ap.parse_args()
@@ -832,41 +954,63 @@ def main() -> None:
         with open(_OUTPUT_JSON, encoding="utf-8") as fh:
             saved = json.load(fh)
 
-    # ── Layer 1: Semantic blend (MRR@20 proxy) ──
-    if args.skip_layer1 and "blend_weights" in saved:
-        best_blend = saved["blend_weights"]
-        l1_mrr     = saved.get("tune_sem_mrr20", 0.0)
-        print(f"[Layer 1] Using saved: {best_blend}  MRR@{_MRR_K}={l1_mrr:.4f}")
-    else:
-        best_blend, l1_mrr = run_layer1(rows, field_embeddings, embedder, train_pairs, args.l1_trials)
-
-    # ── Open / migrate DB ──
-    l2_config_hash = _judge_config_hash(best_blend, args.n_papers)
-    conn = _init_cache_db(_CACHE_DB, l2_config_hash=l2_config_hash)
-
-    # ── Layer 2: LLM judge caching ──
-    if not args.skip_layer2:
-        run_layer2_cache(best_blend, rows, field_embeddings, embedder,
-                         train_pairs, args.n_papers, conn)
-    else:
-        print("[Layer 2] Skipped (--skip_layer2)")
-
-    # ── Layer 3: Structured search — entailment_weight + top_k ──
+    # Subsample for tuning (same 20 across all modes, seed=42)
     random.seed(42)
     tune_pairs = random.sample(train_pairs, min(_TUNE_N_QUERIES, len(train_pairs)))
-    print(f"[Layer 3] Tuning on {len(tune_pairs)}/{len(train_pairs)} queries (seed=42)")
-    if not args.skip_layer3:
-        best_ew, best_tk, l3_fit = run_layer3_structured(
-            best_blend, args.n_papers, tune_pairs, conn,
-            rows, id_to_idx, field_embeddings, embedder,
-        )
-    else:
-        best_ew = saved.get("entailment_weight", _L3_CENTER_EW)
-        best_tk = saved.get("top_k",             _L3_CENTER_TK)
-        l3_fit  = saved.get("tune_fit_score",    0.0)
-        print(f"[Layer 3] Skipped — ew={best_ew} top_k={best_tk}")
 
-    # ── Holdout ──
+    # Open DB (needed even in disable_judge mode to persist trials)
+    l2_config_hash = _judge_config_hash(saved.get("blend_weights", {}), args.n_papers)
+    conn = _init_cache_db(_CACHE_DB, l2_config_hash=l2_config_hash)
+
+    if args.disable_judge:
+        # ── Judge-free path: single deterministic Optuna pass ──────────────
+        print(f"\n[Det. Tuning] Tuning on {len(tune_pairs)}/{len(train_pairs)} queries (seed=42)")
+        best_blend, best_tk, l_fit = run_deterministic_tuning(
+            rows, id_to_idx, field_embeddings, embedder,
+            tune_pairs, args.n_papers, conn,
+            n_trials=args.l1_trials,
+            warm_start=saved if saved else None,
+        )
+        best_ew = 0.0
+        l1_mrr  = 0.0
+        l3_fit  = l_fit
+
+    else:
+        # ── Standard layerwise path ─────────────────────────────────────────
+        # Layer 1: Semantic blend (MRR@20 proxy)
+        if args.skip_layer1 and "blend_weights" in saved:
+            best_blend = saved["blend_weights"]
+            l1_mrr     = saved.get("tune_sem_mrr20", 0.0)
+            print(f"[Layer 1] Using saved: {best_blend}  MRR@{_MRR_K}={l1_mrr:.4f}")
+        else:
+            best_blend, l1_mrr = run_layer1(rows, field_embeddings, embedder, train_pairs, args.l1_trials)
+
+        # Reopen DB with correct config_hash for the chosen blend
+        conn.close()
+        l2_config_hash = _judge_config_hash(best_blend, args.n_papers)
+        conn = _init_cache_db(_CACHE_DB, l2_config_hash=l2_config_hash)
+
+        # Layer 2: LLM judge caching
+        if not args.skip_layer2:
+            run_layer2_cache(best_blend, rows, field_embeddings, embedder,
+                             train_pairs, args.n_papers, conn)
+        else:
+            print("[Layer 2] Skipped (--skip_layer2)")
+
+        # Layer 3: Structured search — entailment_weight + top_k
+        print(f"[Layer 3] Tuning on {len(tune_pairs)}/{len(train_pairs)} queries (seed=42)")
+        if not args.skip_layer3:
+            best_ew, best_tk, l3_fit = run_layer3_structured(
+                best_blend, args.n_papers, tune_pairs, conn,
+                rows, id_to_idx, field_embeddings, embedder,
+            )
+        else:
+            best_ew = saved.get("entailment_weight", _L3_CENTER_EW)
+            best_tk = saved.get("top_k",             _L3_CENTER_TK)
+            l3_fit  = saved.get("tune_fit_score",    0.0)
+            print(f"[Layer 3] Skipped — ew={best_ew} top_k={best_tk}")
+
+    # ── Holdout ──────────────────────────────────────────────────────────────
     if not args.skip_holdout:
         h = run_holdout_eval(best_blend, best_ew, best_tk, args.n_papers,
                              holdout_pairs, conn, rows, id_to_idx, field_embeddings, embedder)
