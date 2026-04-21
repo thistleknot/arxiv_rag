@@ -103,13 +103,12 @@ class EntailmentRanker:
         """
         Re-rank docs using syllogism necessity scores.
 
-        Chain papers: entailment_score = paper_scores[arxiv_id]
-        Non-chain papers: entailment_score = 0.0
-        Blend: final = e_weight * entailment + r_weight * norm_retrieval_score
+        All docs are ranked by blend score descending (no hard chain/nonchain partition):
+            blend = entailment_weight * entailment_score + retrieval_weight * norm_retrieval_score
 
-        Args:
-            docs: List from ArxivRetriever (already ranked by retrieval pipeline)
-            result: SyllogismResult with .paper_scores (arxiv_id → float)
+        Papers with no entailment score (not in paper_scores) get entailment_score=0.0,
+        so they naturally rank below papers the judge selected, but can still appear in
+        top results if their retrieval score is sufficiently strong.
 
         Returns:
             New list of RetrievedDoc with updated final_score, sorted descending.
@@ -143,12 +142,5 @@ class EntailmentRanker:
             d.final_score = blended
             scored.append((blended, d))
 
-        # Sort: chain papers first (entailment_score > 0), then non-chain — both by blended DESC
-        chain_ids = set(paper_scores.keys())
-        chain_docs    = [(s, d) for s, d in scored if _get_paper_id(d) in chain_ids]
-        nonchain_docs = [(s, d) for s, d in scored if _get_paper_id(d) not in chain_ids]
-
-        chain_docs.sort(key=lambda x: x[0], reverse=True)
-        nonchain_docs.sort(key=lambda x: x[0], reverse=True)
-
-        return [d for _, d in chain_docs + nonchain_docs]
+        scored.sort(key=lambda x: x[0], reverse=True)
+        return [d for _, d in scored]

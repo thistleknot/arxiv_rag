@@ -177,6 +177,20 @@ def _try_pgvector_retrieval(query: str, top_k: int):
         raise
 
 
+_BEST_PARAMS_PATH = _ROOT / "best_retriever_params.json"
+
+
+def _load_best_params() -> dict:
+    """Load tuned retriever params if available; return empty dict on miss."""
+    if _BEST_PARAMS_PATH.exists():
+        try:
+            with open(_BEST_PARAMS_PATH, encoding="utf-8") as fh:
+                return json.load(fh)
+        except Exception:
+            pass
+    return {}
+
+
 def run_retrieval(query: str, n_papers: int, top_k: int, output: str) -> None:
     """Run the 9-stage syllogism retriever and write the markdown report."""
     print("\n" + "=" * 60)
@@ -186,6 +200,16 @@ def run_retrieval(query: str, n_papers: int, top_k: int, output: str) -> None:
     print(f"  top_k    : {top_k}")
     print(f"  output   : {output}\n")
 
+    # Load tuned blend weights if available
+    best = _load_best_params()
+    blend_weights = best.get("blend_weights") or None
+    if blend_weights:
+        print(f"  Blend    : {blend_weights}  (from best_retriever_params.json)")
+        if "n_papers" in best and n_papers == 13:
+            n_papers = best["n_papers"]
+    else:
+        print("  Blend    : default (best_retriever_params.json not found)")
+
     pre_selected = _try_pgvector_retrieval(query, top_k)
     if pre_selected:
         print(f"  Source   : 3-layer pgvector retriever ({len(pre_selected)} papers)")
@@ -194,7 +218,7 @@ def run_retrieval(query: str, n_papers: int, top_k: int, output: str) -> None:
 
     from arxiv_pipeline.syllogism_retriever import SyllogismRetriever
 
-    retriever = SyllogismRetriever()
+    retriever = SyllogismRetriever(blend_weights=blend_weights)
     result    = retriever.retrieve(query, n_papers=n_papers, top_k=top_k,
                                    pre_selected=pre_selected)
 

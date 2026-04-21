@@ -97,6 +97,49 @@ python extract_bio_training_data.py --chunks 250 --output training.msgpack
 python tune_bio_tagger.py --data training.msgpack --unfreeze-layers 12 --n-trials 21
 ```
 
+### SyllogismRetriever (9-stage RAG pipeline)
+```bash
+# Single query → markdown report
+python arxiv_pipeline/run.py "autonomous software development" --top_k 3 --output report.md
+
+# Retune blend weights (deterministic, no LLM judge, uses QA v2 pairs)
+python _tune_retriever.py --disable_judge --qa_file eval/data/qa_pairs_v2.json
+
+# Regenerate QA evaluation pairs from abstract+utility fields
+python eval/generate_qa_pairs_v2.py
+```
+
+---
+
+## 📊 SyllogismRetriever — Current Performance
+
+| Setting | Value |
+|---------|-------|
+| Tuning method | Deterministic (Optuna, no LLM judge) |
+| QA source | Abstract + utility fields (`eval/data/qa_pairs_v2.json`, 150 pairs) |
+| Holdout fit-score | **0.6535** |
+| Blend weights | title=0.451, abstract=0.464, utility=0.085 |
+| top_k | 9 (pool) → 3–5 (report) |
+| Backend | Standalone cosine fallback (pgvector optional) |
+
+### Pipeline stages
+1. **Semantic blend** — cosine similarity over title / abstract / utility embeddings, weighted by tuned blend weights
+2. **NLI entailment scoring** — `cross-encoder/nli-deberta-v3-small` scores each paper's utility string against the query intent
+3. **LLM judge** (optional, `--disable_judge` bypasses) — Qwen3-1.7B ranks entailed papers; scores are NLI cross-encoder probabilities
+4. **Syllogism formation** — thesis + ranked evidence chain
+5. **Entailment reranking** — blend of NLI score and retrieval rank
+6. **Through-line synthesis** — Qwen3-4B extracts per-paper angles + cross-paper synthesis (think-tokens stripped)
+
+### Tuning history
+| Run | QA source | Holdout |
+|-----|-----------|---------|
+| v1 | Random sections | 0.4554 |
+| v2 | Abstract + utility | **0.6535** (+43%) |
+
+The v1→v2 jump came from fixing QA pair generation: v1 sourced questions from arbitrary
+section text (tables, figures, methods) that semantic retrieval cannot match. v2 sources
+questions exclusively from abstract and utility fields — the same fields queried at inference.
+
 ---
 
 ## 🔍 Hybrid Retriever — Feature Catalog

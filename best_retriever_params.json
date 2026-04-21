@@ -1,16 +1,16 @@
 {
   "blend_weights": {
-    "title": 0.2012,
-    "abstract": 0.3981,
-    "utility": 0.4008
+    "title": 0.4506,
+    "abstract": 0.4643,
+    "utility": 0.0851
   },
   "n_papers": 13,
   "entailment_weight": 0.0,
   "retrieval_weight": 1.0,
-  "top_k": 7,
+  "top_k": 9,
   "tune_sem_mrr20": 0.0,
-  "tune_fit_score": 0.4604,
-  "holdout_fit_score": 0.4554,
-  "holdout_precision": 0.3992,
-  "holdout_recall": 0.5116
+  "tune_fit_score": 0.7917,
+  "holdout_fit_score": 0.6535,
+  "holdout_precision": 0.5736,
+  "holdout_recall": 0.7333
 }
