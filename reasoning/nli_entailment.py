@@ -319,12 +319,27 @@ class NLIEntailmentScorer:
                          1.0 for the top-ranked paper, decaying to 1/N.
         """
         self._load_judge()
+        self._load()   # ensure cross-encoder is ready for NLI scoring
 
         if not utilities_by_paper:
             return {}, {}
 
         items = list(utilities_by_paper.items())   # preserves cosine-rank order
         N = len(items)
+
+        # Pre-compute NLI entailment probabilities for each utility string
+        sentence_pairs = [[intent_text, utility] for _, utility in items]
+        raw_logits = np.array(self._encoder.predict(sentence_pairs), dtype=np.float32)
+        if raw_logits.ndim == 1:
+            raw_logits = raw_logits[np.newaxis, :]
+        raw_logits -= raw_logits.max(axis=1, keepdims=True)  # numerical stability
+        exp_l = np.exp(raw_logits)
+        nli_probs_arr = exp_l / exp_l.sum(axis=1, keepdims=True)
+        nli_probs: Dict[str, float] = {
+            arxiv_id: float(nli_probs_arr[i, _ENTAIL_IDX])
+            for i, (arxiv_id, _) in enumerate(items)
+        }
+
         numbered_lines = "\n".join(
             f"{i + 1}. {utility}" for i, (_, utility) in enumerate(items)
         )
@@ -392,6 +407,6 @@ class NLIEntailmentScorer:
         for rank_pos, num in enumerate(found):
             arxiv_id, utility = items[num - 1]
             entailed[arxiv_id] = [utility]
-            rank_scores[arxiv_id] = float(N - rank_pos) / N   # 1.0 at rank-1, decays
+            rank_scores[arxiv_id] = nli_probs[arxiv_id]   # NLI entailment probability
 
         return entailed, rank_scores

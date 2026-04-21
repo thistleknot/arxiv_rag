@@ -136,6 +136,13 @@ Based on the synthesis provided, write a decision tree with 3-4 yes/no questions
 Each leaf node must name a specific method or paper (use the arXiv IDs provided).
 Write in plain text. No pseudocode. No equations. Max 200 words."""
 
+_THINK_RE = re.compile(r'<think>.*?</think>', re.DOTALL | re.IGNORECASE)
+
+
+def _strip_think(text: str) -> str:
+    """Strip Qwen3 chain-of-thought <think>…</think> blocks from LLM responses."""
+    return _THINK_RE.sub('', text).strip()
+
 
 # ── Result dataclass ──────────────────────────────────────────────────────────
 
@@ -368,8 +375,10 @@ class SyllogismRetriever:
         self,
         csv_path: pathlib.Path = _CSV_PATH,
         verbose: bool = False,
+        blend_weights: Optional[Dict[str, float]] = None,
     ):
-        self._csv_path  = csv_path
+        self._csv_path     = csv_path
+        self._blend_weights = blend_weights or dict(_BLEND_WEIGHTS)
         self._former    = SyllogismFormer(verbose=verbose)
         self._ranker    = EntailmentRanker(verbose=verbose)
         self._intent    = IntentExtractor(verbose=verbose)
@@ -467,9 +476,9 @@ class SyllogismRetriever:
         utility_scores = self._field_embeddings["utility"] @ q_emb
 
         blended = (
-            _BLEND_WEIGHTS["title"] * title_scores
-            + _BLEND_WEIGHTS["abstract"] * abstract_scores
-            + _BLEND_WEIGHTS["utility"] * utility_scores
+            self._blend_weights["title"] * title_scores
+            + self._blend_weights["abstract"] * abstract_scores
+            + self._blend_weights["utility"] * utility_scores
         )
 
         order = np.argsort(-blended)
@@ -709,7 +718,7 @@ class SyllogismRetriever:
                 }
                 resp = self._llm_client.post("/api/generate", json=payload)
                 resp.raise_for_status()
-                angle = resp.json().get("response", "").strip()
+                angle = _strip_think(resp.json().get("response", ""))
                 result.paper_angles[pid] = angle
 
             # Through-line synthesis from all per-paper angles
@@ -726,7 +735,7 @@ class SyllogismRetriever:
                 }
                 resp = self._llm_client.post("/api/generate", json=payload)
                 resp.raise_for_status()
-                result.through_line = resp.json().get("response", "").strip()
+                result.through_line = _strip_think(resp.json().get("response", ""))
 
             # Decision tree from through-line
             if result.through_line:
@@ -739,7 +748,7 @@ class SyllogismRetriever:
                 }
                 resp = self._llm_client.post("/api/generate", json=payload)
                 resp.raise_for_status()
-                result.decision_tree = resp.json().get("response", "").strip()
+                result.decision_tree = _strip_think(resp.json().get("response", ""))
         except Exception as exc:
             if self._verbose:
                 print(f"[stage 8] warning: {exc}")
