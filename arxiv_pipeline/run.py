@@ -12,12 +12,16 @@ Usage:
     python run.py "your query" --warmup_limit 100   # warm at most 100 papers first
     python run.py "your query" --skip_warmup         # skip warmup entirely
 
+    # Combine per-query reports into a single final _report.md:
+    python run.py --combine _report_asd.md _report_ags.md _report_dsf.md
+
 Flags:
-    query           Retrieval query (required unless --dry_run is used)
+    query           Retrieval query (required unless --dry_run or --combine)
     --top_k         Number of papers to return (default: 13)
     --n_papers      Standalone fallback candidate pool size (default: 13).
                     Only used when the 3-layer pgvector retriever is unavailable.
     --output        Path for the markdown report (default: _report.md)
+    --combine       Combine Synthesis sections from listed report files into --output
     --warmup_limit  Max uncached papers to process before retrieval (default: 0 = all)
     --skip_warmup   Skip the KG cache warmup stage entirely
     --dry_run       Show warmup plan only; do not warm or retrieve
@@ -143,7 +147,63 @@ def run_warmup(limit: int = 0, dry_run: bool = False) -> None:
           f"({100*cached_now/len(all_papers):.1f}%)\n")
 
 
-# ── Stage 2: Retrieval report ─────────────────────────────────────────────────
+# ── Report combiner ───────────────────────────────────────────────────────────
+def _extract_query(text: str) -> str:
+    """Pull the query string from a report's header line."""
+    for line in text.splitlines():
+        if line.startswith("> **Query**:"):
+            return line.replace("> **Query**:", "").strip()
+    return "(unknown query)"
+
+
+def _extract_section(text: str, heading: str) -> str:
+    """Extract content between a ## heading and the next ## heading (or EOF)."""
+    lines = text.splitlines()
+    start = None
+    for i, line in enumerate(lines):
+        if line.strip() == heading:
+            start = i + 1
+            break
+    if start is None:
+        return ""
+    out = []
+    for line in lines[start:]:
+        if line.startswith("## "):
+            break
+        out.append(line)
+    return "\n".join(out).strip()
+
+
+def combine_reports(input_paths: list, output: str) -> None:
+    """Concatenate Synthesis sections from multiple per-query reports into one file."""
+    parts = []
+    for p in input_paths:
+        path = Path(p)
+        if not path.exists():
+            print(f"  [combine] Skipping missing file: {p}")
+            continue
+        text  = path.read_text(encoding="utf-8")
+        query = _extract_query(text)
+        synth = _extract_section(text, "## Synthesis")
+        if not synth:
+            print(f"  [combine] No ## Synthesis section found in {p} — skipping")
+            continue
+        block = f"# Query: {query}\n\n## Synthesis\n\n{synth}"
+        parts.append(block)
+        print(f"  [combine] {path.name}  →  query: {query!r}")
+
+    if not parts:
+        print("  [combine] Nothing to combine — no valid input files.")
+        return
+
+    combined = "\n\n---\n\n".join(parts)
+    out_path = Path(output)
+    out_path.write_text(combined, encoding="utf-8")
+    print(f"\n  Combined report written → {out_path.resolve()}")
+    print(f"  Sections combined: {len(parts)}")
+
+
+
 def _try_pgvector_retrieval(query: str, top_k: int):
     """Attempt to retrieve top_k papers via the 3-layer φ-scaled pgvector pipeline.
 
@@ -245,6 +305,8 @@ def main() -> None:
                          "Ignored when pgvector 3-layer retriever is available.")
     ap.add_argument("--output",       type=str,   default="_report.md",
                     help="Output markdown file (default: _report.md)")
+    ap.add_argument("--combine",      nargs="+",  metavar="FILE",
+                    help="Combine Synthesis sections from these report files into --output")
     ap.add_argument("--warmup_limit", type=int,   default=0,
                     help="Max uncached papers to warm before retrieval (0 = all)")
     ap.add_argument("--warmup",       action="store_true",
@@ -252,6 +314,10 @@ def main() -> None:
     ap.add_argument("--dry_run",      action="store_true",
                     help="Show warmup plan only; do not warm or retrieve")
     args = ap.parse_args()
+
+    if args.combine:
+        combine_reports(args.combine, args.output)
+        return
 
     if args.dry_run:
         run_warmup(limit=args.warmup_limit, dry_run=True)
