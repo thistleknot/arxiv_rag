@@ -83,9 +83,9 @@ class PaperAnalysis(BaseModel):
 # ──────────────────────────────────────────────
 def load_gap_ids() -> List[str]:
     """Return arxiv IDs in llm.txt that are absent from the CSV."""
-    # IDs from llm.txt (via arxiv.org/abs/ URLs)
+    # IDs from llm.txt (via arxiv.org/abs/ or arxiv.org/pdf/ URLs)
     text = LLM_TXT.read_text(encoding="utf-8")
-    url_ids  = re.findall(r'arxiv\.org/abs/(\d{4}\.\d{4,5})', text)
+    url_ids  = re.findall(r'arxiv\.org/(?:abs|pdf)/(\d{4}\.\d{4,5})', text)
     bare_ids = re.findall(r'(?<![/\w])(\d{4}\.\d{4,5})(?!\d)', text)
     llm_ids  = set(url_ids + bare_ids)
 
