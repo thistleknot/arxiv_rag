@@ -78,6 +78,13 @@ try:
 except ImportError:
     _GRAPH_AVAILABLE = False
 
+NLIGraphRetriever = None
+try:
+    from graph.nli_graph_retriever import NLIGraphRetriever
+    _NLI_GRAPH_AVAILABLE = True
+except ImportError:
+    _NLI_GRAPH_AVAILABLE = False
+
 try:
     from retrieval.gist_retriever import RetrievedDoc as RetrievedDoc  # type: ignore
 except ImportError:
@@ -176,6 +183,7 @@ class SyllogismRetrievalResult:
     papers_content: Dict[str, str]      = field(default_factory=dict)   # arxiv_id → markdown
     nli_scores:     Dict[str, float]    = field(default_factory=dict)   # arxiv_id → NLI score
     graph_context:  str                 = ""                            # KG triplets from GraphRetriever
+    graph_premises: Dict[str, List[str]] = field(default_factory=dict) # arxiv_id → NLI-ranked premise strings
     through_line:   str                 = ""                            # unused — capstone = Synthesis section concatenation
     paper_angles:   Dict[str, str]      = field(default_factory=dict)   # arxiv_id → "Philosophy\nApplication"
     decision_tree:  str                 = ""                            # LLM-generated decision tree
@@ -257,18 +265,32 @@ class SyllogismRetrievalResult:
 
         # ── Graph context ──
         if self.graph_context:
-            triples = [t.strip() for t in self.graph_context.split("\n") if t.strip()]
-            md.append(f"## Knowledge Graph Context ({len(triples)} triplets)")
-            md.append("")
-            md.append("| Subject | Predicate | Object |")
-            md.append("|---------|-----------|--------|")
-            for t in triples:
-                parts = [p.strip() for p in t.split("|")]
-                if len(parts) >= 3:
-                    md.append(f"| {parts[0]} | {parts[1]} | {parts[2]} |")
-                else:
-                    md.append(f"| {t} | | |")
-            md.append("")
+            if self.graph_premises:
+                # New format: NLI-ranked premises per paper
+                total = sum(len(v) for v in self.graph_premises.values())
+                md.append(f"## Knowledge Graph Premises ({total} NLI-ranked)")
+                md.append("")
+                md.append("> Premises retrieved via BM25 over KG triplet lemmas, re-ranked by DeBERTa NLI entailment.")
+                md.append("")
+                for aid, premises in self.graph_premises.items():
+                    md.append(f"**[{aid}]**")
+                    for p in premises:
+                        md.append(f"- {p}")
+                    md.append("")
+            else:
+                # Legacy: raw triplet table
+                triples = [t.strip() for t in self.graph_context.split("\n") if t.strip()]
+                md.append(f"## Knowledge Graph Context ({len(triples)} triplets)")
+                md.append("")
+                md.append("| Subject | Predicate | Object |")
+                md.append("|---------|-----------|--------|")
+                for t in triples:
+                    parts = [p.strip() for p in t.split("|")]
+                    if len(parts) >= 3:
+                        md.append(f"| {parts[0]} | {parts[1]} | {parts[2]} |")
+                    else:
+                        md.append(f"| {t} | | |")
+                md.append("")
 
         # ── Top-k papers ──
         chain_ids = {l.arxiv_id for l in self.chain}
@@ -415,6 +437,18 @@ class SyllogismRetriever:
                 if self._verbose:
                     print(f"[init] GraphRetriever unavailable: {e}")
                 self._graph = None
+
+        # NLI graph retriever — BM25+DeBERTa over pre-built KG cache
+        self._nli_graph: Optional[Any] = None
+        if _NLI_GRAPH_AVAILABLE and callable(NLIGraphRetriever):
+            try:
+                self._nli_graph = NLIGraphRetriever()
+                if self._verbose:
+                    print("[init] NLIGraphRetriever loaded")
+            except Exception as e:
+                if self._verbose:
+                    print(f"[init] NLIGraphRetriever unavailable: {e}")
+                self._nli_graph = None
 
         # httpx client for through-line LLM call
         self._llm_client = httpx.Client(base_url=OLLAMA_BASE, timeout=600.0)
@@ -709,14 +743,36 @@ class SyllogismRetriever:
             print(f"[stage 6] Loading paper markdowns...")
 
         # ── Stage 7: Graph context ──
-        if self._graph:
-            if self._verbose:
-                print(f"[stage 7] Retrieving graph context...")
-            try:
-                result.graph_context = self._graph.retrieve_context(result.thesis)
-            except Exception as e:
+        if self._verbose:
+            print(f"[stage 7] Retrieving NLI graph context...")
+        try:
+            selected_ids = [
+                doc.metadata.get("paper_id", doc.doc_id)
+                for doc in result.papers[:top_k]
+            ]
+            if self._nli_graph is not None and selected_ids:
+                # BM25 + NLI retrieval over pre-built KG cache
+                graph_premises = self._nli_graph.retrieve_context_by_paper(
+                    query=result.objective or query,
+                    paper_ids=selected_ids,
+                    top_k_per_paper=3,
+                )
+                result.graph_premises = graph_premises
+                # Flat string for backward-compat graph_context field
+                result.graph_context = "\n".join(
+                    f"[{aid}] {p}"
+                    for aid, premises in graph_premises.items()
+                    for p in premises
+                )
                 if self._verbose:
-                    print(f"[stage 7] Graph retrieval failed: {e}")
+                    n = sum(len(v) for v in graph_premises.values())
+                    print(f"[stage 7] {n} NLI-ranked premises across {len(graph_premises)} papers")
+            elif self._graph is not None:
+                # Legacy fallback: cosine-filtered triplets (requires Ollama)
+                result.graph_context = self._graph.retrieve_context(result.thesis)
+        except Exception as e:
+            if self._verbose:
+                print(f"[stage 7] Graph retrieval failed: {e}")
 
         # ── Stage 8: Through-line synthesis ──
         if self._verbose:
@@ -728,7 +784,17 @@ class SyllogismRetriever:
                 title    = doc.metadata.get("title", "")
                 abstract = doc.metadata.get("abstract", "")
                 utility  = doc.metadata.get("utility", "")
-                user_msg = f"/no_think\n\nTitle: {title}\n\nAbstract: {abstract}\n\nUtility: {utility}"
+                # Include NLI-ranked KG premises if available for this paper
+                premises = result.graph_premises.get(pid, [])
+                premises_block = ""
+                if premises:
+                    premises_block = "\n\nKnowledge Graph Premises (NLI-ranked):\n" + "\n".join(
+                        f"- {p}" for p in premises
+                    )
+                user_msg = (
+                    f"/no_think\n\nTitle: {title}\n\nAbstract: {abstract}"
+                    f"\n\nUtility: {utility}{premises_block}"
+                )
                 payload  = {
                     "model":   _THROUGHLINE_MODEL,
                     "system":  _PAPER_ANGLE_SYSTEM,
