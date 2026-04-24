@@ -142,7 +142,36 @@ def fetch_arxiv(arxiv_id: str) -> Optional[dict]:
 
 
 # ──────────────────────────────────────────────
-# Step 3: LLM extraction
+# JSON recovery helpers
+# ──────────────────────────────────────────────
+def _salvage_json_dict(raw: str) -> dict | None:
+    """Recover a truncated JSON object from an LLM response.
+
+    Tries progressively looser closures when json.loads() fails mid-structure.
+    Returns None if no valid dict can be recovered.
+    Precondition: raw has had markdown fences stripped.
+    Failure mode: returns None if all strategies fail; caller must retry or use sentinel.
+    """
+    # Strategy 1: append common truncation suffixes to close the object
+    for suffix in ("}", '"}', '"]}', '"}]}'):
+        try:
+            result = json.loads(raw + suffix)
+            if isinstance(result, dict):
+                return result
+        except json.JSONDecodeError:
+            pass
+    # Strategy 2: slice to the last syntactically closed brace
+    last_close = raw.rfind("}")
+    if last_close > 0:
+        try:
+            result = json.loads(raw[: last_close + 1])
+            if isinstance(result, dict):
+                return result
+        except json.JSONDecodeError:
+            pass
+    return None
+
+
 # ──────────────────────────────────────────────
 def extract_fields(paper: dict) -> Optional[PaperAnalysis]:
     """Call gpt-4o via copilot-proxy and parse structured PaperAnalysis."""
@@ -162,18 +191,36 @@ def extract_fields(paper: dict) -> Optional[PaperAnalysis]:
             raw = re.sub(r"^```[a-z]*\n?", "", raw)
             raw = re.sub(r"\n?```\s*$", "", raw.rstrip())
 
-            data = json.loads(raw)
+            try:
+                data = json.loads(raw)
+            except json.JSONDecodeError:
+                data = _salvage_json_dict(raw)
+                if data is not None:
+                    print(f"  [WARN] Salvaged partial JSON for {paper['arxiv_id']}")
+                else:
+                    raise
+
+            utility  = data.get("utility",  [])
+            barriers = data.get("barriers", [])
+            thesis   = data.get("thesis",   "")
+            if not isinstance(utility, list) or not isinstance(barriers, list):
+                raise ValueError(f"utility/barriers must be lists, got types "
+                                 f"{type(utility).__name__}/{type(barriers).__name__}")
+            if not utility or not thesis:
+                raise ValueError(f"salvaged data missing required fields: "
+                                 f"utility={utility!r}, thesis={thesis!r}")
+
             return PaperAnalysis(
                 arxiv_id=paper["arxiv_id"],
                 title=paper["title"],
                 abstract=paper["abstract"],
-                utility=data.get("utility", []),
-                barriers=data.get("barriers", []),
-                thesis=data.get("thesis", ""),
+                utility=utility,
+                barriers=barriers,
+                thesis=thesis,
                 is_complete=True,
             )
-        except json.JSONDecodeError as e:
-            print(f"  [WARN] JSON parse failed (attempt {attempt+1}): {e}")
+        except (json.JSONDecodeError, ValueError) as e:
+            print(f"  [WARN] parse/validate failed (attempt {attempt+1}): {e}")
             print(f"  Raw: {raw[:200]}")
             if attempt < 2:
                 time.sleep(2)

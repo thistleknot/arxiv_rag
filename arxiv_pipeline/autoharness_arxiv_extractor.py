@@ -41,7 +41,7 @@ from openai import OpenAI
 
 # ─── Pipeline constants ────────────────────────────────────────────────────────
 PYTHON      = r"c:\users\user\py310\scripts\python.exe"
-EXTRACTOR   = Path(r"C:\Users\user\arxiv_id_lists\arxiv_gap_extractor.py")
+EXTRACTOR   = Path(r"C:\Users\user\arxiv_id_lists\arxiv_pipeline\arxiv_gap_extractor.py")
 STATE_FILE  = Path(r"C:\Users\user\arxiv_id_lists\_extractor_state.json")
 CSV_PATH    = Path(r"C:\Users\user\arxiv_id_lists\papers\post_processed\arxiv_data_with_analysis.csv")
 WORK_DIR    = Path(r"C:\Users\user\arxiv_id_lists\.react_agent")
@@ -89,12 +89,18 @@ def think(user_prompt: str, system: str = "", model: str = "gpt-4o") -> str:
 
 
 def code_edit(bug_description: str, file_content: str) -> str:
-    """ACT step — gpt-4.1 returns COMPLETE fixed Python file (no stubs, no fences)."""
+    """ACT step — gpt-4.1 returns COMPLETE fixed Python file (no stubs, no fences).
+
+    Precondition: bug_description describes the specific failure; file_content is valid Python.
+    Guarantee: returns complete Python source or empty string when truncation is detected.
+    Failure mode: returns "" if # END OF FILE sentinel absent (truncated output) or length < 300.
+    """
     system = (
         "You are a precise Python code editor. "
         "The user describes a bug. You return the COMPLETE fixed Python file — "
         "no markdown fences, no commentary, just raw Python source from line 1 to EOF. "
-        "Do not truncate. Do not add stubs. Return the entire working file."
+        "Do not truncate. Do not add stubs. Return the entire working file. "
+        "The very last line of the file must be exactly: # END OF FILE"
     )
     user = (
         f"Bug to fix:\n{bug_description}\n\n"
@@ -112,7 +118,14 @@ def code_edit(bug_description: str, file_content: str) -> str:
     # Strip accidental markdown fences
     raw = re.sub(r'^```\w*\n?', '', raw)
     raw = re.sub(r'\n?```\s*$', '', raw.rstrip())
-    return raw
+    if len(raw) < 300:
+        return ""
+    if "# END OF FILE" not in raw:
+        print("[WARN] code_edit: truncation detected — # END OF FILE sentinel absent")
+        return ""
+    # Strip sentinel before writing; it is metadata, not source code
+    eof_pos = raw.rfind("# END OF FILE")
+    return raw[:eof_pos].rstrip()
 
 
 # ─── Memory / logging helpers ──────────────────────────────────────────────────
@@ -430,21 +443,44 @@ def main() -> None:
               f"processed={done}/{TOTAL_GAP}  batch={batch}")
 
         # ── VALIDATE ──────────────────────────────────────────────────────────
-        assert EXTRACTOR.exists(), "Extractor deleted mid-run!"
-        assert STATE_FILE.exists() or done == 0, "State file missing after first batch!"
+        if not EXTRACTOR.exists():
+            msg = f"Extractor deleted mid-run: {EXTRACTOR}"
+            print(f"[FATAL] {msg}")
+            log_memory({"outcome": "fail", "reason": msg, "failure_class": "extractor_missing"})
+            write_progress(done, TOTAL_GAP, "FATAL", msg)
+            break
+        if done > 0 and not STATE_FILE.exists():
+            msg = "State file missing after first batch — data loss risk"
+            print(f"[FATAL] {msg}")
+            log_memory({"outcome": "fail", "reason": msg, "failure_class": "state_missing"})
+            write_progress(done, TOTAL_GAP, "FATAL", msg)
+            break
 
-        # ── ACT: run the extractor for one batch ──────────────────────────────
-        log_change({"action": "run_extractor", "limit": batch, "iter": iteration})
-        try:
-            rc, stdout, stderr = run_extractor(limit=batch)
-        except subprocess.TimeoutExpired:
-            stderr = "TimeoutExpired after 900s"
-            stdout = ""
-            rc = 1
-        except Exception as exc:
-            stderr = str(exc)
-            stdout = ""
-            rc = 1
+        # ── PRE-ACT: legality gate (propose → verify → act) ───────────────────
+        # Failure taxonomy:
+        #   preact_block       → proposer bug; env was never invoked
+        #   subprocess_fail    → preact passed, env rejected; refine both
+        #   timeout            → preact passed, env timed out; refine both
+        proceed, preact_reason = adversarial_preact_check("run_extractor", batch, done)
+        failure_class = "subprocess_fail"
+        if not proceed:
+            print(f"[PRE-ACT BLOCKED] {preact_reason}")
+            failure_class = "preact_block"
+            rc, stdout, stderr = 1, "", f"[PRE-ACT BLOCKED] {preact_reason}"
+        else:
+            # ── ACT: run the extractor for one batch ──────────────────────────
+            log_change({"action": "run_extractor", "limit": batch, "iter": iteration})
+            try:
+                rc, stdout, stderr = run_extractor(limit=batch)
+            except subprocess.TimeoutExpired:
+                stderr = "TimeoutExpired after 900s"
+                stdout = ""
+                rc = 1
+                failure_class = "timeout"
+            except Exception as exc:
+                stderr = str(exc)
+                stdout = ""
+                rc = 1
 
         # ── OBSERVE ───────────────────────────────────────────────────────────
         combined = (stdout + "\n" + stderr).strip()
@@ -478,12 +514,28 @@ def main() -> None:
         recent_ctx = json.dumps(recent_failures(), indent=2)
         extractor_head = EXTRACTOR.read_text(encoding="utf-8")[:3000]
 
+        # Refinement routing: proposer-only vs proposer+validator based on failure class
+        if failure_class == "preact_block":
+            routing_note = (
+                "REFINEMENT ROUTING: Pre-ACT gate BLOCKED this action — the validator (is_legal_action) "
+                "rejected the proposed run before the extractor was invoked. "
+                "Refine the PROPOSER (extractor code or arguments) only; do not change validation logic.\n\n"
+            )
+        else:
+            routing_note = (
+                f"REFINEMENT ROUTING: Pre-ACT gate PASSED (failure_class={failure_class}) "
+                "but the extractor FAILED in the environment. "
+                "Both the PROPOSER (extractor code) AND the VALIDATOR (adversarial_preact_check) "
+                "may need refinement — the validator approved an action the environment rejected.\n\n"
+            )
+
         corrections_section = (
             f"=== prior behavioral corrections ===\n{prior_corrections}\n\n"
             if prior_corrections else ""
         )
         diagnosis = think(
             user_prompt=(
+                f"{routing_note}"
                 f"The arxiv_gap_extractor.py script failed (exit {rc}).\n\n"
                 f"=== stdout + stderr (last 3000 chars) ===\n{combined[-3000:]}\n\n"
                 f"=== recent failures ===\n{recent_ctx}\n\n"
@@ -519,10 +571,11 @@ def main() -> None:
             file_content=current_code,
         )
 
-        if len(fixed_code) < 300:
-            # Code edit returned garbage — skip this cycle
-            log_memory({"outcome": "fail", "reason": "code_edit < 300 chars", "diagnosis": diagnosis})
-            print("[WARN] code_edit returned too short — skipping fix")
+        if not fixed_code:
+            # code_edit returned empty — truncation detected or sentinel absent
+            log_memory({"outcome": "fail", "reason": "code_edit truncated or sentinel absent",
+                        "failure_class": "code_edit_truncated", "diagnosis": diagnosis})
+            print("[WARN] code_edit returned empty (truncation) — skipping fix")
             continue
 
         # ── APPLY FIX ─────────────────────────────────────────────────────────
