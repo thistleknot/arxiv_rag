@@ -28,11 +28,17 @@ from __future__ import annotations
 import re
 import sys
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Dict, List, Optional
 
 import httpx
 
-OLLAMA_BASE          = "http://127.0.0.1:11434"
+_ROOT = Path(__file__).resolve().parent.parent
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
+from constants import OLLAMA_BASE
+
 DEFAULT_THESIS_MODEL = "hf.co/unsloth/Qwen3-1.7B-GGUF:Qwen3-1.7B-Q6_K.gguf"
 
 _THESIS_SYSTEM = """\

@@ -27,10 +27,17 @@ import json
 import re
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Dict, List, Tuple
 
 import httpx
 import numpy as np
+
+_ROOT = Path(__file__).resolve().parent.parent
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
+from constants import NLI_ENTAIL_IDX, NLI_MODEL, OLLAMA_BASE
 
 
 @dataclass
@@ -50,12 +57,7 @@ class PremiseScore:
         return max(scores, key=scores.get)
 
 
-NLI_MODEL         = "cross-encoder/nli-deberta-v3-small"
-# Label ordering for nli-deberta-v3-small: [contradiction=0, entailment=1, neutral=2]
-_ENTAIL_IDX       = 1
 DEFAULT_THRESHOLD = 0.4   # retained for filter_entailed(); not used by judge_entailed()
-
-OLLAMA_BASE         = "http://127.0.0.1:11434"
 DEFAULT_JUDGE_MODEL = "hf.co/unsloth/Qwen3-1.7B-GGUF:Qwen3-1.7B-Q6_K.gguf"
 
 _JUDGE_SYSTEM = """\
@@ -148,7 +150,7 @@ class NLIEntailmentScorer:
         raw   = raw - raw.max(axis=1, keepdims=True)
         exp_r = np.exp(raw)
         probs = exp_r / exp_r.sum(axis=1, keepdims=True)
-        entail_probs = probs[:, _ENTAIL_IDX]
+        entail_probs = probs[:, NLI_ENTAIL_IDX]
 
         # Store per-premise 3-class breakdown for downstream use
         self._premise_scores: Dict[str, List[PremiseScore]] = {}
@@ -336,7 +338,7 @@ class NLIEntailmentScorer:
         exp_l = np.exp(raw_logits)
         nli_probs_arr = exp_l / exp_l.sum(axis=1, keepdims=True)
         nli_probs: Dict[str, float] = {
-            arxiv_id: float(nli_probs_arr[i, _ENTAIL_IDX])
+            arxiv_id: float(nli_probs_arr[i, NLI_ENTAIL_IDX])
             for i, (arxiv_id, _) in enumerate(items)
         }
 

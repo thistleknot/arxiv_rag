@@ -8,18 +8,27 @@ pipeline.  Instead of live LLM extraction, this module:
   2. Builds a BM25 index over spaCy-lemmatized triplet fields
      (subject lemma + predicate lemma + object lemma).
   3. At query time:
-       a. BM25-retrieve top candidates from the index.
+       a. BM25-retrieve top candidates from the index, blended with triplet
+          confidence: triplet_score = bm25_score * confidence.
        b. Optionally filter to a specific set of paper IDs.
        c. Verbalize each triplet → natural language premise.
        d. NLI-score premises against the query using DeBERTa cross-encoder.
        e. Return top NLI-ranked premises, grouped by paper.
+  4. After retrieval, reinforce_from_last_query() applies MemRL Q-updates:
+       confidence_new = confidence_old + α * (r_nli - confidence_old)
+     Triplets that consistently support correct entailment gain confidence;
+     those that score low decay.  Updates persist to SQLite.
 
-Design follows the agentic-nli-memory skill spec:
+Design follows the agentic_kg_memory skill spec:
   - Index-side: lemma columns (synset/hypernym expansion deferred to v2).
   - BM25 handles IDF weighting; stop words are NOT stripped manually.
-  - Epistemic tag: all KG-cache triplets default to Observed (weight 1.0).
+  - Epistemic tag: KG-cache triplets default to Observed (confidence 1.0).
   - Verbalization converts raw SPO text to readable premise strings before
     passing to NLI — raw SPO concatenation degrades cross-encoder performance.
+  - Triplet confidence is mutable: initialized from epistemic prior, updated
+    by downstream NLI signal via MemRL Q-learning rule.
+
+Skill reference: .copilot/skills/agentic_kg_memory/SKILL.md
 
 Usage:
     retriever = NLIGraphRetriever()
@@ -28,22 +37,37 @@ Usage:
         paper_ids=["2412.17029", "2502.03283"],
         top_k_per_paper=3,
     )
-    # returns {"2412.17029": ["GraphAgent uses knowledge graph for reasoning.", ...], ...}
+    retriever.reinforce_from_last_query()  # update confidence from this pass
 """
 
 from __future__ import annotations
 
 import json
-import re
+import sqlite3
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
+_ROOT = Path(__file__).resolve().parent.parent
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
+from constants import (
+    BM25_MIN_SCORE,
+    BM25_TOP_K,
+    EPISTEMIC_OBSERVED,
+    KG_CONFIDENCE_DB,
+    MEMRL_ALPHA,
+    NLI_ENTAIL_IDX,
+    NLI_MODEL,
+    TRIPLET_REINFORCE_TAU,
+    TRIPLET_WEAKEN_TAU,
+)
+
 _KG_CACHE_DIR = Path(__file__).resolve().parent / "kg_cache"
-_NLI_MODEL    = "cross-encoder/nli-deberta-v3-small"
-_ENTAIL_IDX   = 1   # DeBERTa label order: contradiction=0, entailment=1, neutral=2
 
 # ── Relation-type → natural language verb phrase ──────────────────────────────
 # Handles the most common relation types produced by the KG extractor prompt.
@@ -87,43 +111,63 @@ def _verbalize(source: str, relation_type: str, target: str) -> str:
 
 @dataclass
 class TripletRecord:
-    """One entry in the BM25 index."""
+    """One entry in the BM25 index.
+
+    epistemic  — static extraction-time prior (OBSERVED=1.0, INFERRED=0.5).
+    confidence — mutable learned posterior; starts at epistemic, updated by
+                 downstream NLI signal via MemRL Q-rule.
+    """
     arxiv_id:      str
     source:        str
     relation_type: str
     target:        str
     premise:       str          # verbalized natural-language string
     tokens:        List[str]    # spaCy-lemmatized tokens for BM25
-    epistemic:     float = 1.0  # 1.0 = Observed (all KG-cache triplets are O)
+    epistemic:     float = EPISTEMIC_OBSERVED
+    confidence:    float = field(default=0.0, init=False)  # set in __post_init__
+
+    def __post_init__(self) -> None:
+        self.confidence = self.epistemic
 
 
 class NLIGraphRetriever:
     """
     BM25 + DeBERTa NLI graph expansion over the pre-built KG triplet cache.
 
+    Retrieval blends BM25 relevance with per-triplet confidence:
+        triplet_score = bm25_score * confidence
+
+    Confidence starts at the epistemic prior (1.0 for observed facts) and
+    is updated after each query via reinforce_from_last_query().  Confidence
+    values persist to SQLite so they accumulate across sessions.
+
     The index is built lazily on first use and cached in memory for the
     lifetime of the object.  Re-instantiate to pick up new cache files.
 
     Args:
-        cache_dir:      Path to graph/kg_cache directory.
-        nli_model:      HuggingFace cross-encoder model name.
-        top_k_bm25:     BM25 candidate pool before NLI re-ranking.
-        min_bm25_score: Minimum BM25 score to include in NLI pass (filters noise).
+        cache_dir:        Path to graph/kg_cache directory.
+        nli_model:        HuggingFace cross-encoder model name.
+        top_k_bm25:       BM25 candidate pool before NLI re-ranking.
+        min_bm25_score:   Minimum raw BM25 score to include in NLI pass.
+        confidence_db:    SQLite path for triplet confidence persistence.
     """
 
     def __init__(
         self,
         cache_dir:      Optional[Path] = None,
-        nli_model:      str            = _NLI_MODEL,
-        top_k_bm25:     int            = 50,
-        min_bm25_score: float          = 0.0,
+        nli_model:      str            = NLI_MODEL,
+        top_k_bm25:     int            = BM25_TOP_K,
+        min_bm25_score: float          = BM25_MIN_SCORE,
+        confidence_db:  Optional[Path] = None,
     ):
         self._cache_dir      = cache_dir or _KG_CACHE_DIR
         self._nli_model      = nli_model
         self._top_k_bm25     = top_k_bm25
         self._min_bm25_score = min_bm25_score
+        self._confidence_db  = confidence_db or KG_CONFIDENCE_DB
 
-        self._records:  List[TripletRecord] = []
+        self._records:      List[TripletRecord]             = []
+        self._last_scored:  List[Tuple[TripletRecord, float]] = []
         self._bm25      = None   # rank_bm25.BM25Okapi — lazy
         self._nlp       = None   # spaCy — lazy
         self._encoder   = None   # sentence_transformers CrossEncoder — lazy
@@ -231,6 +275,7 @@ class NLIGraphRetriever:
 
         corpus = [r.tokens for r in self._records]
         self._bm25 = BM25Okapi(corpus)
+        self._load_confidence_db()
 
     def _lemmatize(self, text: str) -> List[str]:
         """Return spaCy lemma tokens (no stop-word stripping — BM25 IDF handles it)."""
@@ -254,26 +299,28 @@ class NLIGraphRetriever:
         query:     str,
         paper_ids: Optional[List[str]],
     ) -> List[TripletRecord]:
-        """BM25 top-k, then filter to paper_ids if given."""
+        """BM25 top-k, blended with triplet confidence, then filtered to paper_ids.
+
+        triplet_score = bm25_score * confidence  (agentic_kg_memory: Ranking Surface)
+        Triplets below min_bm25_score are excluded before confidence blending.
+        """
         if self._bm25 is None:
             return []
 
         query_tokens = self._lemmatize(query)
-        scores       = self._bm25.get_scores(query_tokens)
+        raw_scores   = self._bm25.get_scores(query_tokens)
 
-        # Pair (record, score) and sort descending
-        ranked = sorted(
-            zip(self._records, scores.tolist()),
-            key=lambda x: x[1],
-            reverse=True,
-        )
+        # Filter below threshold first, then sort by confidence-blended score.
+        pairs = [
+            (rec, bm25)
+            for rec, bm25 in zip(self._records, raw_scores.tolist())
+            if bm25 >= self._min_bm25_score
+        ]
+        pairs.sort(key=lambda x: x[1] * x[0].confidence, reverse=True)
 
-        # Filter by paper_ids
         id_set = set(paper_ids) if paper_ids else None
         candidates: List[TripletRecord] = []
-        for rec, score in ranked:
-            if score < self._min_bm25_score:
-                break
+        for rec, _score in pairs:
             if id_set is not None and rec.arxiv_id not in id_set:
                 continue
             candidates.append(rec)
@@ -298,7 +345,10 @@ class NLIGraphRetriever:
         Score each candidate premise against the query via DeBERTa NLI.
 
         Returns list of (TripletRecord, entailment_prob) sorted descending.
-        Epistemic weight (Observed=1.0) is applied to the raw NLI probability.
+        Triplet confidence (mutable learned posterior) weights the raw NLI
+        probability: effective_score = entail_prob * confidence.
+
+        Also stores result in self._last_scored for reinforce_from_last_query().
         """
         self._load_encoder()
 
@@ -311,13 +361,14 @@ class NLIGraphRetriever:
         raw   = raw - raw.max(axis=1, keepdims=True)
         exp_r = np.exp(raw)
         probs = exp_r / exp_r.sum(axis=1, keepdims=True)
-        entail_probs = probs[:, _ENTAIL_IDX]
+        entail_probs = probs[:, NLI_ENTAIL_IDX]
 
         scored = [
-            (rec, float(ep) * rec.epistemic)
+            (rec, float(ep) * rec.confidence)
             for rec, ep in zip(candidates, entail_probs)
         ]
         scored.sort(key=lambda x: x[1], reverse=True)
+        self._last_scored = scored
         return scored
 
     # ── Grouping ──────────────────────────────────────────────────────────────
@@ -338,3 +389,98 @@ class NLIGraphRetriever:
             result.setdefault(aid, []).append(rec.premise)
             counters[aid] = n + 1
         return result
+
+    # ── MemRL confidence update ───────────────────────────────────────────────
+
+    def reinforce_from_last_query(self) -> None:
+        """Apply MemRL Q-update to triplets scored during the last retrieval pass.
+
+        Precondition: retrieve_context_by_paper() must have been called at least
+        once to populate self._last_scored.
+        """
+        self.reinforce_from_scores(self._last_scored)
+
+    def reinforce_from_scores(
+        self, scored: List[Tuple[TripletRecord, float]]
+    ) -> None:
+        """Apply MemRL Q-update to an explicit (TripletRecord, nli_score) list.
+
+        Q_new = Q_old + MEMRL_ALPHA * (r_nli - Q_old)
+
+        Reinforces triplets with NLI score >= REINFORCE_TAU.
+        Weakens triplets with NLI score <= WEAKEN_TAU.
+        Neutral band (WEAKEN_TAU, REINFORCE_TAU): no update.
+        Clamps confidence to [0.0, 1.0].  Persists updates to SQLite.
+        """
+        if not scored:
+            return
+
+        updates: List[Tuple[str, str, str, str, float]] = []
+        for rec, nli_score in scored:
+            if nli_score >= TRIPLET_REINFORCE_TAU or nli_score <= TRIPLET_WEAKEN_TAU:
+                new_conf = rec.confidence + MEMRL_ALPHA * (nli_score - rec.confidence)
+                rec.confidence = max(0.0, min(1.0, new_conf))
+                updates.append((
+                    rec.arxiv_id, rec.source, rec.relation_type,
+                    rec.target, rec.confidence,
+                ))
+
+        if updates:
+            self._persist_confidence(updates)
+
+    @staticmethod
+    def _triplet_key(
+        arxiv_id: str, source: str, relation_type: str, target: str
+    ) -> str:
+        """Stable lookup key for a triplet across sessions."""
+        return f"{arxiv_id}\x1f{source}\x1f{relation_type}\x1f{target}"
+
+    def _load_confidence_db(self) -> None:
+        """Hydrate persisted confidence values into in-memory TripletRecord objects.
+
+        Called once after _build_index.  Silently skips if the DB does not exist
+        yet (first run) or if the table is missing.
+        """
+        if not self._confidence_db.exists():
+            return
+        try:
+            conn = sqlite3.connect(self._confidence_db)
+            rows = conn.execute(
+                "SELECT triplet_key, confidence FROM triplet_confidence"
+            ).fetchall()
+            conn.close()
+        except Exception:
+            return
+        conf_map = {row[0]: row[1] for row in rows}
+        for rec in self._records:
+            key = self._triplet_key(
+                rec.arxiv_id, rec.source, rec.relation_type, rec.target
+            )
+            if key in conf_map:
+                rec.confidence = conf_map[key]
+
+    def _persist_confidence(
+        self, updates: List[Tuple[str, str, str, str, float]]
+    ) -> None:
+        """Upsert triplet confidence values to SQLite.
+
+        Args:
+            updates: List of (arxiv_id, source, relation_type, target, confidence).
+        """
+        conn = sqlite3.connect(self._confidence_db)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS triplet_confidence (
+                triplet_key TEXT PRIMARY KEY,
+                confidence  REAL NOT NULL,
+                updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+        for arxiv_id, source, rel_type, target, confidence in updates:
+            key = self._triplet_key(arxiv_id, source, rel_type, target)
+            conn.execute(
+                "INSERT OR REPLACE INTO triplet_confidence "
+                "(triplet_key, confidence, updated_at) VALUES (?, ?, datetime('now'))",
+                (key, confidence),
+            )
+        conn.commit()
+        conn.close()

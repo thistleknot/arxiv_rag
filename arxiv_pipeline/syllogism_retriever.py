@@ -63,6 +63,7 @@ _ROOT = _pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_ROOT))
 
 # ── Local imports ─────────────────────────────────────────────────────────────
+from constants import BLEND_WEIGHTS, OLLAMA_BASE, THROUGHLINE_MODEL
 from reasoning.syllogism_former import ChainLink, SyllogismFormer, SyllogismResult
 from reasoning.entailment_ranker import EntailmentRanker
 from reasoning.intent_extractor import IntentExtractor, ObjectiveFunction
@@ -98,20 +99,6 @@ except ImportError:
         final_score: Optional[float] = None
 
 _CSV_PATH = _ROOT / "papers" / "post_processed" / "arxiv_data_with_analysis_cleaned.csv"
-
-# Utility vector index — built once from full CSV, cached to disk
-# for sub-second semantic retrieval against encoded query intent.
-_UTIL_EMB_PATH     = _ROOT / "papers" / "utility_embeddings.npy"
-_UTIL_CATALOG_PATH = _ROOT / "papers" / "utility_catalog.json"
-
-_BLEND_WEIGHTS = {
-    "title": 0.3237,
-    "abstract": 0.5803,
-    "utility": 0.096,
-}
-
-OLLAMA_BASE            = "http://127.0.0.1:11434"
-_THROUGHLINE_MODEL     = "hf.co/unsloth/Qwen3-4B-128K-GGUF:Qwen3-4B-128K-Q6_K.gguf"
 
 _PAPER_ANGLE_SYSTEM = """\
 You are extracting pseudocode and concrete algorithmic methods from a research paper for a software \
@@ -266,7 +253,7 @@ class SyllogismRetrievalResult:
         # ── Graph context ──
         if self.graph_context:
             if self.graph_premises:
-                # New format: NLI-ranked premises per paper
+                # Per-paper NLI-ranked premises (selected papers hit KG cache)
                 total = sum(len(v) for v in self.graph_premises.values())
                 md.append(f"## Knowledge Graph Premises ({total} NLI-ranked)")
                 md.append("")
@@ -278,19 +265,31 @@ class SyllogismRetrievalResult:
                         md.append(f"- {p}")
                     md.append("")
             else:
-                # Legacy: raw triplet table
-                triples = [t.strip() for t in self.graph_context.split("\n") if t.strip()]
-                md.append(f"## Knowledge Graph Context ({len(triples)} triplets)")
-                md.append("")
-                md.append("| Subject | Predicate | Object |")
-                md.append("|---------|-----------|--------|")
-                for t in triples:
-                    parts = [p.strip() for p in t.split("|")]
-                    if len(parts) >= 3:
-                        md.append(f"| {parts[0]} | {parts[1]} | {parts[2]} |")
-                    else:
-                        md.append(f"| {t} | | |")
-                md.append("")
+                # Corpus-wide NLI premises (selected papers not in KG cache)
+                lines = [t.strip() for t in self.graph_context.split("\n") if t.strip()]
+                # Detect new "[arxiv_id] premise" format vs legacy "|"-delimited triplets
+                is_new_fmt = lines and lines[0].startswith("[")
+                if is_new_fmt:
+                    md.append(f"## Knowledge Graph Context ({len(lines)} NLI-ranked premises)")
+                    md.append("")
+                    md.append("> Corpus-wide BM25+NLI search (selected papers not yet KG-cached).")
+                    md.append("")
+                    for line in lines:
+                        md.append(f"- {line}")
+                    md.append("")
+                else:
+                    # Legacy: raw triplet table
+                    md.append(f"## Knowledge Graph Context ({len(lines)} triplets)")
+                    md.append("")
+                    md.append("| Subject | Predicate | Object |")
+                    md.append("|---------|-----------|--------|")
+                    for t in lines:
+                        parts = [p.strip() for p in t.split("|")]
+                        if len(parts) >= 3:
+                            md.append(f"| {parts[0]} | {parts[1]} | {parts[2]} |")
+                        else:
+                            md.append(f"| {t} | | |")
+                    md.append("")
 
         # ── Top-k papers ──
         chain_ids = {l.arxiv_id for l in self.chain}
@@ -419,7 +418,7 @@ class SyllogismRetriever:
         blend_weights: Optional[Dict[str, float]] = None,
     ):
         self._csv_path     = csv_path
-        self._blend_weights = blend_weights or dict(_BLEND_WEIGHTS)
+        self._blend_weights = blend_weights or dict(BLEND_WEIGHTS)
         self._former    = SyllogismFormer(verbose=verbose)
         self._ranker    = EntailmentRanker(verbose=verbose)
         self._intent    = IntentExtractor(verbose=verbose)
@@ -750,23 +749,39 @@ class SyllogismRetriever:
                 doc.metadata.get("paper_id", doc.doc_id)
                 for doc in result.papers[:top_k]
             ]
-            if self._nli_graph is not None and selected_ids:
-                # BM25 + NLI retrieval over pre-built KG cache
-                graph_premises = self._nli_graph.retrieve_context_by_paper(
-                    query=result.objective or query,
-                    paper_ids=selected_ids,
-                    top_k_per_paper=3,
+            if self._nli_graph is not None:
+                nli_query = result.objective or query
+
+                # Pass 1: premises filtered to selected papers (for Stage 8 per-paper injection)
+                if selected_ids:
+                    result.graph_premises = self._nli_graph.retrieve_context_by_paper(
+                        query=nli_query,
+                        paper_ids=selected_ids,
+                        top_k_per_paper=3,
+                    )
+
+                # Pass 2: unfiltered corpus-wide search always populates graph_context.
+                # This covers the common case where selected papers are not yet KG-cached.
+                corpus_premises = self._nli_graph.retrieve_context_by_paper(
+                    query=nli_query,
+                    paper_ids=None,   # full corpus
+                    top_k_per_paper=2,
                 )
-                result.graph_premises = graph_premises
-                # Flat string for backward-compat graph_context field
                 result.graph_context = "\n".join(
                     f"[{aid}] {p}"
-                    for aid, premises in graph_premises.items()
+                    for aid, premises in corpus_premises.items()
                     for p in premises
                 )
+
+                n_per_paper = sum(len(v) for v in result.graph_premises.values())
                 if self._verbose:
-                    n = sum(len(v) for v in graph_premises.values())
-                    print(f"[stage 7] {n} NLI-ranked premises across {len(graph_premises)} papers")
+                    print(
+                        f"[stage 7] per-paper premises: {n_per_paper} "
+                        f"({len(result.graph_premises)} papers hit KG cache); "
+                        f"corpus context: {len(corpus_premises)} papers"
+                    )
+                # MemRL Q-update: reinforce triplet confidence from corpus-wide NLI scores
+                self._nli_graph.reinforce_from_last_query()
             elif self._graph is not None:
                 # Legacy fallback: cosine-filtered triplets (requires Ollama)
                 result.graph_context = self._graph.retrieve_context(result.thesis)
@@ -796,7 +811,7 @@ class SyllogismRetriever:
                     f"\n\nUtility: {utility}{premises_block}"
                 )
                 payload  = {
-                    "model":   _THROUGHLINE_MODEL,
+                    "model":   THROUGHLINE_MODEL,
                     "system":  _PAPER_ANGLE_SYSTEM,
                     "prompt":  user_msg,
                     "stream":  False,
@@ -817,7 +832,7 @@ class SyllogismRetriever:
             # Decision tree from concatenated pseudocode (512 tokens)
             if result.paper_angles:
                 payload = {
-                    "model":   _THROUGHLINE_MODEL,
+                    "model":   THROUGHLINE_MODEL,
                     "system":  _DECISION_TREE_SYSTEM,
                     "prompt":  f"/no_think\n\nQuery: {result.query}\n\nPseudocode extractions:\n{angles_text}",
                     "stream":  False,
