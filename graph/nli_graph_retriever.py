@@ -400,6 +400,28 @@ class NLIGraphRetriever:
         """
         self.reinforce_from_scores(self._last_scored)
 
+    def get_last_triplet_keys(
+        self, threshold: float = 0.5
+    ) -> Tuple[List[str], List[float]]:
+        """Return (triplet_keys, nli_scores) for triplets from the last retrieval pass.
+
+        Only includes triplets with effective_score >= threshold.
+        Effective score = entail_prob * confidence (as stored in _last_scored).
+        Call immediately after retrieve_context_by_paper() to capture results
+        before a second pass overwrites _last_scored.
+        """
+        keys: List[str] = []
+        scores: List[float] = []
+        for rec, score in self._last_scored:
+            if score >= threshold:
+                keys.append(
+                    self._triplet_key(
+                        rec.arxiv_id, rec.source, rec.relation_type, rec.target
+                    )
+                )
+                scores.append(score)
+        return keys, scores
+
     def reinforce_from_scores(
         self, scored: List[Tuple[TripletRecord, float]]
     ) -> None:

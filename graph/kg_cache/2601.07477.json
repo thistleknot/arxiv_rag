@@ -1,0 +1,46 @@
+{
+ "entities": [
+  {
+   "name": "agentic workflows",
+   "type": "Task"
+  },
+  {
+   "name": "block-level diagnostics",
+   "type": "Method"
+  },
+  {
+   "name": "scalable foundation for automating complex workflows",
+   "type": "Model"
+  },
+  {
+   "name": "problematic blocks in agentic workflows",
+   "type": "Concept"
+  },
+  {
+   "name": "mathematical reasoning and code generation tasks",
+   "type": "Task"
+  }
+ ],
+ "relations": [
+  {
+   "source": "agentic workflows",
+   "target": "block-level diagnostics",
+   "relation_type": "uses"
+  },
+  {
+   "source": "agentic workflows",
+   "target": "scalable foundation for automating complex workflows",
+   "relation_type": "is based on"
+  },
+  {
+   "source": "agentic workflows",
+   "target": "problematic blocks in agentic workflows",
+   "relation_type": "detects and ranks"
+  },
+  {
+   "source": "agentic workflows",
+   "target": "mathematical reasoning and code generation tasks",
+   "relation_type": "optimizes"
+  }
+ ]
+}

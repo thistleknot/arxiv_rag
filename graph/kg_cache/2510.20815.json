@@ -1,0 +1,55 @@
+{
+ "entities": [
+  {
+   "name": "LLMs",
+   "type": "Model"
+  },
+  {
+   "name": "GRRM",
+   "type": "Method"
+  },
+  {
+   "name": "unified understanding-reasoning-prediction",
+   "type": "Task"
+  },
+  {
+   "name": "causal transparency",
+   "type": "Concept"
+  },
+  {
+   "name": "end-to-end optimization",
+   "type": "Method"
+  },
+  {
+   "name": "sparse verifiable signals",
+   "type": "Metric"
+  }
+ ],
+ "relations": [
+  {
+   "source": "LLMs",
+   "target": "GRRM",
+   "relation_type": "uses"
+  },
+  {
+   "source": "LLMs",
+   "target": "unified understanding-reasoning-prediction",
+   "relation_type": "supports"
+  },
+  {
+   "source": "LLMs",
+   "target": "causal transparency",
+   "relation_type": "facilitates"
+  },
+  {
+   "source": "LLMs",
+   "target": "end-to-end optimization",
+   "relation_type": "facilitates"
+  },
+  {
+   "source": "LLMs",
+   "target": "sparse verifiable signals",
+   "relation_type": "evaluates on"
+  }
+ ]
+}

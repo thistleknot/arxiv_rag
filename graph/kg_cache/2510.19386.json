@@ -1,0 +1,63 @@
+{
+ "entities": [
+  {
+   "name": "Long-horizon interactions",
+   "type": "Task"
+  },
+  {
+   "name": "Robust interactions with the environment",
+   "type": "Task"
+  },
+  {
+   "name": "Personalized user intent recognition",
+   "type": "Task"
+  },
+  {
+   "name": "Proactive engagement with users",
+   "type": "Task"
+  },
+  {
+   "name": "State-of-the-art success rates",
+   "type": "Metric"
+  },
+  {
+   "name": "AndroidWorld benchmark",
+   "type": "Dataset"
+  },
+  {
+   "name": "AndroidLab benchmark",
+   "type": "Dataset"
+  },
+  {
+   "name": "OS agent",
+   "type": "Architecture"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Enables long-horizon, robust interactions with the environment",
+   "target": "Long-horizon interactions",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Facilitates personalized user intent recognition",
+   "target": "Personalized user intent recognition",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Supports proactive engagement with users",
+   "target": "Proactive engagement with users",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Positions the OS agent as a collaborative partner rather than just an automation tool",
+   "target": "OS agent",
+   "relation_type": "is based on"
+  },
+  {
+   "source": "Achieves state-of-the-art success rates on AndroidWorld and AndroidLab benchmarks",
+   "target": "State-of-the-art success rates",
+   "relation_type": "evaluates on"
+  }
+ ]
+}

@@ -1,0 +1,63 @@
+{
+ "entities": [
+  {
+   "name": "Mixture-of-Experts Large Reasoning Models",
+   "type": "Model"
+  },
+  {
+   "name": "Cognitive Efficiency",
+   "type": "Metric"
+  },
+  {
+   "name": "Cross-Domain Generalization",
+   "type": "Metric"
+  },
+  {
+   "name": "Reasoning Tasks",
+   "type": "Task"
+  },
+  {
+   "name": "Prompt Design",
+   "type": "Concept"
+  },
+  {
+   "name": "Decoding Constraints",
+   "type": "Concept"
+  },
+  {
+   "name": "Existing Reasoning-Steering Techniques",
+   "type": "Concept"
+  },
+  {
+   "name": "General Instruction-Following Abilities",
+   "type": "Metric"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Mixture-of-Experts Large Reasoning Models",
+   "target": "Cognitive Efficiency",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Mixture-of-Experts Large Reasoning Models",
+   "target": "Cross-Domain Generalization",
+   "relation_type": "facilitates"
+  },
+  {
+   "source": "Mixture-of-Experts Large Reasoning Models",
+   "target": "Reasoning Tasks",
+   "relation_type": "outperforms"
+  },
+  {
+   "source": "Existing Reasoning-Steering Techniques",
+   "target": "Prompt Design",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Existing Reasoning-Steering Techniques",
+   "target": "Decoding Constraints",
+   "relation_type": "uses"
+  }
+ ]
+}

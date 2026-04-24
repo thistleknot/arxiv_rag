@@ -1,0 +1,75 @@
+{
+ "entities": [
+  {
+   "name": "High reasoning proficiency",
+   "type": "Concept"
+  },
+  {
+   "name": "Tasks like the International Mathematical Olympiad (IMO)",
+   "type": "Task"
+  },
+  {
+   "name": "International Olympiad in Informatics (IOI)",
+   "type": "Task"
+  },
+  {
+   "name": "Efficient handling of long-context scenarios",
+   "type": "Concept"
+  },
+  {
+   "name": "Reduced computational complexity",
+   "type": "Concept"
+  },
+  {
+   "name": "Scalable agentic training",
+   "type": "Task"
+  },
+  {
+   "name": "Improved generalization and instruction-following in complex environments",
+   "type": "Task"
+  },
+  {
+   "name": "Reasoning and tool-use integration",
+   "type": "Concept"
+  },
+  {
+   "name": "Large-scale synthetic data pipeline",
+   "type": "Dataset"
+  },
+  {
+   "name": "GPT-5",
+   "type": "Model"
+  },
+  {
+   "name": "Gemini-3.0-Pro",
+   "type": "Model"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Achieves high reasoning proficiency on tasks like the International Mathematical Olympiad (IMO) and the International Olympiad in Informatics (IOI)",
+   "target": "High reasoning proficiency",
+   "relation_type": "evaluates on"
+  },
+  {
+   "source": "Enables efficient handling of long-context scenarios with reduced computational complexity.",
+   "target": "Efficient handling of long-context scenarios",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Facilitates scalable agentic training for improved generalization and instruction-following in complex environments.",
+   "target": "Scalable agentic training",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Enhances reasoning and tool-use integration through a large-scale synthetic data pipeline.",
+   "target": "Reasoning and tool-use integration",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Performs comparably to or surpasses state-of-the-art models like GPT-5 and Gemini-3.0-Pro.",
+   "target": "State-of-the-art models",
+   "relation_type": "outperforms"
+  }
+ ]
+}

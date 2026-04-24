@@ -1,0 +1,45 @@
+{
+ "entities": [
+  {
+   "name": "black-box transformer models",
+   "type": "Model"
+  },
+  {
+   "name": "ChatGPT",
+   "type": "Model"
+  },
+  {
+   "name": "PaLM-2",
+   "type": "Model"
+  },
+  {
+   "name": "embedding projection layer",
+   "type": "Layer"
+  },
+  {
+   "name": "hidden dimensions",
+   "type": "Dimension"
+  },
+  {
+   "name": "model architectures",
+   "type": "Architecture"
+  }
+ ],
+ "relations": [
+  {
+   "source": "black-box transformer models",
+   "target": "embedding projection layer",
+   "relation_type": "uses"
+  },
+  {
+   "source": "ChatGPT",
+   "target": "hidden dimensions",
+   "relation_type": "evaluates on"
+  },
+  {
+   "source": "PaLM-2",
+   "target": "hidden dimensions",
+   "relation_type": "evaluates on"
+  }
+ ]
+}

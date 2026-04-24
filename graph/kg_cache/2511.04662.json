@@ -1,0 +1,28 @@
+{
+ "entities": [
+  {
+   "name": "LLMs",
+   "type": "Model"
+  },
+  {
+   "name": "Chain-of-Thought outputs",
+   "type": "Dataset"
+  },
+  {
+   "name": "VeriCoT-distilled datasets",
+   "type": "Dataset"
+  }
+ ],
+ "relations": [
+  {
+   "source": "LLMs",
+   "target": "Chain-of-Thought outputs",
+   "relation_type": "evaluates on"
+  },
+  {
+   "source": "LLMs",
+   "target": "VeriCoT-distilled datasets",
+   "relation_type": "uses"
+  }
+ ]
+}

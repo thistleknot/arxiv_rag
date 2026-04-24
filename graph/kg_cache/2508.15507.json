@@ -1,0 +1,59 @@
+{
+ "entities": [
+  {
+   "name": "Adaptive Reasoning",
+   "type": "Concept"
+  },
+  {
+   "name": "Task Complexity",
+   "type": "Concept"
+  },
+  {
+   "name": "Computational Waste",
+   "type": "Concept"
+  },
+  {
+   "name": "Reasoning Depth",
+   "type": "Concept"
+  },
+  {
+   "name": "Chain-of-Thought Length",
+   "type": "Concept"
+  },
+  {
+   "name": "Logical Reasoning Tasks",
+   "type": "Task"
+  },
+  {
+   "name": "Partitioning Reasoning",
+   "type": "Method"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Adaptive Reasoning",
+   "target": "Task Complexity",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Adaptive Reasoning",
+   "target": "Computational Waste",
+   "relation_type": "reduces"
+  },
+  {
+   "source": "Adaptive Reasoning",
+   "target": "Reasoning Depth",
+   "relation_type": "allows"
+  },
+  {
+   "source": "Adaptive Reasoning",
+   "target": "Chain-of-Thought Length",
+   "relation_type": "allows"
+  },
+  {
+   "source": "Logical Reasoning Tasks",
+   "target": "Partitioning Reasoning",
+   "relation_type": "uses"
+  }
+ ]
+}

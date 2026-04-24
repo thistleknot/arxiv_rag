@@ -1,0 +1,55 @@
+{
+ "entities": [
+  {
+   "name": "Reasoning",
+   "type": "Task"
+  },
+  {
+   "name": "Discrete Linguistic Tokens",
+   "type": "Entity"
+  },
+  {
+   "name": "Mathematical and Coding Benchmarks",
+   "type": "Dataset"
+  },
+  {
+   "name": "Token Usage",
+   "type": "Metric"
+  },
+  {
+   "name": "Interpretable and Readable Outputs",
+   "type": "Output"
+  },
+  {
+   "name": "Smooth Transitions and Rich Representations",
+   "type": "Representation"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Enables reasoning beyond the limitations of discrete linguistic tokens.",
+   "target": "Reasoning",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Improves pass@1 accuracy in mathematical and coding benchmarks.",
+   "target": "Reasoning",
+   "relation_type": "evaluates on"
+  },
+  {
+   "source": "Reduces token usage in reasoning tasks by up to 22.4%",
+   "target": "Token Usage",
+   "relation_type": "is based on"
+  },
+  {
+   "source": "Generates interpretable and readable outputs.",
+   "target": "Output",
+   "relation_type": "produces"
+  },
+  {
+   "source": "Facilitates smoother transitions and richer representations in reasoning.",
+   "target": "Representation",
+   "relation_type": "provides"
+  }
+ ]
+}

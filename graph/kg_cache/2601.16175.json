@@ -1,0 +1,81 @@
+{
+ "entities": [
+  {
+   "name": "Erdős' minimum overlap problem",
+   "type": "Concept"
+  },
+  {
+   "name": "autocorrelation inequality",
+   "type": "Concept"
+  },
+  {
+   "name": "GPU kernel engineering",
+   "type": "Task"
+  },
+  {
+   "name": "GPUMode kernel competition",
+   "type": "Task"
+  },
+  {
+   "name": "algorithm design",
+   "type": "Task"
+  },
+  {
+   "name": "AtCoder algorithm competitions",
+   "type": "Task"
+  },
+  {
+   "name": "denoising in single-cell biological data analysis",
+   "type": "Task"
+  },
+  {
+   "name": "reproducible state-of-the-art results",
+   "type": "Task"
+  },
+  {
+   "name": "open models",
+   "type": "Concept"
+  },
+  {
+   "name": "publicly available code",
+   "type": "Concept"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Solves specific scientific problems such as Erdős' minimum overlap problem and an autocorrelation inequality.",
+   "target": "Erdős' minimum overlap problem",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Solves specific scientific problems such as Erdős' minimum overlap problem and an autocorrelation inequality.",
+   "target": "autocorrelation inequality",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Achieves significant performance improvements in GPU kernel engineering, e.g., up to 2x faster in a GPUMode kernel competition.",
+   "target": "GPU kernel engineering",
+   "relation_type": "outperforms"
+  },
+  {
+   "source": "Advances solutions in algorithm design, including past AtCoder algorithm competitions.",
+   "target": "algorithm design",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Improves denoising in single-cell biological data analysis.",
+   "target": "denoising in single-cell biological data analysis",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Enables reproducible state-of-the-art results using open models and publicly available code.",
+   "target": "open models",
+   "relation_type": "evaluates on"
+  },
+  {
+   "source": "Enables reproducible state-of-the-art results using open models and publicly available code.",
+   "target": "publicly available code",
+   "relation_type": "evaluates on"
+  }
+ ]
+}

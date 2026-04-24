@@ -1,0 +1,55 @@
+{
+ "entities": [
+  {
+   "name": "Data agent",
+   "type": "Concept"
+  },
+  {
+   "name": "Hierarchical taxonomy",
+   "type": "Concept"
+  },
+  {
+   "name": "Structured reviews",
+   "type": "Concept"
+  },
+  {
+   "name": "Critical technical gaps",
+   "type": "Concept"
+  },
+  {
+   "name": "User expectations",
+   "type": "Concept"
+  },
+  {
+   "name": "Generative, fully autonomous data agents (L5)",
+   "type": "Concept"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Enables clear classification of data agent capabilities through a hierarchical taxonomy.",
+   "target": "Data agent",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Supports structured reviews of existing data agent systems based on autonomy levels.",
+   "target": "Data agent",
+   "relation_type": "supports"
+  },
+  {
+   "source": "Facilitates identification of critical technical gaps for advancing data agents.",
+   "target": "Data agent",
+   "relation_type": "facilitates"
+  },
+  {
+   "source": "Aids in aligning user expectations with the capabilities of data agents.",
+   "target": "Data agent",
+   "relation_type": "guides"
+  },
+  {
+   "source": "Guides the development of generative, fully autonomous data agents (L5).",
+   "target": "Data agent",
+   "relation_type": "guides"
+  }
+ ]
+}

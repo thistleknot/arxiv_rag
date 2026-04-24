@@ -1,0 +1,50 @@
+{
+ "entities": [
+  {
+   "name": "Autonomous Agent Learning",
+   "type": "Method"
+  },
+  {
+   "name": "Task Datasets",
+   "type": "Dataset"
+  },
+  {
+   "name": "Experience Reuse",
+   "type": "Architecture"
+  },
+  {
+   "name": "Hybrid Policy Guidance",
+   "type": "Architecture"
+  },
+  {
+   "name": "Differentiated Reward Assignment",
+   "type": "Metric"
+  },
+  {
+   "name": "Sample Efficiency",
+   "type": "Metric"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Enables scalable and cost-effective autonomous agent learning",
+   "target": "Task Datasets",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Reduces dependence on manually constructed task datasets",
+   "target": "Autonomous Agent Learning",
+   "relation_type": "evaluates on"
+  },
+  {
+   "source": "Improves exploration efficiency through experience reuse and hybrid policy guidance",
+   "target": "Autonomous Agent Learning",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Enhances sample efficiency via differentiated reward assignment",
+   "target": "Autonomous Agent Learning",
+   "relation_type": "evaluates on"
+  }
+ ]
+}

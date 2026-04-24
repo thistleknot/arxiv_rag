@@ -1,0 +1,28 @@
+{
+ "entities": [
+  {
+   "name": "Externalization",
+   "type": "Method"
+  },
+  {
+   "name": "Harness behavior",
+   "type": "Concept"
+  },
+  {
+   "name": "Agent harness execution",
+   "type": "Task"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Externalization",
+   "target": "Harness behavior",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Harness behavior",
+   "target": "Agent harness execution",
+   "relation_type": "supports"
+  }
+ ]
+}

@@ -1,0 +1,51 @@
+{
+ "entities": [
+  {
+   "name": "Significantly reduces inference latency in reasoning tasks",
+   "type": "Method"
+  },
+  {
+   "name": "Preserves accuracy while optimizing computational efficiency",
+   "type": "Method"
+  },
+  {
+   "name": "Enables selective allocation of reasoning steps between lightweight and large models",
+   "type": "Method"
+  },
+  {
+   "name": "Improves accuracy by 10.7% while reducing latency by 25.9% on the AIME25 benchmark",
+   "type": "Method"
+  },
+  {
+   "name": "Provides a training-free framework for collaborative inference",
+   "type": "Method"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Significantly reduces inference latency in reasoning tasks",
+   "target": "AIME25 benchmark",
+   "relation_type": "evaluates on"
+  },
+  {
+   "source": "Preserves accuracy while optimizing computational efficiency",
+   "target": "AIME25 benchmark",
+   "relation_type": "evaluates on"
+  },
+  {
+   "source": "Enables selective allocation of reasoning steps between lightweight and large models",
+   "target": "AIME25 benchmark",
+   "relation_type": "evaluates on"
+  },
+  {
+   "source": "Improves accuracy by 10.7% while reducing latency by 25.9% on the AIME25 benchmark",
+   "target": "AIME25 benchmark",
+   "relation_type": "evaluates on"
+  },
+  {
+   "source": "Provides a training-free framework for collaborative inference",
+   "target": "AIME25 benchmark",
+   "relation_type": "evaluates on"
+  }
+ ]
+}

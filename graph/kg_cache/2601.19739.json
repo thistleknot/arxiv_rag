@@ -1,0 +1,45 @@
+{
+ "entities": [
+  {
+   "name": "Transformer-based models",
+   "type": "Model"
+  },
+  {
+   "name": "Large language models",
+   "type": "Model"
+  },
+  {
+   "name": "Fine-tuning memory consumption",
+   "type": "Metric"
+  },
+  {
+   "name": "Efficient fine-tuning of transformer-based models",
+   "type": "Method"
+  },
+  {
+   "name": "Maintains or improves model performance while saving memory",
+   "type": "Metric"
+  },
+  {
+   "name": "Token efficiency through interpretable processes",
+   "type": "Concept"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Transformer-based models",
+   "target": "Fine-tuning memory consumption",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Transformer-based models",
+   "target": "Efficient fine-tuning of transformer-based models",
+   "relation_type": "outperforms"
+  },
+  {
+   "source": "Transformer-based models",
+   "target": "Maintains or improves model performance while saving memory",
+   "relation_type": "evaluates on"
+  }
+ ]
+}

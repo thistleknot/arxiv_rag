@@ -1,0 +1,59 @@
+{
+ "entities": [
+  {
+   "name": "Agent Memory",
+   "type": "Concept"
+  },
+  {
+   "name": "Memory Forms",
+   "type": "Concept"
+  },
+  {
+   "name": "Memory Functions",
+   "type": "Concept"
+  },
+  {
+   "name": "Memory Dynamics",
+   "type": "Concept"
+  },
+  {
+   "name": "LLM Memory",
+   "type": "Concept"
+  },
+  {
+   "name": "RAG",
+   "type": "Concept"
+  },
+  {
+   "name": "Agent Intelligence",
+   "type": "Concept"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Provides a comprehensive taxonomy of agent memory based on forms, functions, and dynamics",
+   "target": "Agent Memory",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Supports practical development with a summary of memory benchmarks and open-source frameworks",
+   "target": "Agent Memory",
+   "relation_type": "supports"
+  },
+  {
+   "source": "Clarifies the scope of agent memory relative to related concepts like LLM memory and RAG",
+   "target": "Agent Memory",
+   "relation_type": "clarifies"
+  },
+  {
+   "source": "Identifies emerging research frontiers such as memory automation and multimodal memory",
+   "target": "Agent Memory",
+   "relation_type": "identifies"
+  },
+  {
+   "source": "Lays a conceptual foundation for designing memory as a first-class primitive in agentic intelligence",
+   "target": "Agent Memory",
+   "relation_type": "lays a conceptual foundation for"
+  }
+ ]
+}

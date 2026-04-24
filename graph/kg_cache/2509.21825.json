@@ -1,0 +1,55 @@
+{
+ "entities": [
+  {
+   "name": "Data Integration",
+   "type": "Method"
+  },
+  {
+   "name": "Research Report Generation",
+   "type": "Task"
+  },
+  {
+   "name": "State-of-the-Art Performance",
+   "type": "Metric"
+  },
+  {
+   "name": "Hard-Level QA Tasks",
+   "type": "Concept"
+  },
+  {
+   "name": "Multi-File Processing",
+   "type": "Task"
+  },
+  {
+   "name": "Data Science Reports",
+   "type": "Report Type"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Processing and integrating data across diverse, heterogeneous formats",
+   "target": "Data Integration",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Generating comprehensive research reports for open-ended queries",
+   "target": "Research Report Generation",
+   "relation_type": "produces"
+  },
+  {
+   "source": "Achieving state-of-the-art performance on benchmarks like DABStep and KramaBench",
+   "target": "State-of-the-Art Performance",
+   "relation_type": "evaluates on"
+  },
+  {
+   "source": "Handling hard-level QA tasks requiring multi-file processing",
+   "target": "Hard-Level QA Tasks",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Producing high-quality data science reports preferred in over 88% of cases",
+   "target": "Data Science Reports",
+   "relation_type": "produces"
+  }
+ ]
+}

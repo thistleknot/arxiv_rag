@@ -63,7 +63,7 @@ _ROOT = _pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_ROOT))
 
 # ── Local imports ─────────────────────────────────────────────────────────────
-from constants import BLEND_WEIGHTS, OLLAMA_BASE, THROUGHLINE_MODEL
+from constants import BLEND_WEIGHTS, OLLAMA_BASE, THROUGHLINE_MODEL, TRIPLET_REINFORCE_TAU
 from reasoning.syllogism_former import ChainLink, SyllogismFormer, SyllogismResult
 from reasoning.entailment_ranker import EntailmentRanker
 from reasoning.intent_extractor import IntentExtractor, ObjectiveFunction
@@ -463,6 +463,19 @@ class SyllogismRetriever:
         except Exception:
             pass
 
+        # Memory store (Pages + Throughlines tiers) — lazy, non-critical
+        self._memory = None
+        try:
+            from graph.memory_store import MemoryStore
+            self._memory = MemoryStore()
+        except Exception:
+            pass
+
+        # Runtime state for current retrieval (set in Stage 0)
+        self._objective_struct = None
+        self._goal_vec: Optional[np.ndarray] = None
+        self._page_id: Optional[int] = None
+
         self._load_csv_rows()
 
     def _load_csv_rows(self) -> None:
@@ -653,11 +666,31 @@ class SyllogismRetriever:
             print(f"[stage 0] Extracting intent from query...")
         try:
             objective = self._intent.extract(query)
+            self._objective_struct = objective
             result.objective = objective.as_text() if hasattr(objective, 'as_text') else str(objective)
         except Exception as e:
             if self._verbose:
                 print(f"[stage 0] Intent extraction failed: {e}")
+            self._objective_struct = None
             result.objective = query
+
+        # ── Stage 0b: Memory page matching ──
+        self._goal_vec = None
+        self._page_id = None
+        if self._memory is not None and self._embedder is not None and self._objective_struct is not None:
+            try:
+                goal_text = getattr(self._objective_struct, 'goal', result.objective)
+                domain = getattr(self._objective_struct, 'domain', '')
+                self._goal_vec = self._embedder.encode(
+                    goal_text, convert_to_numpy=True, normalize_embeddings=True
+                ).astype("float32")
+                self._page_id = self._memory.match_page(self._goal_vec, domain)
+                if self._page_id is not None:
+                    self._memory.increment_read(self._page_id)
+                    if self._verbose:
+                        print(f"[stage 0] memory page matched: page_id={self._page_id}")
+            except Exception:
+                pass
 
         # ── Stage 1: Candidate selection ──
         candidates: List[Any] = []
@@ -759,6 +792,10 @@ class SyllogismRetriever:
                         paper_ids=selected_ids,
                         top_k_per_paper=3,
                     )
+                # Capture Pass 1 triplet evidence for memory reinforcement before Pass 2 overwrites
+                pass1_triplet_keys, pass1_nli_scores = self._nli_graph.get_last_triplet_keys(
+                    threshold=TRIPLET_REINFORCE_TAU
+                )
 
                 # Pass 2: unfiltered corpus-wide search always populates graph_context.
                 # This covers the common case where selected papers are not yet KG-cached.
@@ -782,6 +819,10 @@ class SyllogismRetriever:
                     )
                 # MemRL Q-update: reinforce triplet confidence from corpus-wide NLI scores
                 self._nli_graph.reinforce_from_last_query()
+
+                # Update memory store (non-critical — wrapped in _update_memory)
+                self._update_memory(result, pass1_triplet_keys, pass1_nli_scores)
+
             elif self._graph is not None:
                 # Legacy fallback: cosine-filtered triplets (requires Ollama)
                 result.graph_context = self._graph.retrieve_context(result.thesis)
@@ -850,3 +891,82 @@ class SyllogismRetriever:
             print(f"[retrieve] Complete. Thesis: {result.thesis[:80]}...")
 
         return result
+
+    # ── Memory helpers ──────────────────────────────────────────────────────────
+
+    def _update_memory(
+        self,
+        result: "RetrievalResult",
+        pass1_triplet_keys: List[str],
+        pass1_nli_scores: List[float],
+    ) -> None:
+        """Upsert memory page and throughline after a completed retrieval.
+
+        Fully wrapped in try/except — memory is non-critical and must never
+        break the main retrieval flow.
+        """
+        if self._memory is None or self._goal_vec is None:
+            return
+        try:
+            from constants import PAGE_EMBED_SIM_TAU
+            objective = self._objective_struct
+            goal_text = getattr(objective, "goal", result.objective or "")
+            domain = getattr(objective, "domain", "")
+            intent = getattr(objective, "intent", "")
+            chain_ids = [
+                doc.metadata.get("paper_id", doc.doc_id)
+                for doc in (result.papers or [])
+            ]
+
+            # Create page if no match found at Stage 0b
+            if self._page_id is None and goal_text:
+                bm25_text = f"{goal_text} {domain}".strip()
+                self._page_id = self._memory.create_page(
+                    goal=goal_text,
+                    domain=domain,
+                    intent=intent,
+                    goal_vec=self._goal_vec,
+                    bm25_text=bm25_text,
+                )
+
+            if self._page_id is None:
+                return
+
+            # Reinforce triplet evidence for this page
+            triplet_keys = pass1_triplet_keys or []
+            nli_scores = pass1_nli_scores or []
+            if triplet_keys:
+                self._memory.reinforce_page(
+                    page_id=self._page_id,
+                    triplet_keys=triplet_keys,
+                    nli_scores=nli_scores,
+                )
+
+            # Upsert throughline if thesis qualifies
+            if _thesis_qualifies(result.thesis, chain_ids) and self._embedder is not None:
+                claim_vec = self._embedder.encode(
+                    result.thesis, convert_to_numpy=True, normalize_embeddings=True
+                ).astype("float32")
+                avg_nli = float(sum(nli_scores) / len(nli_scores)) if nli_scores else 0.0
+                self._memory.upsert_throughline(
+                    page_id=self._page_id,
+                    claim_text=result.thesis,
+                    claim_vec=claim_vec,
+                    arxiv_ids=chain_ids,
+                    triplet_keys=triplet_keys,
+                    avg_nli=avg_nli,
+                )
+        except Exception:
+            pass  # memory is always non-critical
+
+
+def _thesis_qualifies(thesis: str, chain: List[str]) -> bool:
+    """Return True if the thesis is non-trivial and has supporting evidence."""
+    if not thesis or len(chain) < 2:
+        return False
+    t = thesis.lower().strip()
+    junk_patterns = (
+        "no thesis", "not enough", "insufficient", "n/a", "none",
+        "unable to", "cannot", "no clear", "no single",
+    )
+    return not any(p in t for p in junk_patterns)

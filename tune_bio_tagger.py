@@ -21,6 +21,7 @@ Hyperparameters to tune:
 """
 
 import gc
+import hashlib
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader, WeightedRandomSampler
@@ -1125,8 +1126,16 @@ def main():
     gc.collect()
     torch.cuda.empty_cache()
 
-    # Create study with median pruner
+    # Study name encodes data file + subset size + unfreeze config so stale studies
+    # are never reused when any of those inputs change.
+    data_hash  = hashlib.md5(args.data.encode()).hexdigest()[:8]
+    study_name = f"bio_tagger_{data_hash}_s{tune_size}_u{args.unfreeze_layers}"
+
+    # Create study with SQLite persistence so interrupted runs are resumable.
     study = optuna.create_study(
+        study_name=study_name,
+        storage="sqlite:///optuna_bio_tagger.db",
+        load_if_exists=True,
         direction='maximize',
         pruner=optuna.pruners.MedianPruner(
             n_startup_trials=5,
@@ -1136,10 +1145,16 @@ def main():
     
     # Store unfreeze_layers in study user_attrs so objective function can access it
     study.set_user_attr('unfreeze_layers', args.unfreeze_layers)
-    
-    # WARM START: Load previous best hyperparameters if available
+
+    # Count already-completed trials so we never re-run them on resume.
+    n_existing = len([t for t in study.trials if t.value is not None])
+    n_new = max(0, args.n_trials - n_existing)
+    if n_existing:
+        print(f"  [RESUME] {n_existing} completed trials found; running {n_new} more.")
+
+    # WARM START: enqueue previous best params only on the very first run.
     best_params_file = 'best_hyperparams.json'
-    if os.path.exists(best_params_file):
+    if n_existing == 0 and os.path.exists(best_params_file):
         print(f"\n  [WARM START] Loading previous best hyperparameters from {best_params_file}")
         with open(best_params_file, 'r') as f:
             prev_best = json.load(f)
@@ -1147,9 +1162,8 @@ def main():
         print(f"     Previous best F1: {prev_best.get('best_f1', 'unknown')}")
         print(f"     Enqueuing as Trial 0...")
         
-        # Enqueue the previous best as the first trial
         study.enqueue_trial(prev_best['params'])
-    else:
+    elif n_existing == 0:
         print(f"\n  No previous hyperparameters found ({best_params_file} does not exist)")
         print(f"  Starting fresh exploration...")
     
@@ -1161,21 +1175,24 @@ def main():
     else:
         print(f"  Unfreezing: NONE (classifier-only training)")
     
-    # Optimize
-    study.optimize(
-        lambda trial: objective(
-            trial, tune_train, tune_eval, tokenizer, device,
-            min_warmup_epochs=args.min_warmup,
-            patience=args.patience,
-            samples_per_epoch=args.samples_per_epoch,
-            validate=args.validate,
-            active_label_indices=active_label_indices,
-            full_label_names=full_label_names,
-            num_labels=num_active_labels
-        ),
-        n_trials=args.n_trials,
-        show_progress_bar=True,
-    )
+    # Optimize — only run the remaining trials needed to reach args.n_trials total.
+    if n_new > 0:
+        study.optimize(
+            lambda trial: objective(
+                trial, tune_train, tune_eval, tokenizer, device,
+                min_warmup_epochs=args.min_warmup,
+                patience=args.patience,
+                samples_per_epoch=args.samples_per_epoch,
+                validate=args.validate,
+                active_label_indices=active_label_indices,
+                full_label_names=full_label_names,
+                num_labels=num_active_labels
+            ),
+            n_trials=n_new,
+            show_progress_bar=True,
+        )
+    else:
+        print(f"  [SKIP] Already have {n_existing} trials — skipping search.")
     
     print(f"\n[4/5] Best trial results:")
     best_trial = study.best_trial

@@ -1,0 +1,41 @@
+{
+ "entities": [
+  {
+   "name": "Progressive model scaling",
+   "type": "Method"
+  },
+  {
+   "name": "Increasing chains based on previous models",
+   "type": "Model"
+  },
+  {
+   "name": "Seamless language model switching",
+   "type": "Architecture"
+  },
+  {
+   "name": "Acceleration of prefilling computations",
+   "type": "Algorithm"
+  },
+  {
+   "name": "Improved training efficiency for language models",
+   "type": "Metric"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Progressive model scaling",
+   "target": "Increasing chains based on previous models",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Seamless language model switching",
+   "target": "Acceleration of prefilling computations",
+   "relation_type": "evaluates on"
+  },
+  {
+   "source": "Improved training efficiency for language models",
+   "target": "Training efficiency",
+   "relation_type": "is based on"
+  }
+ ]
+}

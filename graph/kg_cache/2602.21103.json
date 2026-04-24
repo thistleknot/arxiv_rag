@@ -1,0 +1,91 @@
+{
+ "entities": [
+  {
+   "name": "Compact models",
+   "type": "Model"
+  },
+  {
+   "name": "Frontier performance",
+   "type": "Metric"
+  },
+  {
+   "name": "Latency overhead",
+   "type": "Metric"
+  },
+  {
+   "name": "Interpretability",
+   "type": "Concept"
+  },
+  {
+   "name": "Full human verification of logic",
+   "type": "Concept"
+  },
+  {
+   "name": "Test-time inference costs",
+   "type": "Metric"
+  },
+  {
+   "name": "Advanced reasoning",
+   "type": "Concept"
+  },
+  {
+   "name": "Regulated industries such as law, finance, and content moderation",
+   "type": "Task"
+  },
+  {
+   "name": "High-volume use cases",
+   "type": "Task"
+  },
+  {
+   "name": "Edge devices",
+   "type": "Device"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Compact models",
+   "target": "Frontier performance",
+   "relation_type": "outperforms"
+  },
+  {
+   "source": "Compact models",
+   "target": "Latency overhead",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Compact models",
+   "target": "Interpretability",
+   "relation_type": "supports"
+  },
+  {
+   "source": "Compact models",
+   "target": "Full human verification of logic",
+   "relation_type": "supports"
+  },
+  {
+   "source": "Compact models",
+   "target": "Test-time inference costs",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Compact models",
+   "target": "Advanced reasoning",
+   "relation_type": "supports"
+  },
+  {
+   "source": "Compact models",
+   "target": "Regulated industries such as law, finance, and content moderation",
+   "relation_type": "supports"
+  },
+  {
+   "source": "Compact models",
+   "target": "High-volume use cases",
+   "relation_type": "supports"
+  },
+  {
+   "source": "Compact models",
+   "target": "Edge devices",
+   "relation_type": "supports"
+  }
+ ]
+}

@@ -1,0 +1,37 @@
+{
+ "entities": [
+  {
+   "name": "Workflow",
+   "type": "Task"
+  },
+  {
+   "name": "Software Development Lifecycle (SDLC)",
+   "type": "Task"
+  },
+  {
+   "name": "Single-agent Architecture",
+   "type": "Architecture"
+  },
+  {
+   "name": "Multi-agent Architecture",
+   "type": "Architecture"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Workflow",
+   "target": "SDLC",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Software Development Lifecycle (SDLC)",
+   "target": "Single-agent Architecture",
+   "relation_type": "supports"
+  },
+  {
+   "source": "Software Development Lifecycle (SDLC)",
+   "target": "Multi-agent Architecture",
+   "relation_type": "supports"
+  }
+ ]
+}

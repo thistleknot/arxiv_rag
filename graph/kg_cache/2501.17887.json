@@ -1,0 +1,55 @@
+{
+ "entities": [
+  {
+   "name": "Converts multiple document formats into a unified, richly structured representation.",
+   "type": "Method"
+  },
+  {
+   "name": "DocLayNet",
+   "type": "Model"
+  },
+  {
+   "name": "TableFormer",
+   "type": "Model"
+  },
+  {
+   "name": "LangChain",
+   "type": "Framework"
+  },
+  {
+   "name": "LlamaIndex",
+   "type": "Framework"
+  },
+  {
+   "name": "spaCy",
+   "type": "Framework"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Converts multiple document formats into a unified, richly structured representation.",
+   "target": "DocLayNet",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Converts multiple document formats into a unified, richly structured representation.",
+   "target": "TableFormer",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Converts multiple document formats into a unified, richly structured representation.",
+   "target": "LangChain",
+   "relation_type": "supports"
+  },
+  {
+   "source": "Converts multiple document formats into a unified, richly structured representation.",
+   "target": "LlamaIndex",
+   "relation_type": "supports"
+  },
+  {
+   "source": "Converts multiple document formats into a unified, richly structured representation.",
+   "target": "spaCy",
+   "relation_type": "supports"
+  }
+ ]
+}

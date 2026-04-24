@@ -1,0 +1,67 @@
+{
+ "entities": [
+  {
+   "name": "Research papers",
+   "type": "Dataset"
+  },
+  {
+   "name": "AI agents",
+   "type": "Model"
+  },
+  {
+   "name": "Automated analysis",
+   "type": "Method"
+  },
+  {
+   "name": "Robustification of research methods and code",
+   "type": "Algorithm"
+  },
+  {
+   "name": "Natural language interfaces",
+   "type": "Architecture"
+  },
+  {
+   "name": "Reproduces original research results",
+   "type": "Metric"
+  },
+  {
+   "name": "Handles novel user queries",
+   "type": "Task"
+  },
+  {
+   "name": "Accelerates knowledge dissemination",
+   "type": "Concept"
+  },
+  {
+   "name": "Collaborative AI ecosystems",
+   "type": "Architecture"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Transforms research papers into AI agents for active use and discovery.",
+   "target": "AI agents",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Enables automated analysis and robustification of research methods and code.",
+   "target": "Research methods and code",
+   "relation_type": "evaluates on"
+  },
+  {
+   "source": "Facilitates complex scientific queries through natural language interfaces.",
+   "target": "Natural language interfaces",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Reproduces original research results and handles novel user queries.",
+   "target": "Original research results",
+   "relation_type": "evaluates on"
+  },
+  {
+   "source": "Accelerates knowledge dissemination and collaborative AI ecosystems.",
+   "target": "Knowledge dissemination",
+   "relation_type": "uses"
+  }
+ ]
+}

@@ -1,0 +1,51 @@
+{
+ "entities": [
+  {
+   "name": "Achieves",
+   "type": "Method"
+  },
+  {
+   "name": "Adapts reasoning strategies",
+   "type": "Method"
+  },
+  {
+   "name": "Organizes problem-solving hierarchically",
+   "type": "Method"
+  },
+  {
+   "name": "Consistently attains or surpasses human gold-medalist performance",
+   "type": "Metric"
+  },
+  {
+   "name": "Generalizes across diverse scientific domains including mathematics, physics, and chemistry",
+   "type": "Concept"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Achieves",
+   "target": "domain-specific scientific tasks",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Adapts reasoning strategies",
+   "target": "disciplines and difficulty levels",
+   "relation_type": "outperforms"
+  },
+  {
+   "source": "Organizes problem-solving hierarchically",
+   "target": "dynamic task handling",
+   "relation_type": "evaluates on"
+  },
+  {
+   "source": "Consistently attains or surpasses human gold-medalist performance",
+   "target": "scientific Olympiads",
+   "relation_type": "outperforms"
+  },
+  {
+   "source": "Generalizes across diverse scientific domains including mathematics, physics, and chemistry",
+   "target": "mathematics, physics, and chemistry",
+   "relation_type": "evaluates on"
+  }
+ ]
+}

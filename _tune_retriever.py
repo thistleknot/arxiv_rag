@@ -381,14 +381,31 @@ def run_layer1(
             blend_weights, rows, field_embeddings, embedder, train_pairs,
         )
 
-    study = optuna.create_study(direction="maximize")
-    # Seed with the current default (title=0.4, abstract=0.3, utility=0.3)
-    study.enqueue_trial({"title_w": 0.4, "abstract_frac": 0.3 / 0.6})  # abstract_frac = 0.3/(1-0.4)
+    corpus_tag = hashlib.md5(f"{len(rows)}_{len(train_pairs)}".encode()).hexdigest()[:8]
+    study_name = f"retriever_l1_{corpus_tag}"
+    study = optuna.create_study(
+        study_name=study_name,
+        storage="sqlite:///optuna_retriever.db",
+        load_if_exists=True,
+        direction="maximize",
+    )
+    # Resumability: only run trials that have not already completed.
+    n_existing = len([t for t in study.trials if t.value is not None])
+    n_new = max(0, n_trials - n_existing)
+    if n_existing:
+        print(f"  [RESUME] {n_existing} completed trials found; running {n_new} more.")
+    # Seed with the current default only on first run.
+    if n_existing == 0:
+        study.enqueue_trial({"title_w": 0.4, "abstract_frac": 0.3 / 0.6})  # abstract_frac = 0.3/(1-0.4)
 
-    print(f"\n[Layer 1] Optuna TPE — {n_trials} trials...")
-    t0 = time.time()
-    study.optimize(objective, n_trials=n_trials, show_progress_bar=False)
-    elapsed = time.time() - t0
+    if n_new > 0:
+        print(f"\n[Layer 1] Optuna TPE — {n_new} trials ({n_existing} existing)...")
+        t0 = time.time()
+        study.optimize(objective, n_trials=n_new, show_progress_bar=False)
+        elapsed = time.time() - t0
+    else:
+        print(f"\n[Layer 1] Already {n_existing} completed trials — skipping search.")
+        elapsed = 0.0
 
     best = study.best_trial
     title_w       = best.params["title_w"]
@@ -861,11 +878,21 @@ def run_deterministic_tuning(
         )
         return score
 
+    corpus_tag = hashlib.md5(f"{len(rows)}_{n_papers}".encode()).hexdigest()[:8]
+    study_name = f"retriever_det_{corpus_tag}"
     study = optuna.create_study(
+        study_name=study_name,
+        storage="sqlite:///optuna_retriever.db",
+        load_if_exists=True,
         direction="maximize",
         sampler=optuna.samplers.TPESampler(seed=42),
     )
-    if warm_start and "blend_weights" in warm_start:
+    # Resumability: only enqueue warm start and run trials that haven't completed yet.
+    n_existing = len([t for t in study.trials if t.value is not None])
+    n_new = max(0, n_trials - n_existing)
+    if n_existing:
+        print(f"  [RESUME] {n_existing} completed trials found; running {n_new} more.", flush=True)
+    if n_existing == 0 and warm_start and "blend_weights" in warm_start:
         bw = warm_start["blend_weights"]
         study.enqueue_trial({
             "title":    bw.get("title",    0.3237),
@@ -873,8 +900,11 @@ def run_deterministic_tuning(
             "top_k":    warm_start.get("top_k", 5),
         })
 
-    print(f"[Det. Tuning] Optuna TPE — {n_trials} trials × {len(valid)} queries...", flush=True)
-    study.optimize(objective, n_trials=n_trials, show_progress_bar=False)
+    if n_new > 0:
+        print(f"[Det. Tuning] Optuna TPE — {n_new} trials × {len(valid)} queries...", flush=True)
+        study.optimize(objective, n_trials=n_new, show_progress_bar=False)
+    else:
+        print(f"[Det. Tuning] Already {n_existing} completed trials — skipping search.", flush=True)
 
     best = study.best_trial
     title_w    = best.params["title"]

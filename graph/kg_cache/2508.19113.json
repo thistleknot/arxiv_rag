@@ -1,0 +1,55 @@
+{
+ "entities": [
+  {
+   "name": "Multi-step reasoning",
+   "type": "Task"
+  },
+  {
+   "name": "External knowledge retrieval",
+   "type": "Method"
+  },
+  {
+   "name": "Hybrid search strategy",
+   "type": "Method"
+  },
+  {
+   "name": "Structured aggregation of multiple queries",
+   "type": "Method"
+  },
+  {
+   "name": "Test-time search scaling for deeper reasoning",
+   "type": "Method"
+  },
+  {
+   "name": "State-of-the-art performance",
+   "type": "Metric"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Enables multi-step reasoning with external knowledge retrieval",
+   "target": "External knowledge retrieval",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Improves evidence coverage through hybrid search strategy",
+   "target": "Hybrid search strategy",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Facilitates structured aggregation of multiple queries",
+   "target": "Structured aggregation of multiple queries",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Enhances test-time search scaling for deeper reasoning",
+   "target": "Test-time search scaling for deeper reasoning",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Achieves state-of-the-art performance on multiple benchmarks",
+   "target": "State-of-the-art performance",
+   "relation_type": "evaluates on"
+  }
+ ]
+}

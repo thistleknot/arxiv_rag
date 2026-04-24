@@ -1,0 +1,84 @@
+{
+ "entities": [
+  {
+   "name": "Efficient Multi-Hop Question Answering",
+   "type": "Task"
+  },
+  {
+   "name": "Offline Indexing",
+   "type": "Method"
+  },
+  {
+   "name": "Naive RAG",
+   "type": "Model"
+  },
+  {
+   "name": "F1 Scores",
+   "type": "Metric"
+  },
+  {
+   "name": "Multi-hop QA Benchmarks",
+   "type": "Dataset"
+  },
+  {
+   "name": "Graph-Based Methods",
+   "type": "Method"
+  },
+  {
+   "name": "Flat Retrieval",
+   "type": "Architecture"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Efficient Multi-Hop Question Answering",
+   "target": "Offline Indexing",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Naive RAG",
+   "target": "Offline Indexing",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Efficient Multi-Hop Question Answering",
+   "target": "F1 Scores",
+   "relation_type": "outperforms"
+  },
+  {
+   "source": "Naive RAG",
+   "target": "F1 Scores",
+   "relation_type": "outperforms"
+  },
+  {
+   "source": "Efficient Multi-Hop Question Answering",
+   "target": "Multi-hop QA Benchmarks",
+   "relation_type": "evaluates on"
+  },
+  {
+   "source": "Naive RAG",
+   "target": "Multi-hop QA Benchmarks",
+   "relation_type": "evaluates on"
+  },
+  {
+   "source": "Efficient Multi-Hop Question Answering",
+   "target": "Graph-Based Methods",
+   "relation_type": "is based on"
+  },
+  {
+   "source": "Naive RAG",
+   "target": "Graph-Based Methods",
+   "relation_type": "is based on"
+  },
+  {
+   "source": "Efficient Multi-Hop Question Answering",
+   "target": "Flat Retrieval",
+   "relation_type": "evaluates on"
+  },
+  {
+   "source": "Naive RAG",
+   "target": "Flat Retrieval",
+   "relation_type": "evaluates on"
+  }
+ ]
+}

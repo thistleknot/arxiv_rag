@@ -1,0 +1,41 @@
+{
+ "entities": [
+  {
+   "name": "Automate the entire machine learning pipeline",
+   "type": "Task"
+  },
+  {
+   "name": "Adapts to complex, innovative data science tasks",
+   "type": "Task"
+  },
+  {
+   "name": "Generates code dynamically based on task complexity",
+   "type": "Method"
+  },
+  {
+   "name": "Strategically explores solutions using knowledgeable tree search",
+   "type": "Method"
+  },
+  {
+   "name": "Improves effectiveness and efficiency in automated data science benchmarks",
+   "type": "Task"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Automate the entire machine learning pipeline",
+   "target": "Generates code dynamically based on task complexity",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Adapts to complex, innovative data science tasks",
+   "target": "Strategically explores solutions using knowledgeable tree search",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Automate the entire machine learning pipeline",
+   "target": "Improves effectiveness and efficiency in automated data science benchmarks",
+   "relation_type": "evaluates on"
+  }
+ ]
+}

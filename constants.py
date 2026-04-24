@@ -54,3 +54,10 @@ BLEND_WEIGHTS = {
     "abstract": 0.5803,
     "utility":  0.096,
 }
+
+# ── Memory store — Pages (tier 2) + Throughlines (tier 3) ─────────────────────
+# (agentic_kg_memory: Pages layer + Throughlines layer)
+MEMORY_STORE_DB     = ROOT / "graph" / "memory_store.sqlite3"
+PAGE_EMBED_SIM_TAU  = 0.85   # cosine threshold to match an existing memory page
+PAGE_FIT_ALPHA      = 0.1    # MemRL alpha for page fit_score and throughline q_score
+THROUGHLINE_SIM_TAU = 0.70   # cosine threshold to match an existing throughline

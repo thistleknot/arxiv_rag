@@ -337,12 +337,24 @@ class NLIEntailmentScorer:
         raw_logits -= raw_logits.max(axis=1, keepdims=True)  # numerical stability
         exp_l = np.exp(raw_logits)
         nli_probs_arr = exp_l / exp_l.sum(axis=1, keepdims=True)
-        nli_probs: Dict[str, float] = {
+        raw_nli: Dict[str, float] = {
             arxiv_id: float(nli_probs_arr[i, NLI_ENTAIL_IDX])
             for i, (arxiv_id, _) in enumerate(items)
         }
 
-        numbered_lines = "\n".join(
+        # Min-max normalize within the batch so the blend scores span [0, 1].
+        # Raw entailment probabilities from DeBERTa NLI are uniformly near-zero
+        # for utility strings (which are not logical claims), collapsing the blend
+        # to pure retrieval rank.  Normalization preserves relative NLI ordering
+        # while restoring discrimination power.
+        _vals = list(raw_nli.values())
+        _lo, _hi = min(_vals), max(_vals)
+        if _hi > _lo:
+            nli_probs: Dict[str, float] = {k: (v - _lo) / (_hi - _lo) for k, v in raw_nli.items()}
+        else:
+            nli_probs = dict(raw_nli)  # all identical — leave as-is, blend falls back to retrieval
+
+        numbered_lines= "\n".join(
             f"{i + 1}. {utility}" for i, (_, utility) in enumerate(items)
         )
 

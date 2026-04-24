@@ -1,0 +1,41 @@
+{
+ "entities": [
+  {
+   "name": "Customer support automation",
+   "type": "Method"
+  },
+  {
+   "name": "Scheduling tasks",
+   "type": "Task"
+  },
+  {
+   "name": "Data summarization",
+   "type": "Task"
+  },
+  {
+   "name": "Research automation",
+   "type": "Method"
+  },
+  {
+   "name": "Robotic coordination",
+   "type": "Architecture"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Customer support automation",
+   "target": "Scheduling tasks",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Data summarization",
+   "target": "Research automation",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Robotic coordination",
+   "target": "Customer support automation",
+   "relation_type": "is based on"
+  }
+ ]
+}

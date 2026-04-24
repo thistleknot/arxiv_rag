@@ -1,0 +1,51 @@
+{
+ "entities": [
+  {
+   "name": "Autonomous construction and adaptation of task-specific agents",
+   "type": "Task"
+  },
+  {
+   "name": "Continual learning without updating LLM parameters",
+   "type": "Method"
+  },
+  {
+   "name": "Knowledge transfer across interactions via reusable skills",
+   "type": "Method"
+  },
+  {
+   "name": "End-to-end design of agents for new tasks",
+   "type": "Task"
+  },
+  {
+   "name": "Improved performance on benchmarks such as General AI Assistants and Humanity's Last Exam",
+   "type": "Metric"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Autonomous construction and adaptation of task-specific agents",
+   "target": "Continual learning without updating LLM parameters",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Autonomous construction and adaptation of task-specific agents",
+   "target": "Knowledge transfer across interactions via reusable skills",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Autonomous construction and adaptation of task-specific agents",
+   "target": "End-to-end design of agents for new tasks",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Continual learning without updating LLM parameters",
+   "target": "Improved performance on benchmarks such as General AI Assistants and Humanity's Last Exam",
+   "relation_type": "evaluates on"
+  },
+  {
+   "source": "Knowledge transfer across interactions via reusable skills",
+   "target": "Improved performance on benchmarks such as General AI Assistants and Humanity's Last Exam",
+   "relation_type": "evaluates on"
+  }
+ ]
+}

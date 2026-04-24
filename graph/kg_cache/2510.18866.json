@@ -1,0 +1,67 @@
+{
+ "entities": [
+  {
+   "name": "LLMs",
+   "type": "Model"
+  },
+  {
+   "name": "Historical interaction information",
+   "type": "Dataset"
+  },
+  {
+   "name": "Dynamic environments",
+   "type": "Environment"
+  },
+  {
+   "name": "QA accuracy",
+   "type": "Metric"
+  },
+  {
+   "name": "LongMemEval",
+   "type": "Benchmark"
+  },
+  {
+   "name": "LoCoMo benchmarks",
+   "type": "Benchmark"
+  },
+  {
+   "name": "Token usage during inference",
+   "type": "Performance Metric"
+  },
+  {
+   "name": "API calls during online test-time",
+   "type": "Performance Metric"
+  },
+  {
+   "name": "LLM memory systems",
+   "type": "System Architecture"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Enables LLMs to leverage historical interaction information in dynamic environments.",
+   "target": "LLMs",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Improves QA accuracy by up to 7.7% / 29.3% on LongMemEval and LoCoMo benchmarks.",
+   "target": "QA accuracy",
+   "relation_type": "evaluates on"
+  },
+  {
+   "source": "Reduces token usage during inference by up to 106x / 117x.",
+   "target": "Token usage during inference",
+   "relation_type": "reduces"
+  },
+  {
+   "source": "Minimizes API calls by up to 159x / 310x during online test-time.",
+   "target": "API calls during online test-time",
+   "relation_type": "reduces"
+  },
+  {
+   "source": "Balances performance and efficiency in LLM memory systems.",
+   "target": "LLM memory systems",
+   "relation_type": "is based on"
+  }
+ ]
+}

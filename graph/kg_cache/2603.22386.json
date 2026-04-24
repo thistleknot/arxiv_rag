@@ -1,0 +1,59 @@
+{
+ "entities": [
+  {
+   "name": "LLM-based systems",
+   "type": "Concept"
+  },
+  {
+   "name": "Executable workflows",
+   "type": "Concept"
+  },
+  {
+   "name": "Aging computation graphs (ACGs)",
+   "type": "Concept"
+  },
+  {
+   "name": "Reusable workflow scaffolds",
+   "type": "Concept"
+  },
+  {
+   "name": "Dynamic workflow generation and revision during execution",
+   "type": "Concept"
+  },
+  {
+   "name": "Graph-level properties",
+   "type": "Metric"
+  },
+  {
+   "name": "Execution metrics",
+   "type": "Metric"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Enables the design and optimization of executable workflows for LLM-based systems",
+   "target": "LLM-based systems",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Supports the creation of agentic computation graphs (ACGs) for complex task-solving",
+   "target": "LLM-based systems",
+   "relation_type": "supports"
+  },
+  {
+   "source": "Facilitates reusable workflow scaffolds for deployment",
+   "target": "LLM-based systems",
+   "relation_type": "facilitates"
+  },
+  {
+   "source": "Provides a framework for dynamic workflow generation and revision during execution",
+   "target": "LLM-based systems",
+   "relation_type": "provides"
+  },
+  {
+   "source": "Improves evaluation standards by incorporating graph-level properties and execution metrics",
+   "target": "LLM-based systems",
+   "relation_type": "improves"
+  }
+ ]
+}

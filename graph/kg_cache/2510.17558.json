@@ -1,0 +1,28 @@
+{
+ "entities": [
+  {
+   "name": "Generative Processes",
+   "type": "Method"
+  },
+  {
+   "name": "Random Latent Variables",
+   "type": "Dataset"
+  },
+  {
+   "name": "Downstream Tasks",
+   "type": "Task"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Generative Processes",
+   "target": "Random Latent Variables",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Generative Processes",
+   "target": "Downstream Tasks",
+   "relation_type": "evaluates on"
+  }
+ ]
+}

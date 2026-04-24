@@ -1,0 +1,51 @@
+{
+ "entities": [
+  {
+   "name": "LLMs",
+   "type": "Model"
+  },
+  {
+   "name": "Context",
+   "type": "Dataset"
+  },
+  {
+   "name": "Query",
+   "type": "Concept"
+  },
+  {
+   "name": "Zero-shot Accuracy",
+   "type": "Metric"
+  },
+  {
+   "name": "Personalized Chat Behavior",
+   "type": "Task"
+  }
+ ],
+ "relations": [
+  {
+   "source": "LLMs",
+   "target": "Context",
+   "relation_type": "uses"
+  },
+  {
+   "source": "LLMs",
+   "target": "Query",
+   "relation_type": "answers"
+  },
+  {
+   "source": "LLMs",
+   "target": "Context",
+   "relation_type": "reconsiders"
+  },
+  {
+   "source": "LLMs",
+   "target": "Context",
+   "relation_type": "overcomes"
+  },
+  {
+   "source": "LLMs",
+   "target": "Context",
+   "relation_type": "supports"
+  }
+ ]
+}

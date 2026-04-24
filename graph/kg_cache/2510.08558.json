@@ -1,0 +1,59 @@
+{
+ "entities": [
+  {
+   "name": "Agents",
+   "type": "Concept"
+  },
+  {
+   "name": "Learning",
+   "type": "Method"
+  },
+  {
+   "name": "Actions",
+   "type": "Concept"
+  },
+  {
+   "name": "Reward signals",
+   "type": "Metric"
+  },
+  {
+   "name": "Environment dynamics",
+   "type": "Concept"
+  },
+  {
+   "name": "World modeling",
+   "type": "Method"
+  },
+  {
+   "name": "Self-reflection",
+   "type": "Concept"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Agents",
+   "target": "Learning",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Agents",
+   "target": "Actions",
+   "relation_type": "outperforms"
+  },
+  {
+   "source": "Agents",
+   "target": "Environment dynamics",
+   "relation_type": "evaluates on"
+  },
+  {
+   "source": "Agents",
+   "target": "World modeling",
+   "relation_type": "is based on"
+  },
+  {
+   "source": "Agents",
+   "target": "Self-reflection",
+   "relation_type": "uses"
+  }
+ ]
+}

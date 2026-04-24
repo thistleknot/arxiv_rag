@@ -1,0 +1,45 @@
+{
+ "entities": [
+  {
+   "name": "Narrative-complete synthetic personas",
+   "type": "Concept"
+  },
+  {
+   "name": "LLMs",
+   "type": "Model"
+  },
+  {
+   "name": "Personalized question answering accuracy",
+   "type": "Metric"
+  },
+  {
+   "name": "Social surveys",
+   "type": "Dataset"
+  },
+  {
+   "name": "High-fidelity human simulation",
+   "type": "Platform"
+  },
+  {
+   "name": "AI personalization and behavioral simulation",
+   "type": "Task"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Narrative-complete synthetic personas",
+   "target": "LLMs",
+   "relation_type": "uses"
+  },
+  {
+   "source": "LLMs",
+   "target": "Personalized question answering accuracy",
+   "relation_type": "evaluates on"
+  },
+  {
+   "source": "Social surveys",
+   "target": "High-fidelity human simulation",
+   "relation_type": "outperforms"
+  }
+ ]
+}

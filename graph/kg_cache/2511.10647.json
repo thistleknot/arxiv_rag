@@ -1,0 +1,46 @@
+{
+ "entities": [
+  {
+   "name": "Predicting spatially consistent geometry from arbitrary visual inputs",
+   "type": "Task"
+  },
+  {
+   "name": "Handling inputs with or without known camera poses",
+   "type": "Input"
+  },
+  {
+   "name": "Improving camera pose estimation accuracy significantly",
+   "type": "Method"
+  },
+  {
+   "name": "Advancing geometric accuracy in visual rendering tasks",
+   "type": "Method"
+  },
+  {
+   "name": "Enhancing monocular depth estimation capabilities",
+   "type": "Method"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Predicting spatially consistent geometry from arbitrary visual inputs",
+   "target": "Handling inputs with or without known camera poses",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Predicting spatially consistent geometry from arbitrary visual inputs",
+   "target": "Improving camera pose estimation accuracy significantly",
+   "relation_type": "outperforms"
+  },
+  {
+   "source": "Predicting spatially consistent geometry from arbitrary visual inputs",
+   "target": "Advancing geometric accuracy in visual rendering tasks",
+   "relation_type": "evaluates on"
+  },
+  {
+   "source": "Predicting spatially consistent geometry from arbitrary visual inputs",
+   "target": "Enhancing monocular depth estimation capabilities",
+   "relation_type": "evaluates on"
+  }
+ ]
+}

@@ -1,0 +1,63 @@
+{
+ "entities": [
+  {
+   "name": "Autonomous thinking",
+   "type": "Concept"
+  },
+  {
+   "name": "Action execution",
+   "type": "Concept"
+  },
+  {
+   "name": "Single reasoning process",
+   "type": "Concept"
+  },
+  {
+   "name": "Efficient and stable general-purpose tool use",
+   "type": "Method"
+  },
+  {
+   "name": "Reinforcement learning",
+   "type": "Model"
+  },
+  {
+   "name": "Improved performance in labeled-tool and open-set tool retrieval scenarios",
+   "type": "Metric"
+  },
+  {
+   "name": "Reduction of error accumulation in long-horizon interactions",
+   "type": "Metric"
+  },
+  {
+   "name": "Enhanced task completion in general tool-use and downstream applications",
+   "type": "Task"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Autonomous thinking",
+   "target": "Single reasoning process",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Efficient and stable general-purpose tool use",
+   "target": "Reinforcement learning",
+   "relation_type": "is based on"
+  },
+  {
+   "source": "Improved performance in labeled-tool and open-set tool retrieval scenarios",
+   "target": "Task",
+   "relation_type": "evaluates on"
+  },
+  {
+   "source": "Reduction of error accumulation in long-horizon interactions",
+   "target": "Task",
+   "relation_type": "evaluates on"
+  },
+  {
+   "source": "Enhanced task completion in general tool-use and downstream applications",
+   "target": "Task",
+   "relation_type": "evaluates on"
+  }
+ ]
+}

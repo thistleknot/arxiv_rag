@@ -1,0 +1,41 @@
+{
+ "entities": [
+  {
+   "name": "Automates end-to-end data science tasks",
+   "type": "Task"
+  },
+  {
+   "name": "Handles dynamic data adjustments and evolving task dependencies",
+   "type": "Task"
+  },
+  {
+   "name": "Improves code generation results and robustness through iterative refinement",
+   "type": "Method"
+  },
+  {
+   "name": "Achieves significant performance boosts in machine learning and open-ended tasks",
+   "type": "Metric"
+  },
+  {
+   "name": "Performs exceptionally well on mathematical problem-solving datasets",
+   "type": "Dataset"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Automates end-to-end data science tasks",
+   "target": "Improves code generation results and robustness through iterative refinement",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Handles dynamic data adjustments and evolving task dependencies",
+   "target": "Achieves significant performance boosts in machine learning and open-ended tasks",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Improves code generation results and robustness through iterative refinement",
+   "target": "Performs exceptionally well on mathematical problem-solving datasets",
+   "relation_type": "evaluates on"
+  }
+ ]
+}

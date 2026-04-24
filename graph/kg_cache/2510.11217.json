@@ -1,0 +1,67 @@
+{
+ "entities": [
+  {
+   "name": "Domain-grounded question-answering",
+   "type": "Task"
+  },
+  {
+   "name": "QAC triples",
+   "type": "Dataset"
+  },
+  {
+   "name": "RAG components",
+   "type": "Model"
+  },
+  {
+   "name": "LLMs",
+   "type": "Model"
+  },
+  {
+   "name": "Retrievers",
+   "type": "Model"
+  },
+  {
+   "name": "Embedding models",
+   "type": "Model"
+  },
+  {
+   "name": "Distractor contexts",
+   "type": "Context"
+  },
+  {
+   "name": "Large and evolving document corpora",
+   "type": "Dataset"
+  },
+  {
+   "name": "Dynamic domains",
+   "type": "Domain"
+  }
+ ],
+ "relations": [
+  {
+   "source": "Enables domain-grounded question-answering",
+   "target": "QAC triples",
+   "relation_type": "supports"
+  },
+  {
+   "source": "Supports optimization of RAG components like LLMs, retrievers, and embedding models.",
+   "target": "RAG systems",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Facilitates robust reasoning through curated distractor contexts.",
+   "target": "RAG systems",
+   "relation_type": "uses"
+  },
+  {
+   "source": "Efficiently processes large and evolving document corpora.",
+   "target": "Document corpora",
+   "relation_type": "supports"
+  },
+  {
+   "source": "Adapts RAG systems to dynamic domains like scientific research and enterprise knowledge bases.",
+   "target": "Dynamic domains",
+   "relation_type": "uses"
+  }
+ ]
+}
