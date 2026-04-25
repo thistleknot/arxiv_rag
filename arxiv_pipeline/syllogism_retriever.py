@@ -432,7 +432,7 @@ class _LatencyTracker:
         mad = float(np.median([abs(v - med) for v in log_vals]))
         if mad == 0.0:
             return False, 0.0
-        threshold = math.exp(med + 3.0 * mad)
+        threshold = math.exp(med + 2.0 * mad)
         return secs > threshold, threshold
 
 
