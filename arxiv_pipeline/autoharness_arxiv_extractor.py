@@ -52,6 +52,8 @@ MEMORY_LOG     = WORK_DIR / "memory.jsonl"
 PROGRESS_MD    = WORK_DIR / "progress.md"
 CORRECTIONS_MD = WORK_DIR / "corrections.md"
 EVIDENCE_MD    = WORK_DIR / "evidence.md"
+AUTONOMY_MD    = WORK_DIR / "autonomy.md"
+TASK_MD        = WORK_DIR / "task.md"
 
 PROXY_BASE  = "http://127.0.0.1:8069/v1"
 PROXY_KEY   = "dummy-key"
@@ -415,6 +417,22 @@ def main() -> None:
         prior_corrections = CORRECTIONS_MD.read_text(encoding="utf-8").strip()
         if prior_corrections:
             print(f"[STARTUP] Prior corrections found in {CORRECTIONS_MD.name} — injecting into diagnosis context")
+
+    if AUTONOMY_MD.exists():
+        autonomy_text = AUTONOMY_MD.read_text(encoding="utf-8").strip()
+        if autonomy_text:
+            print(f"[STARTUP] Standing autonomy tiers loaded from {AUTONOMY_MD.name}")
+
+    if not TASK_MD.exists():
+        TASK_MD.write_text(
+            f"# Task Execution Contract\n\n"
+            f"Started: {datetime.now().isoformat(timespec='seconds')}\n"
+            f"Goal: Extract {TOTAL_GAP} gap papers from arxiv corpus\n"
+            f"Extractor: {EXTRACTOR}\n"
+            f"State: {STATE_FILE}\n",
+            encoding="utf-8",
+        )
+        print(f"[STARTUP] Task contract written to {TASK_MD.name}")
 
     consecutive_errors = 0
     applied_fix_keys: list[str] = []

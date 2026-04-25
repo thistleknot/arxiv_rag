@@ -61,12 +61,15 @@ class MemoryPage:
     intent:               str       = ""
     constraints:          List[str] = field(default_factory=list)
     entity_bag:           List[str] = field(default_factory=list)
-    fit_score:            float     = 0.5
-    read_count:           int       = 0
-    confirmed_read_count: int       = 0
-    update_count:         int       = 0
-    wiki_summary:         str       = ""
-    embedding_ref:        str       = ""
+    fit_score:             float        = 0.5
+    read_count:            int          = 0
+    confirmed_read_count:  int          = 0
+    update_count:          int          = 0
+    wiki_summary:          str          = ""
+    embedding_ref:         str          = ""
+    bm25_text:             str          = ""
+    triplet_sequence_text: str          = ""
+    cluster_id:            Optional[str] = None
 
 
 @dataclass
@@ -221,9 +224,15 @@ class MemoryStore:
         Returns the page_id with the highest dot-product similarity >= PAGE_EMBED_SIM_TAU,
         or None when no stored page meets the threshold.
         """
-        rows = self._conn.execute(
-            "SELECT page_id, goal_embedding FROM memory_pages"
-        ).fetchall()
+        if domain:
+            rows = self._conn.execute(
+                "SELECT page_id, goal_embedding FROM memory_pages WHERE domain=?",
+                (domain,),
+            ).fetchall()
+        else:
+            rows = self._conn.execute(
+                "SELECT page_id, goal_embedding FROM memory_pages"
+            ).fetchall()
         best_id, best_sim = None, PAGE_EMBED_SIM_TAU
         for row in rows:
             emb_blob = row["goal_embedding"]
@@ -236,6 +245,42 @@ class MemoryStore:
             if sim > best_sim:
                 best_sim, best_id = sim, row["page_id"]
         return best_id
+
+    def get_page(self, page_id: str) -> Optional[MemoryPage]:
+        """Load a MemoryPage from the DB by its page_id, or None if not found.
+
+        Precondition: page_id is a valid hex UUID string.
+        Failure mode: returns None on a missing row; never raises.
+        """
+        row = self._conn.execute(
+            """
+            SELECT page_id, goal, domain, intent, constraints, entity_bag,
+                   fit_score, read_count, confirmed_read_count, update_count,
+                   wiki_summary, embedding_ref,
+                   bm25_text, triplet_sequence_text, cluster_id
+            FROM memory_pages WHERE page_id=?
+            """,
+            (page_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        return MemoryPage(
+            page_id=row["page_id"],
+            goal=row["goal"],
+            domain=row["domain"],
+            intent=row["intent"],
+            constraints=json.loads(row["constraints"] or "[]"),
+            entity_bag=json.loads(row["entity_bag"] or "[]"),
+            fit_score=row["fit_score"],
+            read_count=row["read_count"],
+            confirmed_read_count=row["confirmed_read_count"],
+            update_count=row["update_count"],
+            wiki_summary=row["wiki_summary"] or "",
+            embedding_ref=row["embedding_ref"] or "",
+            bm25_text=row["bm25_text"] or "",
+            triplet_sequence_text=row["triplet_sequence_text"] or "",
+            cluster_id=row["cluster_id"],
+        )
 
     def create_page(
         self,

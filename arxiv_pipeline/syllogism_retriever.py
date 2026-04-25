@@ -41,11 +41,14 @@ from __future__ import annotations
 
 import argparse
 import ast
+import collections
 import csv
 import json
+import math
 import pathlib
 import re
 import sys
+import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -394,6 +397,48 @@ def _norm_arxiv_id(v: str) -> str:
     return str(v).strip().strip('"')
 
 
+# ── Latency tracking ─────────────────────────────────────────────────────────
+
+class _LatencyTracker:
+    """Per-model log-space latency outlier detector.
+
+    Records response times for each model name and flags unusually slow calls
+    using log-space median + MAD.  Logs a warning only; never blocks execution.
+
+    Precondition: record() called only on successful completions.
+    Failure mode: silently skipped when fewer than 5 samples or MAD == 0.
+    """
+
+    def __init__(self, window: int = 50) -> None:
+        self._windows: Dict[str, collections.deque] = {}
+        self._window_size = window
+
+    def record(self, model: str, secs: float) -> None:
+        """Append a successful call duration (seconds) for model."""
+        if model not in self._windows:
+            self._windows[model] = collections.deque(maxlen=self._window_size)
+        self._windows[model].append(secs)
+
+    def check_outlier(self, model: str, secs: float) -> Tuple[bool, float]:
+        """Return (is_outlier, threshold) via log-space median+MAD.
+
+        Returns (False, 0.0) when fewer than 5 samples or MAD is zero.
+        """
+        buf = self._windows.get(model)
+        if not buf or len(buf) < 5:
+            return False, 0.0
+        log_vals = [math.log(max(v, 1e-9)) for v in buf]
+        med = float(np.median(log_vals))
+        mad = float(np.median([abs(v - med) for v in log_vals]))
+        if mad == 0.0:
+            return False, 0.0
+        threshold = math.exp(med + 3.0 * mad)
+        return secs > threshold, threshold
+
+
+_lat_tracker = _LatencyTracker()
+
+
 # ── Orchestrator ──────────────────────────────────────────────────────────────
 
 class SyllogismRetriever:
@@ -450,7 +495,7 @@ class SyllogismRetriever:
                 self._nli_graph = None
 
         # httpx client for through-line LLM call
-        self._llm_client = httpx.Client(base_url=OLLAMA_BASE, timeout=600.0)
+        self._llm_client = httpx.Client(base_url=OLLAMA_BASE, timeout=300.0)
 
         # Sentence-transformer for semantic utility index search (lazy)
         self._embedder = None
@@ -859,8 +904,14 @@ class SyllogismRetriever:
                     "think":   False,
                     "options": {"num_predict": 1024, "temperature": 0.0},
                 }
+                _t0 = time.perf_counter()
                 resp = self._llm_client.post("/api/generate", json=payload)
                 resp.raise_for_status()
+                _elapsed = time.perf_counter() - _t0
+                _lat_tracker.record(THROUGHLINE_MODEL, _elapsed)
+                _slow, _thr = _lat_tracker.check_outlier(THROUGHLINE_MODEL, _elapsed)
+                if _slow:
+                    print(f"[stage 8] latency outlier: {_elapsed:.1f}s > {_thr:.1f}s (model={THROUGHLINE_MODEL})")
                 angle = _strip_think(resp.json().get("response", ""))
                 result.paper_angles[pid] = angle
 
@@ -880,8 +931,14 @@ class SyllogismRetriever:
                     "think":   False,
                     "options": {"num_predict": 512, "temperature": 0.2},
                 }
+                _t0 = time.perf_counter()
                 resp = self._llm_client.post("/api/generate", json=payload)
                 resp.raise_for_status()
+                _elapsed = time.perf_counter() - _t0
+                _lat_tracker.record(THROUGHLINE_MODEL, _elapsed)
+                _slow, _thr = _lat_tracker.check_outlier(THROUGHLINE_MODEL, _elapsed)
+                if _slow:
+                    print(f"[stage 8] latency outlier: {_elapsed:.1f}s > {_thr:.1f}s (model={THROUGHLINE_MODEL})")
                 result.decision_tree = _strip_think(resp.json().get("response", ""))
         except Exception as exc:
             if self._verbose:
