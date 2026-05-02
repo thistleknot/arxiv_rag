@@ -496,8 +496,88 @@ def _load_best_params() -> dict:
     return {}
 
 
-def run_retrieval(query: str, n_papers: int, top_k: int, output: str, extract: bool = False) -> None:
-    """Run the 9-stage syllogism retriever and write the markdown report."""
+def _bridge_and_inject(query: str, top_n_derive: int = 5) -> list:
+    """
+    Run arXiv bridge search, append novel papers to CSV, return pre_selected list.
+
+    Preconditions:
+        arxiv_bridge module importable from _ROOT.
+        copilot-proxy running (for LLM utility derivation of novel papers).
+    Postconditions:
+        Novel papers with LLM-derived utility are appended to the master CSV so
+        SyllogismRetriever._load_csv_rows() can find them on the next init.
+        Returns list of (arxiv_id, relevance_score) for ALL bridge results.
+    Failure modes:
+        bridge_search returns [] → returns []; caller falls back to pgvector/standalone.
+        CSV append fails → logged, retrieval continues with papers already in CSV.
+    """
+    import json as _json
+    import csv as _csv_mod
+
+    sys.path.insert(0, str(_ROOT))
+    from arxiv_bridge import bridge_search  # noqa: E402
+
+    print("\n  [bridge] Searching upstream arXiv sources...")
+    results = bridge_search(query, limit=20, top_n_derive=top_n_derive)
+    if not results:
+        print("  [bridge] No upstream results — using local sources only.")
+        return []
+
+    # Append novel+complete papers to CSV so the retriever can see them
+    novel_written = 0
+    existing_ids: set[str] = set()
+    try:
+        with open(_CSV, encoding="utf-8", newline="") as fh:
+            for row in _csv_mod.DictReader(fh):
+                existing_ids.add(row.get("arxiv_id", "").strip().strip('"'))
+    except Exception:
+        pass
+
+    to_append = [r for r in results
+                 if not r.local and r.is_complete and r.arxiv_id not in existing_ids]
+    if to_append:
+        try:
+            with open(_CSV, "a", encoding="utf-8", newline="") as fh:
+                writer = _csv_mod.writer(fh)
+                for r in to_append:
+                    writer.writerow([
+                        r.arxiv_id,
+                        r.title,
+                        r.abstract,
+                        _json.dumps(r.utility),
+                        _json.dumps(r.barriers),
+                        r.thesis,
+                        True,
+                    ])
+            novel_written = len(to_append)
+            print(f"  [bridge] Appended {novel_written} novel paper(s) to corpus CSV.")
+        except Exception as exc:
+            print(f"  [bridge] WARNING: CSV append failed ({exc}); novel papers skipped.")
+
+    local_count   = sum(1 for r in results if r.local)
+    novel_count   = len(results) - local_count
+    print(f"  [bridge] {len(results)} results: {local_count} local, "
+          f"{novel_count} novel ({novel_written} added to CSV, "
+          f"{novel_count - novel_written} text-only or cached)")
+
+    return [(r.arxiv_id, r.relevance_score) for r in results]
+
+
+def run_retrieval(
+    query: str,
+    n_papers: int,
+    top_k: int,
+    output: str,
+    extract: bool = False,
+    bridge: bool = False,
+    bridge_derive: int = 5,
+) -> None:
+    """Run the 9-stage syllogism retriever and write the markdown report.
+
+    If bridge=True, upstream arXiv/S2 results are fetched first, novel papers
+    are appended to the corpus CSV, and all results feed into pre_selected so
+    the retriever can rank them alongside local papers.
+    """
     print("\n" + "=" * 60)
     print("STAGE 2 — Syllogism retrieval")
     print("=" * 60)
@@ -515,14 +595,38 @@ def run_retrieval(query: str, n_papers: int, top_k: int, output: str, extract: b
     else:
         print("  Blend    : default (best_retriever_params.json not found)")
 
+    # Optional: upstream arXiv bridge (must run BEFORE SyllogismRetriever init
+    # so appended CSV rows are visible when _load_csv_rows() fires in __init__)
+    bridge_pre_selected: list = []
+    if bridge:
+        bridge_pre_selected = _bridge_and_inject(query, top_n_derive=bridge_derive)
+
     # pgvector candidate pool — use the tuned top_k from best_retriever_params (or 13).
     # This is deliberately larger than the final top_k to give the syllogism pipeline
     # enough candidates to rerank from.
     pgvector_top_k = best.get("top_k", 13)
-    pre_selected = _try_pgvector_retrieval(query, pgvector_top_k)
-    if pre_selected:
-        print(f"  Source   : 3-layer pgvector retriever ({len(pre_selected)} candidates → top {top_k})")
+    pgvec_pre_selected = _try_pgvector_retrieval(query, pgvector_top_k)
+
+    # Merge: pgvector takes priority (higher signal), bridge fills in the rest
+    if bridge_pre_selected or pgvec_pre_selected:
+        seen: set[str] = set()
+        pre_selected: list = []
+        for aid, score in (pgvec_pre_selected or []):
+            if aid not in seen:
+                seen.add(aid)
+                pre_selected.append((aid, score))
+        for aid, score in bridge_pre_selected:
+            if aid not in seen:
+                seen.add(aid)
+                pre_selected.append((aid, score))
+        if pgvec_pre_selected:
+            print(f"  Source   : pgvector ({len(pgvec_pre_selected)}) + "
+                  f"bridge ({len(bridge_pre_selected)}) → "
+                  f"{len(pre_selected)} merged candidates → top {top_k}")
+        else:
+            print(f"  Source   : bridge only ({len(pre_selected)} candidates → top {top_k})")
     else:
+        pre_selected = None
         print(f"  Source   : standalone cosine search (n_papers={n_papers})")
 
     from arxiv_pipeline.syllogism_retriever import SyllogismRetriever
@@ -568,8 +672,13 @@ def main() -> None:
     ap.add_argument("--dry_run",      action="store_true",
                     help="Show warmup plan only; do not warm or retrieve")
     ap.add_argument("--extract",      action="store_true",
-                    help=f"Run on-demand PDF extraction for top {EXTRACT_TOP_N} papers "
+                    help=f"Run on-demand PDF extraction for top papers "
                          f"(Phase 5 ~20s if MD cached; full pipeline ~6 min if not)")
+    ap.add_argument("--bridge",       action="store_true",
+                    help="Augment with upstream arXiv/S2 search; novel papers are LLM-derived "
+                         "and appended to corpus before retrieval")
+    ap.add_argument("--bridge_derive", type=int, default=5,
+                    help="Max novel papers to run LLM utility derivation on (default: 5)")
     args = ap.parse_args()
 
     if args.combine:
@@ -593,11 +702,13 @@ def main() -> None:
         run_warmup(limit=args.warmup_limit, dry_run=False)
 
     run_retrieval(
-        query    = args.query,
-        n_papers = args.n_papers,
-        top_k    = args.top_k,
-        output   = args.output,
-        extract  = args.extract,
+        query        = args.query,
+        n_papers     = args.n_papers,
+        top_k        = args.top_k,
+        output       = args.output,
+        extract      = args.extract,
+        bridge       = args.bridge,
+        bridge_derive= args.bridge_derive,
     )
 
 
