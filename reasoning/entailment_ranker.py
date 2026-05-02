@@ -27,6 +27,20 @@ from typing import Dict, List, Optional, Tuple
 
 from reasoning.syllogism_former import ChainLink, SyllogismResult
 
+_ROOT_ER = __import__("pathlib").Path(__file__).resolve().parent.parent
+if str(_ROOT_ER) not in sys.path:
+    sys.path.insert(0, str(_ROOT_ER))
+try:
+    from constants import (  # type: ignore
+        AGENT_ENTAILMENT_WEIGHT,
+        AGENT_RETRIEVAL_WEIGHT,
+        AGENT_CONFIDENCE_WEIGHT,
+    )
+except ImportError:
+    AGENT_ENTAILMENT_WEIGHT = 0.5
+    AGENT_RETRIEVAL_WEIGHT  = 0.3
+    AGENT_CONFIDENCE_WEIGHT = 0.2
+
 # Import RetrievedDoc from its canonical location
 try:
     from retrieval.gist_retriever import RetrievedDoc
@@ -50,8 +64,10 @@ except ImportError:
         cross_encoder_score: Optional[float] = None
         final_score: Optional[float] = None
 
-ENTAILMENT_WEIGHT = 0.5
-RETRIEVAL_WEIGHT  = 0.5
+# Module-level defaults (imported from constants; kept for backward-compat import)
+ENTAILMENT_WEIGHT  = AGENT_ENTAILMENT_WEIGHT
+RETRIEVAL_WEIGHT   = AGENT_RETRIEVAL_WEIGHT
+CONFIDENCE_WEIGHT  = AGENT_CONFIDENCE_WEIGHT
 
 
 def _get_paper_id(doc: RetrievedDoc) -> str:
@@ -80,35 +96,54 @@ class EntailmentRanker:
     """
     Re-ranks RetrievedDocs by blending retrieval score with syllogism necessity.
 
+    3-way blend (tuned weights from best_config_id=8):
+        final = entailment_weight * judge_score
+              + retrieval_weight  * norm_retrieval_score
+              + confidence_weight * nli_cross_encoder_score
+
+    Weights map to composite_weights:
+        entailment_weight  = geo_alpha      (LLM judge selection quality)
+        retrieval_weight   = selection_prec (initial retrieval rank precision)
+        confidence_weight  = confidence_bonus (cross-encoder max entailment prob)
+
     Usage:
         ranker = EntailmentRanker()
-        reranked = ranker.rerank(docs, syllogism_result)
+        reranked = ranker.rerank(docs, syllogism_result, nli_scores)
     """
 
     def __init__(
         self,
         entailment_weight: float = ENTAILMENT_WEIGHT,
         retrieval_weight:  float = RETRIEVAL_WEIGHT,
+        confidence_weight: float = CONFIDENCE_WEIGHT,
         verbose: bool = False,
     ):
         self._ew = entailment_weight
         self._rw = retrieval_weight
+        self._cw = confidence_weight
         self._verbose = verbose
 
     def rerank(
         self,
-        docs:   List[RetrievedDoc],
-        result: SyllogismResult,
+        docs:       List[RetrievedDoc],
+        result:     SyllogismResult,
+        nli_scores: Optional[Dict[str, float]] = None,
     ) -> List[RetrievedDoc]:
         """
-        Re-rank docs using syllogism necessity scores.
+        Re-rank docs using a 3-way blend of judge score, retrieval score, and NLI confidence.
 
-        All docs are ranked by blend score descending (no hard chain/nonchain partition):
-            blend = entailment_weight * entailment_score + retrieval_weight * norm_retrieval_score
+        blend = entailment_weight * judge_score
+              + retrieval_weight  * norm_retrieval_score
+              + confidence_weight * nli_cross_encoder_score
 
-        Papers with no entailment score (not in paper_scores) get entailment_score=0.0,
-        so they naturally rank below papers the judge selected, but can still appear in
-        top results if their retrieval score is sufficiently strong.
+        Papers absent from paper_scores get judge_score=0.0 (rank below judge selections).
+        Papers absent from nli_scores get nli_score=0.0.
+
+        Args:
+            docs:       Candidate RetrievedDoc list from Stage 1.
+            result:     SyllogismResult with paper_scores (judge position weights).
+            nli_scores: Optional dict of arxiv_id → cross-encoder max entailment probability.
+                        When provided, adds the confidence_bonus component to the blend.
 
         Returns:
             New list of RetrievedDoc with updated final_score, sorted descending.
@@ -116,6 +151,7 @@ class EntailmentRanker:
         if not docs:
             return docs
 
+        _nli = nli_scores or {}
         norm = _norm_final_score(docs)
         paper_scores = result.paper_scores
 
@@ -125,19 +161,24 @@ class EntailmentRanker:
             paper_id = _get_paper_id(d)
             entailment_score = paper_scores.get(paper_id, 0.0)
             retrieval_score  = norm.get(d.doc_id, 0.0)
-            blended = self._ew * entailment_score + self._rw * retrieval_score
+            nli_conf         = _nli.get(paper_id, 0.0)
+            blended = (
+                self._ew * entailment_score
+                + self._rw * retrieval_score
+                + self._cw * nli_conf
+            )
 
             if self._verbose:
                 in_chain = paper_id in paper_scores
                 marker = "*" if in_chain else " "
                 print(
                     f"  {marker} {paper_id}: entail={entailment_score:.3f} "
-                    f"retr={retrieval_score:.3f} -> blend={blended:.3f}"
+                    f"retr={retrieval_score:.3f} nli_conf={nli_conf:.3f} -> blend={blended:.3f}"
                 )
 
-            # Overwrite final_score with blended value; preserve original in metadata
             d.metadata["original_final_score"] = doc.final_score
             d.metadata["entailment_score"]      = entailment_score
+            d.metadata["nli_confidence"]         = nli_conf
             d.metadata["blended_score"]          = blended
             d.final_score = blended
             scored.append((blended, d))

@@ -66,7 +66,11 @@ _ROOT = _pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_ROOT))
 
 # ── Local imports ─────────────────────────────────────────────────────────────
-from constants import BLEND_WEIGHTS, OLLAMA_BASE, THROUGHLINE_MODEL, TRIPLET_REINFORCE_TAU
+from constants import (
+    BLEND_WEIGHTS, OLLAMA_BASE, THROUGHLINE_MODEL, TRIPLET_REINFORCE_TAU,
+    AGENT_TOP_K, AGENT_TEMPERATURE, AGENT_TOP_P, AGENT_REPEAT_PENALTY,
+    AGENT_CONTEXT_BUDGET, AGENT_ABSTENTION_TAU,
+)
 from reasoning.syllogism_former import ChainLink, SyllogismFormer, SyllogismResult
 from reasoning.entailment_ranker import EntailmentRanker
 from reasoning.intent_extractor import IntentExtractor, ObjectiveFunction
@@ -795,7 +799,7 @@ class SyllogismRetriever:
                 print(f"[stage 4] Syllogism forming failed: {e}")
             syllogism = SyllogismResult(thesis="", chain=[], paper_scores={})
         try:
-            result.papers = self._ranker.rerank(candidates, syllogism)  # type: ignore[arg-type]
+            result.papers = self._ranker.rerank(candidates, syllogism, nli_scores=result.nli_scores)  # type: ignore[arg-type]
         except Exception as e:
             if self._verbose:
                 print(f"[stage 5] Rerank failed: {e}")
@@ -879,22 +883,39 @@ class SyllogismRetriever:
         if self._verbose:
             print(f"[stage 8] LLM through-line synthesis ({len(result.papers)} papers)...")
         try:
-            # Per-paper angle extraction (MAP phase: 1024 tokens each)
-            for doc in result.papers[:top_k]:
+            # Abstention: skip papers whose cross-encoder NLI score is below threshold.
+            # Always keep at least one paper even if all are below the threshold.
+            papers_for_synthesis = [
+                doc for doc in result.papers[:top_k]
+                if result.nli_scores.get(
+                    doc.metadata.get("paper_id", doc.doc_id), 1.0
+                ) >= AGENT_ABSTENTION_TAU
+            ] or result.papers[:1]
+
+            # Per-paper angle extraction (MAP phase).
+            # context_budget: last AGENT_CONTEXT_BUDGET chars of prior paper's angle
+            # are injected into each subsequent paper's prompt for continuity.
+            running_context = ""
+            for doc in papers_for_synthesis:
                 pid      = doc.metadata.get("paper_id", doc.doc_id)
                 title    = doc.metadata.get("title", "")
                 abstract = doc.metadata.get("abstract", "")
                 utility  = doc.metadata.get("utility", "")
-                # Include NLI-ranked KG premises if available for this paper
                 premises = result.graph_premises.get(pid, [])
                 premises_block = ""
                 if premises:
                     premises_block = "\n\nKnowledge Graph Premises (NLI-ranked):\n" + "\n".join(
                         f"- {p}" for p in premises
                     )
+                context_block = ""
+                if running_context:
+                    context_block = (
+                        "\n\nPrior analysis context:\n"
+                        + running_context[-AGENT_CONTEXT_BUDGET:]
+                    )
                 user_msg = (
                     f"/no_think\n\nTitle: {title}\n\nAbstract: {abstract}"
-                    f"\n\nUtility: {utility}{premises_block}"
+                    f"\n\nUtility: {utility}{premises_block}{context_block}"
                 )
                 payload  = {
                     "model":   THROUGHLINE_MODEL,
@@ -902,7 +923,12 @@ class SyllogismRetriever:
                     "prompt":  user_msg,
                     "stream":  False,
                     "think":   False,
-                    "options": {"num_predict": 1024, "temperature": 0.0},
+                    "options": {
+                        "num_predict":    1024,
+                        "temperature":    AGENT_TEMPERATURE,
+                        "top_p":          AGENT_TOP_P,
+                        "repeat_penalty": AGENT_REPEAT_PENALTY,
+                    },
                 }
                 _t0 = time.perf_counter()
                 resp = self._llm_client.post("/api/generate", json=payload)
@@ -914,6 +940,7 @@ class SyllogismRetriever:
                     print(f"[stage 8] latency outlier: {_elapsed:.1f}s > {_thr:.1f}s (model={THROUGHLINE_MODEL})")
                 angle = _strip_think(resp.json().get("response", ""))
                 result.paper_angles[pid] = angle
+                running_context = angle  # carry forward for next paper's context_budget
 
             # Capstone: literal concatenation of per-paper pseudocode extractions (no LLM call)
             if result.paper_angles:
@@ -929,7 +956,12 @@ class SyllogismRetriever:
                     "prompt":  f"/no_think\n\nQuery: {result.query}\n\nPseudocode extractions:\n{angles_text}",
                     "stream":  False,
                     "think":   False,
-                    "options": {"num_predict": 512, "temperature": 0.2},
+                    "options": {
+                        "num_predict":    512,
+                        "temperature":    AGENT_TEMPERATURE,
+                        "top_p":          AGENT_TOP_P,
+                        "repeat_penalty": AGENT_REPEAT_PENALTY,
+                    },
                 }
                 _t0 = time.perf_counter()
                 resp = self._llm_client.post("/api/generate", json=payload)

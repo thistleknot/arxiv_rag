@@ -32,6 +32,7 @@ import csv
 import ast
 import json
 import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -41,6 +42,8 @@ _ROOT   = Path(__file__).resolve().parent.parent
 _CSV    = _ROOT / "papers" / "post_processed" / "arxiv_data_with_analysis_cleaned.csv"
 _KG_DIR = _ROOT / "graph" / "kg_cache"
 sys.path.insert(0, str(_ROOT))  # ensure arxiv_id_lists/ on path for graph.*, reasoning.*, arxiv_pipeline.*
+
+from constants import AGENT_TOP_K  # noqa: E402  (import after sys.path fixup)
 
 
 # ── Helpers (mirrored from warm_kg_cache.py) ──────────────────────────────────
@@ -204,8 +207,28 @@ def combine_reports(input_paths: list, output: str) -> None:
 
 
 
+def _pgvec_id_to_csv_id(pid: str) -> str:
+    """Normalize a pgvector paper_id to the CSV arxiv_id format.
+
+    pgvector stores IDs as YYMM_NNNNN (underscore separator, optional vN suffix).
+    The utility CSV uses YYMM.NNNNN (dot separator, no version suffix).
+
+    Examples:
+        "2502_12110"    → "2502.12110"
+        "2403_19889v1"  → "2403.19889"
+        "ISLP"          → "ISLP"  (non-standard IDs pass through unchanged)
+    """
+    pid = re.sub(r'v\d+$', '', pid)                     # strip version suffix
+    pid = re.sub(r'^(\d{4})_(\d)', r'\1.\2', pid)       # YYMM_N → YYMM.N
+    return pid
+
+
 def _try_pgvector_retrieval(query: str, top_k: int):
     """Attempt to retrieve top_k papers via the 3-layer φ-scaled pgvector pipeline.
+
+    top_k here is the candidate pool size for the pgvector retriever — intentionally
+    larger than the final AGENT_TOP_K to give the syllogism pipeline enough candidates
+    to filter from.
 
     Returns list of (arxiv_id, score) tuples if successful, None if unavailable.
     Only falls back on availability errors; unexpected exceptions are re-raised.
@@ -224,7 +247,10 @@ def _try_pgvector_retrieval(query: str, top_k: int):
         )
         retriever = ArxivRetriever(config)
         results = retriever.search(query, top_k=top_k)
-        return [(r.doc_id, float(getattr(r, "final_score", None) or 0.5)) for r in results]
+        return [
+            (_pgvec_id_to_csv_id(r.doc_id), float(getattr(r, "final_score", None) or 0.5))
+            for r in results
+        ]
     except (ImportError, ModuleNotFoundError) as e:
         print(f"  [L1-L3] Modules unavailable — using standalone fallback: {e}")
         return None
@@ -265,14 +291,18 @@ def run_retrieval(query: str, n_papers: int, top_k: int, output: str) -> None:
     blend_weights = best.get("blend_weights") or None
     if blend_weights:
         print(f"  Blend    : {blend_weights}  (from best_retriever_params.json)")
-        if "n_papers" in best and n_papers == 13:
+        if "n_papers" in best and n_papers == AGENT_TOP_K:
             n_papers = best["n_papers"]
     else:
         print("  Blend    : default (best_retriever_params.json not found)")
 
-    pre_selected = _try_pgvector_retrieval(query, top_k)
+    # pgvector candidate pool — use the tuned top_k from best_retriever_params (or 13).
+    # This is deliberately larger than the final top_k to give the syllogism pipeline
+    # enough candidates to rerank from.
+    pgvector_top_k = best.get("top_k", 13)
+    pre_selected = _try_pgvector_retrieval(query, pgvector_top_k)
     if pre_selected:
-        print(f"  Source   : 3-layer pgvector retriever ({len(pre_selected)} papers)")
+        print(f"  Source   : 3-layer pgvector retriever ({len(pre_selected)} candidates → top {top_k})")
     else:
         print(f"  Source   : standalone cosine search (n_papers={n_papers})")
 
@@ -298,10 +328,10 @@ def main() -> None:
     )
     ap.add_argument("query",          nargs="?",  default="",
                     help="Retrieval query (required unless --dry_run)")
-    ap.add_argument("--top_k",        type=int,   default=13,
-                    help="Papers to return (default: 13)")
-    ap.add_argument("--n_papers",     type=int,   default=13,
-                    help="Standalone fallback candidate pool size (default: 13). "
+    ap.add_argument("--top_k",        type=int,   default=AGENT_TOP_K,
+                    help=f"Final papers to return from syllogism pipeline (default: {AGENT_TOP_K})")
+    ap.add_argument("--n_papers",     type=int,   default=AGENT_TOP_K,
+                    help="Standalone fallback candidate pool size (default: AGENT_TOP_K). "
                          "Ignored when pgvector 3-layer retriever is available.")
     ap.add_argument("--output",       type=str,   default="_report.md",
                     help="Output markdown file (default: _report.md)")

@@ -1,0 +1,39 @@
+{
+  "best_config_id": 8,
+  "source": "lifted from finance repo best_config_id=8; semantics re-mapped to arxiv SyllogismRetriever",
+  "tune_delta": 0.013766300000000009,
+  "holdout_delta": 0.054143186535408866,
+  "params": {
+    "retrieval_depth": 5,
+    "reranking": "llm_judge",
+    "context_budget": 512,
+    "planning_depth": 1,
+    "verification_passes": 0,
+    "temperature": 0.0,
+    "top_p": 0.9,
+    "frequency_penalty": 0.7,
+    "repeat_penalty_ollama": 1.3,
+    "abstention_policy": "exclude_if_low",
+    "abstention_tau": 0.3
+  },
+  "composite_weights": {
+    "entailment_weight": 0.5,
+    "retrieval_weight": 0.3,
+    "confidence_weight": 0.2
+  },
+  "mapping_notes": {
+    "retrieval_depth": "top_k in SyllogismRetriever.retrieve() — per-paper Stage 8 loop iterations; pgvector candidate pool stays at best_retriever_params.top_k",
+    "reranking": "NLI LLM judge (Stage 3) + EntailmentRanker 3-way blend (Stage 5) — already implemented",
+    "context_budget": "chars of prior paper's angle injected into next paper's Stage 8 prompt (running_context accumulation)",
+    "planning_depth": "single-shot decision tree call — already 1, no change",
+    "verification_passes": "no self-critique loops — already 0, no change",
+    "temperature": "Ollama options.temperature for all Stage 8 calls",
+    "top_p": "Ollama options.top_p — added to all Stage 8 payload options",
+    "frequency_penalty": "mapped to Ollama repeat_penalty=1.3 (multiplicative, not additive)",
+    "abstention_policy": "papers with nli_scores[pid] < abstention_tau skipped in Stage 8 synthesis; always keep >=1 paper",
+    "geo_alpha": "entailment_weight in EntailmentRanker (LLM judge selection quality)",
+    "selection_prec": "retrieval_weight in EntailmentRanker (initial retrieval rank precision)",
+    "confidence_bonus": "confidence_weight in EntailmentRanker (cross-encoder max entailment prob — nli_scores, previously computed but unused in blend)"
+  },
+  "timestamp": "2026-05-01T18:55:29"
+}
