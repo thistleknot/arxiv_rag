@@ -39,6 +39,31 @@ while True:
 
 _PLACEHOLDER = "[Image description unavailable]"
 
+# Matches a bare <image_NNN> tag — one NOT immediately followed by \n (i.e., not yet expanded)
+_BARE_TAG_RE = re.compile(r"<image_(\d+)>(?!\n)")
+# Matches a fully expanded block opened by <image_NNN>\n
+_EXPANDED_TAG_RE = re.compile(r"<image_(\d+)>\n")
+
+
+def count_bare_image_tags(md_content: str) -> int:
+    """
+    Count <image_NNN> tags that have not been expanded by Phase 4.
+
+    A bare tag looks like '<image_001>' with no newline immediately after.
+    An expanded tag looks like '<image_001>\ndescription\n</image_001>'.
+
+    Use this as a pre-condition guard before chunking: if count > 0,
+    Phase 4 has not completed and the document should not be chunked.
+
+    Guarantee: returns 0 when all image tokens are populated.
+    """
+    return len(_BARE_TAG_RE.findall(md_content))
+
+
+def count_expanded_image_tags(md_content: str) -> int:
+    """Return the number of fully expanded <image_NNN>\\ndesc\\n</image_NNN> blocks."""
+    return len(_EXPANDED_TAG_RE.findall(md_content))
+
 
 def load_descriptions(csv_path: Path) -> dict[int, tuple[str, bool]]:
     """
@@ -138,6 +163,14 @@ def main() -> int:
     if missing:
         print(f"  Warning: {missing} tag(s) had no matching description — placeholder inserted.")
 
+    # Post-condition: verify no bare tags remain (guard for future chunking)
+    final_content = md_path.read_text(encoding="utf-8")
+    bare = count_bare_image_tags(final_content)
+    expanded = count_expanded_image_tags(final_content)
+    if bare:
+        print(f"  ERROR: {bare} bare <image_NNN> tag(s) remain unexpanded — chunking must not proceed.")
+        return 1
+    print(f"  All {expanded} image token(s) populated — safe to chunk.")
     return 0
 
 
