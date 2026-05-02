@@ -181,6 +181,7 @@ class SyllogismRetrievalResult:
     through_line:   str                 = ""                            # unused — capstone = Synthesis section concatenation
     paper_angles:   Dict[str, str]      = field(default_factory=dict)   # arxiv_id → "Philosophy\nApplication"
     decision_tree:  str                 = ""                            # LLM-generated decision tree
+    methods_content: Dict[str, str]     = field(default_factory=dict)   # arxiv_id → extracted _methods.md text
 
     def top_k_summary(self, k: int = 5) -> str:
         lines = [f"Query  : {self.query}"]
@@ -322,6 +323,15 @@ class SyllogismRetrievalResult:
                 md.append("**Abstract:**")
                 md.append("")
                 md.append(abstract)
+                md.append("")
+
+            methods = self.methods_content.get(pid, "")
+            if methods:
+                md.append("<details><summary>📄 Extracted Methods</summary>")
+                md.append("")
+                md.append(methods.strip())
+                md.append("")
+                md.append("</details>")
                 md.append("")
 
         # ── Per-paper Synthesis ──

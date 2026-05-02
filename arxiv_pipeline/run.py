@@ -33,14 +33,24 @@ import ast
 import json
 import os
 import re
+import subprocess
 import sys
 import time
+import urllib.request
 from pathlib import Path
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
-_ROOT   = Path(__file__).resolve().parent.parent
-_CSV    = _ROOT / "papers" / "post_processed" / "arxiv_data_with_analysis_cleaned.csv"
-_KG_DIR = _ROOT / "graph" / "kg_cache"
+_ROOT        = Path(__file__).resolve().parent.parent
+_CSV         = _ROOT / "papers" / "post_processed" / "arxiv_data_with_analysis_cleaned.csv"
+_KG_DIR      = _ROOT / "graph" / "kg_cache"
+_POSTPROC    = _ROOT / "papers" / "post_processed"
+_PAPERS_DIR  = _ROOT / "papers"
+_PIPELINE_BAT = _ROOT / "run_pipeline.bat"
+_EXTRACT_PY   = _ROOT / "extract_methods.py"
+_PYTHON       = sys.executable
+
+EXTRACT_TOP_N = 3   # max papers to run on-demand extraction for
+
 sys.path.insert(0, str(_ROOT))  # ensure arxiv_id_lists/ on path for graph.*, reasoning.*, arxiv_pipeline.*
 
 from constants import AGENT_TOP_K  # noqa: E402  (import after sys.path fixup)
@@ -223,6 +233,122 @@ def _pgvec_id_to_csv_id(pid: str) -> str:
     return pid
 
 
+def _norm_to_underscore(pid: str) -> str:
+    """Normalize arxiv_id to filesystem underscore form (YYMM_NNNNN)."""
+    pid = re.sub(r'v\d+$', '', pid)
+    pid = re.sub(r'^(\d{4})\.(\d)', r'\1_\2', pid)
+    return pid
+
+
+def _ensure_methods(paper_id: str) -> tuple[str | None, str]:
+    """Return (_methods.md content, source_label) for paper_id, running extraction if needed.
+
+    Resolution order (fast → slow):
+      1. _methods.md already in post_processed → "cached"
+      2. enriched .md in post_processed → run Phase 5 only (~20 s) → "phase5"
+      3. .pdf in papers/ → copy to post_processed, run full pipeline → "full_pipeline"
+      4. download PDF from arxiv → run full pipeline → "downloaded"
+
+    Require: paper_id is a valid arxiv ID in CSV (dot) or path (underscore) form.
+    Guarantee: if returned content is not None, _methods.md exists in post_processed.
+    Failure modes: subprocess errors, network errors — logged, returns (None, "error").
+    """
+    uid = _norm_to_underscore(paper_id)
+    dot_id = _pgvec_id_to_csv_id(uid)
+
+    methods_path = _POSTPROC / f"{uid}_methods.md"
+
+    # ── Level 1: cache hit ────────────────────────────────────────────────────
+    if methods_path.exists():
+        return methods_path.read_text(encoding="utf-8"), "cached"
+
+    # ── Level 2: enriched MD exists — Phase 5 only ───────────────────────────
+    md_path = _POSTPROC / f"{uid}.md"
+    if md_path.exists():
+        print(f"  [extract] {uid}: running Phase 5 (extract_methods.py)...")
+        try:
+            result = subprocess.run(
+                [_PYTHON, str(_EXTRACT_PY), str(md_path)],
+                capture_output=True, text=True, timeout=120,
+            )
+            if result.returncode == 0 and methods_path.exists():
+                return methods_path.read_text(encoding="utf-8"), "phase5"
+            print(f"  [extract] Phase 5 failed (rc={result.returncode}): {result.stderr[:200]}")
+        except subprocess.TimeoutExpired:
+            print(f"  [extract] Phase 5 timed out for {uid}")
+        except Exception as exc:
+            print(f"  [extract] Phase 5 error for {uid}: {exc}")
+        return None, "error"
+
+    # ── Level 3: PDF in papers/ — copy to post_processed, run full pipeline ──
+    pdf_src = _PAPERS_DIR / f"{uid}.pdf"
+    pdf_dest = _POSTPROC / f"{uid}.pdf"
+    if pdf_src.exists():
+        print(f"  [extract] {uid}: copying PDF and running full pipeline...")
+        try:
+            import shutil
+            shutil.copy2(pdf_src, pdf_dest)
+            result = subprocess.run(
+                [str(_PIPELINE_BAT), str(pdf_dest)],
+                capture_output=True, text=True, timeout=600, shell=True,
+            )
+            pdf_dest.unlink(missing_ok=True)
+            if result.returncode == 0 and methods_path.exists():
+                return methods_path.read_text(encoding="utf-8"), "full_pipeline"
+            print(f"  [extract] Full pipeline failed (rc={result.returncode}): {result.stderr[:200]}")
+        except subprocess.TimeoutExpired:
+            pdf_dest.unlink(missing_ok=True)
+            print(f"  [extract] Full pipeline timed out for {uid}")
+        except Exception as exc:
+            pdf_dest.unlink(missing_ok=True)
+            print(f"  [extract] Full pipeline error for {uid}: {exc}")
+        return None, "error"
+
+    # ── Level 4: download PDF from arxiv ─────────────────────────────────────
+    arxiv_url = f"https://arxiv.org/pdf/{dot_id}.pdf"
+    print(f"  [extract] {uid}: downloading PDF from arxiv ({arxiv_url})...")
+    try:
+        _POSTPROC.mkdir(parents=True, exist_ok=True)
+        urllib.request.urlretrieve(arxiv_url, pdf_dest)
+        result = subprocess.run(
+            [str(_PIPELINE_BAT), str(pdf_dest)],
+            capture_output=True, text=True, timeout=600, shell=True,
+        )
+        pdf_dest.unlink(missing_ok=True)
+        if result.returncode == 0 and methods_path.exists():
+            return methods_path.read_text(encoding="utf-8"), "downloaded"
+        print(f"  [extract] Pipeline after download failed (rc={result.returncode})")
+    except Exception as exc:
+        pdf_dest.unlink(missing_ok=True)
+        print(f"  [extract] Download/pipeline error for {uid}: {exc}")
+    return None, "error"
+
+
+def _run_on_demand_extraction(result, top_n: int = EXTRACT_TOP_N) -> None:
+    """Populate result.methods_content for the top_n papers in result.papers.
+
+    Modifies result in-place. Skips papers that fail extraction.
+
+    Require: result.papers is a sorted list of RetrievedDoc with metadata["paper_id"].
+    Guarantee: result.methods_content[pid] set for each paper where extraction succeeded.
+    """
+    target = result.papers[:top_n]
+    n = len(target)
+    print(f"\n  [extract] On-demand extraction for top {n} paper(s)...")
+    t0 = time.time()
+    for doc in target:
+        pid = doc.metadata.get("paper_id", doc.doc_id)
+        content, source = _ensure_methods(pid)
+        if content:
+            result.methods_content[pid] = content
+            print(f"  [extract] {pid}: ✓ ({source})")
+        else:
+            print(f"  [extract] {pid}: ✗ skipped")
+    elapsed = time.time() - t0
+    n_ok = len(result.methods_content)
+    print(f"  [extract] Done: {n_ok}/{n} extracted in {elapsed:.0f}s\n")
+
+
 def _try_pgvector_retrieval(query: str, top_k: int):
     """Attempt to retrieve top_k papers via the 3-layer φ-scaled pgvector pipeline.
 
@@ -277,7 +403,7 @@ def _load_best_params() -> dict:
     return {}
 
 
-def run_retrieval(query: str, n_papers: int, top_k: int, output: str) -> None:
+def run_retrieval(query: str, n_papers: int, top_k: int, output: str, extract: bool = False) -> None:
     """Run the 9-stage syllogism retriever and write the markdown report."""
     print("\n" + "=" * 60)
     print("STAGE 2 — Syllogism retrieval")
@@ -312,11 +438,16 @@ def run_retrieval(query: str, n_papers: int, top_k: int, output: str) -> None:
     result    = retriever.retrieve(query, n_papers=n_papers, top_k=top_k,
                                    pre_selected=pre_selected)
 
+    if extract:
+        _run_on_demand_extraction(result, top_n=EXTRACT_TOP_N)
+
     md = result.to_markdown()
     out_path = Path(output)
     out_path.write_text(md, encoding="utf-8")
     print(f"\n  Report written → {out_path.resolve()}")
     print(f"  Papers retrieved: {len(result.papers)}")
+    if result.methods_content:
+        print(f"  Methods extracted: {len(result.methods_content)} paper(s)")
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
@@ -343,6 +474,9 @@ def main() -> None:
                     help="Run KG cache warmup before retrieval (optional, slow)")
     ap.add_argument("--dry_run",      action="store_true",
                     help="Show warmup plan only; do not warm or retrieve")
+    ap.add_argument("--extract",      action="store_true",
+                    help=f"Run on-demand PDF extraction for top {EXTRACT_TOP_N} papers "
+                         f"(Phase 5 ~20s if MD cached; full pipeline ~6 min if not)")
     args = ap.parse_args()
 
     if args.combine:
@@ -370,6 +504,7 @@ def main() -> None:
         n_papers = args.n_papers,
         top_k    = args.top_k,
         output   = args.output,
+        extract  = args.extract,
     )
 
 
