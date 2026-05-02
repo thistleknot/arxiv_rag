@@ -149,13 +149,14 @@ def extract_tabula(pdf_path: Path, page_no: int, bbox: dict,
         return f"[tabula error: {exc}]"
 
 
-def extract_camelot(pdf_path: Path, page_no: int, bbox: dict) -> str:
+def extract_camelot(pdf_path: Path, page_no: int, bbox: dict) -> tuple[str, str, float]:
     """
-    Extract table text via camelot (pure-Python; handles both lattice and stream).
+    Extract table text via camelot. Tries lattice first (line-based); falls back to stream.
 
-    Tries lattice mode first (line-based), falls back to stream mode.
-    Guarantee: returns a plain-text rendering of the best extracted table.
-    Failure mode: returns empty string on any error.
+    Require: camelot installed; PDF page_no is 1-based.
+    Guarantee: returns (text, flavor_used, accuracy_pct).
+        accuracy_pct >= 80 indicates visible grid lines; use as ruled-table signal.
+    Failure mode: returns ("", "none", 0.0) on all errors.
     """
     area_str = _camelot_area(bbox)
     for flavor in ("lattice", "stream"):
@@ -167,14 +168,14 @@ def extract_camelot(pdf_path: Path, page_no: int, bbox: dict) -> str:
                 table_areas=[area_str],
             )
             if tables and len(tables) > 0:
-                rows = []
-                df = tables[0].df.fillna("")
-                for _, row in df.iterrows():
-                    rows.append(" | ".join(str(v) for v in row))
-                return "\n".join(rows)
+                t = tables[0]
+                accuracy = float(t.parsing_report.get("accuracy", 0.0))
+                df = t.df.fillna("")
+                rows = [" | ".join(str(v) for v in row) for _, row in df.iterrows()]
+                return "\n".join(rows), flavor, accuracy
         except Exception:
             continue
-    return ""
+    return "", "none", 0.0
 
 
 def docling_table_to_md(table_item: dict) -> str:
@@ -206,7 +207,8 @@ def docling_table_to_md(table_item: dict) -> str:
 
 
 def fuse_with_vlm(b64_image: str, docling_md: str, tabula_text: str,
-                  camelot_text: str, host: str, port: int, model: str) -> str:
+                  camelot_text: str, camelot_flavor: str, camelot_accuracy: float,
+                  host: str, port: int, model: str) -> str:
     """
     Ask the VLM to fuse three extraction sources into a single clean markdown table.
 
@@ -214,19 +216,36 @@ def fuse_with_vlm(b64_image: str, docling_md: str, tabula_text: str,
     Guarantee: returns the VLM's response text; empty string on failure.
     Failure mode: HTTP/JSON errors logged, returns empty string.
     """
+    _camelot_mode_desc = {
+        "lattice": (
+            "lattice mode — requires visible grid lines; reliable for ruled tables "
+            "but tends to split merged/spanning cells into separate entries"
+        ),
+        "stream": (
+            "stream mode — whitespace-based; works without grid lines but column "
+            "boundaries drift in dense or multi-column layouts"
+        ),
+        "none": "no output — all camelot extraction attempts failed",
+    }
+    camelot_desc = _camelot_mode_desc.get(camelot_flavor, camelot_flavor)
+
     prompt = (
         "You are a document table transcription assistant. A PDF table region has "
-        "been extracted using three independent methods. Produce the most accurate "
-        "markdown table possible.\n\n"
-        "DOCLING EXTRACTION (structural layout model):\n"
+        "been extracted using three independent methods, each with known failure modes. "
+        "Use their outputs as signals, but treat the image as the authoritative source.\n\n"
+        "DOCLING EXTRACTION (structural layout model — may hallucinate column spans in "
+        "complex tables; reliable for simple grids and header detection):\n"
         f"{docling_md or '[no output]'}\n\n"
-        "TABULA EXTRACTION (Java-based text layer):\n"
+        "TABULA EXTRACTION (Java text-layer extraction — column alignment drifts on "
+        "rotated or skewed tables; unreliable without clear column delimiters):\n"
         f"{tabula_text or '[no output]'}\n\n"
-        "CAMELOT EXTRACTION (line-detection):\n"
+        f"CAMELOT EXTRACTION ({camelot_desc}; accuracy: {camelot_accuracy:.0f}%):\n"
         f"{camelot_text or '[no output]'}\n\n"
-        "Examine the table image carefully. Use it as the authoritative source to "
-        "resolve any disagreements between the three extractions. "
-        "Return ONLY the markdown table — nothing else, no commentary."
+        "Examine the image carefully. Pay special attention to:\n"
+        "- Merged or spanning cells (all three extractors tend to split these incorrectly)\n"
+        "- Header rows vs data rows\n"
+        "- Column alignment, especially in borderless tables\n"
+        "Return ONLY the markdown table — no commentary, no code fences."
     )
     url = f"http://{host}:{port}/api/generate"
     payload = {
@@ -256,6 +275,34 @@ def find_md_tables(md_content: str) -> list[tuple[int, int]]:
     A table block is one or more consecutive lines beginning with '|'.
     """
     return [(m.start(), m.end()) for m in _TABLE_BLOCK_RE.finditer(md_content)]
+
+
+def find_md_table_match(md_content: str, docling_md: str, fallback_idx: int) -> int:
+    """
+    Find the markdown table block index that best matches the docling reconstruction.
+
+    Uses Jaccard token overlap between docling_md and each pipe-block in md_content.
+    Falls back to fallback_idx when the best overlap score is below 0.25 (docling_md
+    has too little text to fingerprint — e.g. single-row or numeric-only tables).
+
+    Require: fallback_idx is a valid positional index (clamped to table count).
+    Guarantee: always returns an index in [0, len(blocks)-1].
+    """
+    spans = find_md_tables(md_content)
+    if not spans:
+        return fallback_idx
+    docling_tokens = set(re.findall(r'\w+', docling_md.lower()))
+    if len(docling_tokens) < 5:
+        return min(fallback_idx, len(spans) - 1)
+    best_idx, best_score = fallback_idx, 0.0
+    for i, (start, end) in enumerate(spans):
+        block_tokens = set(re.findall(r'\w+', md_content[start:end].lower()))
+        if not block_tokens:
+            continue
+        score = len(docling_tokens & block_tokens) / len(docling_tokens | block_tokens)
+        if score > best_score:
+            best_score, best_idx = score, i
+    return best_idx if best_score >= 0.25 else min(fallback_idx, len(spans) - 1)
 
 
 def patch_markdown(md_content: str, enhanced_tables: dict[int, str]) -> str:
@@ -359,26 +406,30 @@ def main() -> int:
         print(f"    tabula: {len(tab_text)} chars")
 
         # 3. Camelot extraction
-        cam_text = extract_camelot(pdf_path, page_no, bbox)
-        print(f"    camelot: {len(cam_text)} chars")
+        cam_text, cam_flavor, cam_accuracy = extract_camelot(pdf_path, page_no, bbox)
+        print(f"    camelot: {len(cam_text)} chars ({cam_flavor}, {cam_accuracy:.0f}%)")
 
         # 4. Docling markdown for this table
         docling_md = docling_table_to_md(table_item)
         print(f"    docling: {len(docling_md)} chars")
 
+        # Map JSON table index → best-matching MD pipe block (text-overlap fingerprint)
+        md_idx = find_md_table_match(md_content, docling_md, idx)
+        if md_idx != idx:
+            print(f"    fingerprint: JSON[{idx}] → MD block [{md_idx}] (positional was {idx})")
+
         # 5. VLM fusion
         print("    fusing via VLM...", end="", flush=True)
-        fused = fuse_with_vlm(b64, docling_md, tab_text, cam_text,
+        fused = fuse_with_vlm(b64, docling_md, tab_text, cam_text, cam_flavor, cam_accuracy,
                               args.host, args.port, args.model)
         if fused:
             print(f" {len(fused)} chars")
-            enhanced[idx] = fused
+            enhanced[md_idx] = fused
             succeeded += 1
         else:
             print(" failed — keeping docling original")
-            # Fall back to docling reconstruction
             if docling_md:
-                enhanced[idx] = docling_md
+                enhanced[md_idx] = docling_md
             failed += 1
 
     if enhanced:
