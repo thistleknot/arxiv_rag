@@ -21,8 +21,8 @@ Pipeline (9 stages):
                  → nli_scores: Dict[arxiv_id, float]  (normalised position weights 1.0→1/N)
     Stage 4: SyllogismFormer.form(…, nli_scores)
                  → SyllogismResult (thesis, entailment chain, chain links)
-    Stage 5: EntailmentRanker.rerank(docs, result)
-                 → blend = 0.5 * nli_score + 0.5 * normalised_retrieval_rank
+    Stage 5: EntailmentRanker.rerank(docs, result, nli_scores)
+                 → blend = 0.5 * judge_score + 0.3 * retrieval_rank + 0.2 * nli_cross_encoder
                  → sorted List[RetrievedDoc] across full [0, 1] range
     Stage 6: load_papers(surviving_ids)
                  → Dict[arxiv_id, markdown]  (docling-converted full text)
