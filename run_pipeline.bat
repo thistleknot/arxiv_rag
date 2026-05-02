@@ -23,8 +23,8 @@ pushd "%INPUT_DIR%"
 
 rem ── Phase 1: Docling extraction ──────────────────────────────────────────────
 if /i "%INPUT_EXT%"==".pdf" (
-    echo [1/5] Extracting document with docling...
-    docling "%INPUT_STEM%.pdf" --to md --output . --pdf-backend dlparse_v4
+    echo [1/6] Extracting document with docling...
+    docling "%INPUT_STEM%.pdf" --to md --to json --output . --pdf-backend dlparse_v4
     if errorlevel 1 (
         popd
         echo ERROR: docling extraction failed.
@@ -32,7 +32,7 @@ if /i "%INPUT_EXT%"==".pdf" (
     )
     echo.
 ) else if /i "%INPUT_EXT%"==".md" (
-    echo [1/5] Skipping docling ^(input is already Markdown^).
+    echo [1/6] Skipping docling ^(input is already Markdown^).
     echo.
 ) else (
     popd
@@ -41,8 +41,23 @@ if /i "%INPUT_EXT%"==".pdf" (
     exit /b 1
 )
 
+rem ── Phase 1.5: Table enhancement (tabula + camelot + VLM fusion) ─────────────
+if /i "%INPUT_EXT%"==".pdf" (
+    if exist "%INPUT_STEM%.json" (
+        echo [1.5/6] Enhancing tables ^(tabula + camelot + VLM^)...
+        python "%SCRIPT_DIR%enhance_tables.py" "%INPUT_STEM%.pdf" "%INPUT_STEM%.md" "%INPUT_STEM%.json"
+        if errorlevel 1 (
+            echo WARNING: Table enhancement failed ^(continuing pipeline^).
+        )
+        echo.
+    ) else (
+        echo [1.5/6] Skipping table enhancement ^(no JSON output from docling^).
+        echo.
+    )
+)
+
 rem ── Phase 2: Extract base64 images to CSV ────────────────────────────────────
-echo [2/5] Extracting base64 images to CSV...
+echo [2/6] Extracting base64 images to CSV...
 python "%SCRIPT_DIR%post_process_md-csv.py" "%INPUT_STEM%.md"
 if errorlevel 1 (
     popd
@@ -52,7 +67,7 @@ if errorlevel 1 (
 echo.
 
 rem ── Phase 3: VLM descriptions via copilot-proxy ──────────────────────────────
-echo [3/5] Generating VLM descriptions ^(qwen3-vl:2b via Ollama^)...
+echo [3/6] Generating VLM descriptions ^(qwen3-vl:2b via Ollama^)...
 python "%SCRIPT_DIR%vlm_describe.py" "%INPUT_STEM%.csv"
 if errorlevel 1 (
     popd
@@ -62,7 +77,7 @@ if errorlevel 1 (
 echo.
 
 rem ── Phase 4: Reinsert descriptions into document ─────────────────────────────
-echo [4/5] Reinserting descriptions into document...
+echo [4/6] Reinserting descriptions into document...
 python "%SCRIPT_DIR%reinsert_descriptions.py" "%INPUT_STEM%.md" "%INPUT_STEM%.csv"
 if errorlevel 1 (
     popd
@@ -72,7 +87,7 @@ if errorlevel 1 (
 echo.
 
 rem ── Phase 5: Extract core methods as pseudocode ─────────────────────────────
-echo [5/5] Extracting core methods as pseudocode...
+echo [5/6] Extracting core methods as pseudocode...
 python "%SCRIPT_DIR%extract_methods.py" "%INPUT_STEM%.md"
 if errorlevel 1 (
     popd

@@ -15,8 +15,45 @@ Chunk → Section → Paper (3-level aggregation)
 """
 
 from collections import defaultdict
-from typing import List, Dict, Any
+from pathlib import Path
+from typing import List, Dict, Any, Optional
 from retrieval.base_gist_retriever import BaseGISTRetriever, RetrievedDoc
+
+# Default location for pre-computed pipeline outputs (Phase 4 enriched MD + Phase 5 methods)
+PAPERS_DIR = Path(__file__).parent / "papers" / "post_processed"
+
+
+def load_methods_content(paper_id: str, papers_dir: Path) -> Optional[str]:
+    """
+    Load pre-computed Phase 5 methods pseudocode for a paper if available.
+
+    Tries {paper_id}_methods.md with both underscore and dot normalizations so
+    that arxiv IDs stored as "1806_07366" or "1806.07366" both resolve.
+
+    Require: papers_dir is a readable directory path (need not exist).
+    Guarantee: returns file text if found, None otherwise.
+    """
+    variants = [paper_id, paper_id.replace(".", "_"), paper_id.replace("_", ".")]
+    for vid in dict.fromkeys(variants):  # deduplicated, order-preserving
+        p = papers_dir / f"{vid}_methods.md"
+        if p.is_file():
+            return p.read_text(encoding="utf-8")
+    return None
+
+
+def load_enriched_md(paper_id: str, papers_dir: Path) -> Optional[str]:
+    """
+    Load the Phase 4 enriched Markdown (with inline image descriptions) if available.
+
+    Require: papers_dir is a readable directory path (need not exist).
+    Guarantee: returns file text if found, None otherwise.
+    """
+    variants = [paper_id, paper_id.replace(".", "_"), paper_id.replace("_", ".")]
+    for vid in dict.fromkeys(variants):
+        p = papers_dir / f"{vid}.md"
+        if p.is_file():
+            return p.read_text(encoding="utf-8")
+    return None
 
 
 class ArxivRetriever(BaseGISTRetriever):
@@ -210,7 +247,19 @@ if __name__ == "__main__":
     parser.add_argument("--user", type=str, default="langchain")
     parser.add_argument("--password", type=str, default="langchain")
     parser.add_argument("--table", type=str, default="arxiv_chunks")
+    parser.add_argument(
+        "--papers-dir",
+        type=str,
+        default=str(PAPERS_DIR),
+        help="Directory containing pre-processed paper MDs and _methods.md files",
+    )
+    parser.add_argument(
+        "--no-methods",
+        action="store_true",
+        help="Skip injecting pre-computed methods pseudocode into results",
+    )
     args = parser.parse_args()
+    papers_dir = Path(args.papers_dir)
 
     from pgvector_retriever import PGVectorConfig
 
@@ -237,17 +286,30 @@ if __name__ == "__main__":
     results = retriever.search(args.search, top_k=args.top_k)
     elapsed = time.time() - t0
 
+    # Attach pre-computed enrichments to each paper's metadata
+    if not args.no_methods:
+        for p in results:
+            p.metadata["methods"] = load_methods_content(p.doc_id, papers_dir)
+            p.metadata["enriched_md"] = load_enriched_md(p.doc_id, papers_dir)
+
     total_sections = sum(len(p.sections) for p in results)
+    enriched_count = sum(1 for p in results if p.metadata.get("methods")) if not args.no_methods else 0
     score_lo = results[-1].final_score if results else 0.0
     score_hi = results[0].final_score if results else 0.0
 
     print(f"\nQuery : {args.search}")
     print(f"Papers: {len(results)}  |  Sections: {total_sections}  |  {elapsed:.1f}s")
-    print(f"Scores: {score_lo:.4f} – {score_hi:.4f}\n")
+    print(f"Scores: {score_lo:.4f} – {score_hi:.4f}")
+    if not args.no_methods:
+        print(f"Enriched: {enriched_count}/{len(results)} papers have pre-computed methods")
+    print()
     for i, p in enumerate(results, 1):
         secs = p.sections or []
         sec_scores = " ".join(f"{s.final_score:.4f}" for s in secs)
-        print(f"  {i:2d}. {p.doc_id:<20s}  paper={p.final_score:.4f}  sections=[{sec_scores}]")
+        has_methods = "✓methods" if p.metadata.get("methods") else ""
+        has_img = "✓images" if p.metadata.get("enriched_md") else ""
+        enrichment_tag = f"  [{' '.join(t for t in [has_methods, has_img] if t)}]" if (has_methods or has_img) else ""
+        print(f"  {i:2d}. {p.doc_id:<20s}  paper={p.final_score:.4f}  sections=[{sec_scores}]{enrichment_tag}")
 
     if args.save:
         lines = [
@@ -271,16 +333,19 @@ if __name__ == "__main__":
             f"| Total sections | {total_sections} |",
             f"| Avg sections / paper | {total_sections / max(len(results), 1):.1f} |",
             f"| Score range | {score_lo:.4f} – {score_hi:.4f} |",
+            f"| Papers with extracted methods | {enriched_count} |",
             "",
             "## Rankings",
             "",
         ]
         for rank, p in enumerate(results, 1):
             secs = p.sections or []
+            methods_text = p.metadata.get("methods")
             lines += [
                 f"### [{rank}] {p.doc_id}",
                 "",
-                f"**Paper score:** {p.final_score:.4f} &nbsp;|&nbsp; **Sections:** {len(secs)}",
+                f"**Paper score:** {p.final_score:.4f} &nbsp;|&nbsp; **Sections:** {len(secs)}"
+                + (" &nbsp;|&nbsp; **Methods: ✓**" if methods_text else ""),
                 "",
             ]
             for j, sec in enumerate(secs, 1):
@@ -299,6 +364,13 @@ if __name__ == "__main__":
                     f"(section_idx={sidx}, ColBERT score={sec.final_score:.4f}){heading_str}",
                     "",
                     blockquote,
+                    "",
+                ]
+            if methods_text:
+                lines += [
+                    "#### Extracted Methods (pseudocode)",
+                    "",
+                    methods_text.strip(),
                     "",
                 ]
         with open(args.save, "w", encoding="utf-8") as fh:
