@@ -24,7 +24,12 @@ Flags:
     --combine       Combine Synthesis sections from listed report files into --output
     --warmup_limit  Max uncached papers to process before retrieval (default: 0 = all)
     --skip_warmup   Skip the KG cache warmup stage entirely
-    --dry_run       Show warmup plan only; do not warm or retrieve
+    --extract       Run tiered on-demand methods extraction after retrieval:
+                      • top-3 cached  → eager full-pipeline on top 5
+                      • some missing  → eager full-pipeline on top 3
+                      • floor: always attempt ≥2 fully-enriched results
+                      • remainder of top_k: text-only Phase-5 extraction
+                        (injected into report, NOT written to disk)
 """
 
 import argparse
@@ -47,7 +52,9 @@ _POSTPROC    = _ROOT / "papers" / "post_processed"
 _PAPERS_DIR  = _ROOT / "papers"
 _PIPELINE_BAT = _ROOT / "run_pipeline.bat"
 
-EXTRACT_TOP_N = 3   # max papers to run on-demand extraction for
+EXTRACT_EAGER_BASE     = 3  # full-pipeline papers when any top-3 are missing
+EXTRACT_EAGER_EXTENDED = 5  # full-pipeline papers when all top-3 already done
+EXTRACT_MIN_FULL       = 2  # minimum papers with disk-persisted full methods
 
 sys.path.insert(0, str(_ROOT))  # ensure arxiv_id_lists/ on path for graph.*, reasoning.*, arxiv_pipeline.*
 
@@ -238,6 +245,44 @@ def _norm_to_underscore(pid: str) -> str:
     return pid
 
 
+def _extract_methods_text_only(paper_id: str) -> str | None:
+    """Run Phase 5 extraction inline without writing _methods.md to disk.
+
+    Used for papers outside the eager-extraction tier. Produces a 'bastardized'
+    methods extraction: text body only, no VLM image descriptions. The result is
+    injected into the report but never persisted so it cannot be mistaken for a
+    fully-enriched (Phase 3+4+5) extraction.
+
+    Require: .md exists in post_processed for paper_id.
+    Guarantee: _methods.md is never created; returns content string or None.
+    Failure modes: missing .md, proxy unreachable, empty response → returns None.
+    """
+    uid = _norm_to_underscore(paper_id)
+    md_path = _POSTPROC / f"{uid}.md"
+    if not md_path.is_file():
+        return None
+    try:
+        from extract_methods import (  # noqa: PLC0415
+            call_proxy, load_system_prompt, strip_post_references,
+        )
+    except ImportError as exc:
+        print(f"  [extract] cannot import extract_methods: {exc}")
+        return None
+    try:
+        system_prompt = load_system_prompt()
+        body, _ = strip_post_references(md_path.read_text(encoding="utf-8"))
+        content = call_proxy(body, system_prompt, "gpt-4.1", "localhost", 8069)
+        if not content.strip():
+            return None
+        return (
+            "> ⚠️ **Text-only extraction** — image descriptions not yet available "
+            "for this paper.\n\n" + content
+        )
+    except Exception as exc:
+        print(f"  [extract] text-only failed for {uid}: {exc}")
+        return None
+
+
 def _ensure_methods(paper_id: str) -> tuple[str | None, str]:
     """Return (_methods.md content, source_label) for paper_id, running extraction if needed.
 
@@ -309,29 +354,92 @@ def _ensure_methods(paper_id: str) -> tuple[str | None, str]:
     return _run_pipeline_on_pdf("downloaded")
 
 
-def _run_on_demand_extraction(result, top_n: int = EXTRACT_TOP_N) -> None:
-    """Populate result.methods_content for the top_n papers in result.papers.
+def _run_on_demand_extraction(result) -> None:
+    """Populate result.methods_content using a tiered extraction strategy.
 
-    Modifies result in-place. Skips papers that fail extraction.
+    Tier 1 — Eager full-pipeline (writes _methods.md to disk):
+      - Counts how many of the top-3 papers already have _methods.md.
+      - If all 3 are cached: extends eager processing to EXTRACT_EAGER_EXTENDED (5).
+      - Otherwise:          eager window is EXTRACT_EAGER_BASE (3).
+      - After the eager pass, if <EXTRACT_MIN_FULL full results were obtained,
+        continues trying papers beyond the eager window until the floor is met.
 
+    Tier 2 — Text-only bastardized extraction (never writes to disk):
+      - Every remaining top-k paper that didn't receive Tier 1 treatment.
+      - Runs Phase 5 directly on the existing .md (no VLM image descriptions).
+      - Output is injected into the report labelled as text-only.
+
+    Modifies result in-place.
     Require: result.papers is a sorted list of RetrievedDoc with metadata["paper_id"].
-    Guarantee: result.methods_content[pid] set for each paper where extraction succeeded.
+    Guarantee: result.methods_content[pid] set for each paper where any extraction
+               succeeded; _methods.md is only written for Tier 1 papers.
     """
-    target = result.papers[:top_n]
-    n = len(target)
-    print(f"\n  [extract] On-demand extraction for top {n} paper(s)...")
+    papers = result.papers
+    if not papers:
+        return
+
+    # ── Determine eager-extraction limit ──────────────────────────────────────
+    n_top3 = min(3, len(papers))
+    top3_done = sum(
+        1 for doc in papers[:n_top3]
+        if (_POSTPROC / f"{_norm_to_underscore(doc.metadata.get('paper_id', doc.doc_id))}_methods.md").exists()
+    )
+    eager_limit = min(
+        EXTRACT_EAGER_EXTENDED if top3_done == n_top3 else EXTRACT_EAGER_BASE,
+        len(papers),
+    )
+    print(
+        f"\n  [extract] Tier config: top3_cached={top3_done}/{n_top3}  "
+        f"eager_limit={eager_limit}  min_full={EXTRACT_MIN_FULL}"
+    )
+
     t0 = time.time()
-    for doc in target:
+
+    # ── Tier 1a: Eager full-pipeline ──────────────────────────────────────────
+    n_full = 0
+    for doc in papers[:eager_limit]:
         pid = doc.metadata.get("paper_id", doc.doc_id)
         content, source = _ensure_methods(pid)
         if content:
             result.methods_content[pid] = content
-            print(f"  [extract] {pid}: ✓ ({source})")
+            n_full += 1
+            print(f"  [extract] {pid}: ✓ full ({source})")
         else:
-            print(f"  [extract] {pid}: ✗ skipped")
+            print(f"  [extract] {pid}: ✗ full pipeline failed")
+
+    # ── Tier 1b: Min-full guarantee — extend past eager_limit if needed ───────
+    if n_full < EXTRACT_MIN_FULL:
+        for doc in papers[eager_limit:]:
+            if n_full >= EXTRACT_MIN_FULL:
+                break
+            pid = doc.metadata.get("paper_id", doc.doc_id)
+            if pid in result.methods_content:
+                continue
+            content, source = _ensure_methods(pid)
+            if content:
+                result.methods_content[pid] = content
+                n_full += 1
+                print(f"  [extract] {pid}: ✓ full ({source}, min-full pass)")
+            else:
+                print(f"  [extract] {pid}: ✗ full pipeline failed (min-full pass)")
+
+    # ── Tier 2: Text-only bastardized extraction for remainder ────────────────
+    n_bastard = 0
+    for doc in papers:
+        pid = doc.metadata.get("paper_id", doc.doc_id)
+        if pid in result.methods_content:
+            continue
+        content = _extract_methods_text_only(pid)
+        if content:
+            result.methods_content[pid] = content
+            n_bastard += 1
+            print(f"  [extract] {pid}: ~ text-only (not persisted)")
+
     elapsed = time.time() - t0
-    n_ok = len(result.methods_content)
-    print(f"  [extract] Done: {n_ok}/{n} extracted in {elapsed:.0f}s\n")
+    print(
+        f"\n  [extract] Done: {n_full} full + {n_bastard} text-only "
+        f"({len(result.methods_content)} total) in {elapsed:.0f}s\n"
+    )
 
 
 def _try_pgvector_retrieval(query: str, top_k: int):
@@ -424,7 +532,7 @@ def run_retrieval(query: str, n_papers: int, top_k: int, output: str, extract: b
                                    pre_selected=pre_selected)
 
     if extract:
-        _run_on_demand_extraction(result, top_n=EXTRACT_TOP_N)
+        _run_on_demand_extraction(result)
 
     md = result.to_markdown()
     out_path = Path(output)
