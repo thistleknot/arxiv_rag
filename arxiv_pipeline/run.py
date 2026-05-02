@@ -46,8 +46,6 @@ _KG_DIR      = _ROOT / "graph" / "kg_cache"
 _POSTPROC    = _ROOT / "papers" / "post_processed"
 _PAPERS_DIR  = _ROOT / "papers"
 _PIPELINE_BAT = _ROOT / "run_pipeline.bat"
-_EXTRACT_PY   = _ROOT / "extract_methods.py"
-_PYTHON       = sys.executable
 
 EXTRACT_TOP_N = 3   # max papers to run on-demand extraction for
 
@@ -243,11 +241,15 @@ def _norm_to_underscore(pid: str) -> str:
 def _ensure_methods(paper_id: str) -> tuple[str | None, str]:
     """Return (_methods.md content, source_label) for paper_id, running extraction if needed.
 
-    Resolution order (fast → slow):
-      1. _methods.md already in post_processed → "cached"
-      2. enriched .md in post_processed → run Phase 5 only (~20 s) → "phase5"
-      3. .pdf in papers/ → copy to post_processed, run full pipeline → "full_pipeline"
-      4. download PDF from arxiv → run full pipeline → "downloaded"
+    _methods.md is the canonical signal that the paper has been through the full
+    new pipeline (docling → Phase 2 base64 strip → Phase 3 VLM descriptions →
+    Phase 4 reinsert → Phase 5 methods). Its absence always triggers a full re-run,
+    even if a .md exists from an older pipeline run without image descriptions.
+
+    Resolution order:
+      1. _methods.md in post_processed → "cached"
+      2. .pdf in papers/             → copy to post_processed, run full pipeline → "full_pipeline"
+      3. download from arxiv.org     → run full pipeline → "downloaded"
 
     Require: paper_id is a valid arxiv ID in CSV (dot) or path (underscore) form.
     Guarantee: if returned content is not None, _methods.md exists in post_processed.
@@ -262,66 +264,49 @@ def _ensure_methods(paper_id: str) -> tuple[str | None, str]:
     if methods_path.exists():
         return methods_path.read_text(encoding="utf-8"), "cached"
 
-    # ── Level 2: enriched MD exists — Phase 5 only ───────────────────────────
-    md_path = _POSTPROC / f"{uid}.md"
-    if md_path.exists():
-        print(f"  [extract] {uid}: running Phase 5 (extract_methods.py)...")
-        try:
-            result = subprocess.run(
-                [_PYTHON, str(_EXTRACT_PY), str(md_path)],
-                capture_output=True, text=True, timeout=120,
-            )
-            if result.returncode == 0 and methods_path.exists():
-                return methods_path.read_text(encoding="utf-8"), "phase5"
-            print(f"  [extract] Phase 5 failed (rc={result.returncode}): {result.stderr[:200]}")
-        except subprocess.TimeoutExpired:
-            print(f"  [extract] Phase 5 timed out for {uid}")
-        except Exception as exc:
-            print(f"  [extract] Phase 5 error for {uid}: {exc}")
-        return None, "error"
-
-    # ── Level 3: PDF in papers/ — copy to post_processed, run full pipeline ──
+    # ── Level 2 & 3: full pipeline needed (PDF source → post_processed) ──────
+    # Prefer existing local PDF; fall back to arxiv download.
     pdf_src = _PAPERS_DIR / f"{uid}.pdf"
     pdf_dest = _POSTPROC / f"{uid}.pdf"
-    if pdf_src.exists():
-        print(f"  [extract] {uid}: copying PDF and running full pipeline...")
+
+    def _run_pipeline_on_pdf(label: str) -> tuple[str | None, str]:
         try:
-            import shutil
-            shutil.copy2(pdf_src, pdf_dest)
             result = subprocess.run(
                 [str(_PIPELINE_BAT), str(pdf_dest)],
                 capture_output=True, text=True, timeout=600, shell=True,
             )
             pdf_dest.unlink(missing_ok=True)
             if result.returncode == 0 and methods_path.exists():
-                return methods_path.read_text(encoding="utf-8"), "full_pipeline"
-            print(f"  [extract] Full pipeline failed (rc={result.returncode}): {result.stderr[:200]}")
+                return methods_path.read_text(encoding="utf-8"), label
+            print(f"  [extract] Pipeline failed (rc={result.returncode}): {result.stderr[:300]}")
         except subprocess.TimeoutExpired:
             pdf_dest.unlink(missing_ok=True)
-            print(f"  [extract] Full pipeline timed out for {uid}")
+            print(f"  [extract] Pipeline timed out for {uid}")
         except Exception as exc:
             pdf_dest.unlink(missing_ok=True)
-            print(f"  [extract] Full pipeline error for {uid}: {exc}")
+            print(f"  [extract] Pipeline error for {uid}: {exc}")
         return None, "error"
 
-    # ── Level 4: download PDF from arxiv ─────────────────────────────────────
+    if pdf_src.exists():
+        print(f"  [extract] {uid}: copying PDF → running full pipeline...")
+        try:
+            import shutil
+            shutil.copy2(pdf_src, pdf_dest)
+        except Exception as exc:
+            print(f"  [extract] PDF copy error for {uid}: {exc}")
+            return None, "error"
+        return _run_pipeline_on_pdf("full_pipeline")
+
     arxiv_url = f"https://arxiv.org/pdf/{dot_id}.pdf"
-    print(f"  [extract] {uid}: downloading PDF from arxiv ({arxiv_url})...")
+    print(f"  [extract] {uid}: downloading PDF from {arxiv_url}...")
     try:
         _POSTPROC.mkdir(parents=True, exist_ok=True)
         urllib.request.urlretrieve(arxiv_url, pdf_dest)
-        result = subprocess.run(
-            [str(_PIPELINE_BAT), str(pdf_dest)],
-            capture_output=True, text=True, timeout=600, shell=True,
-        )
-        pdf_dest.unlink(missing_ok=True)
-        if result.returncode == 0 and methods_path.exists():
-            return methods_path.read_text(encoding="utf-8"), "downloaded"
-        print(f"  [extract] Pipeline after download failed (rc={result.returncode})")
     except Exception as exc:
         pdf_dest.unlink(missing_ok=True)
-        print(f"  [extract] Download/pipeline error for {uid}: {exc}")
-    return None, "error"
+        print(f"  [extract] Download error for {uid}: {exc}")
+        return None, "error"
+    return _run_pipeline_on_pdf("downloaded")
 
 
 def _run_on_demand_extraction(result, top_n: int = EXTRACT_TOP_N) -> None:
