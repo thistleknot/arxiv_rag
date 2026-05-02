@@ -41,18 +41,6 @@ if /i "%INPUT_EXT%"==".pdf" (
     exit /b 1
 )
 
-rem ── Phase 1b: Fix formula-not-decoded via PDF text stream ────────────────────
-if /i "%INPUT_EXT%"==".pdf" (
-    echo [1b/5] Fixing formula placeholders from PDF text stream...
-    python "%SCRIPT_DIR%fix_formulas.py" "%INPUT_STEM%.md" "%INPUT_STEM%.pdf"
-    if errorlevel 1 (
-        popd
-        echo ERROR: formula fix failed.
-        exit /b 1
-    )
-    echo.
-)
-
 rem ── Phase 2: Extract base64 images to CSV ────────────────────────────────────
 echo [2/5] Extracting base64 images to CSV...
 python "%SCRIPT_DIR%post_process_md-csv.py" "%INPUT_STEM%.md"
