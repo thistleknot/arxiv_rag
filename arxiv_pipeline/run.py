@@ -15,13 +15,19 @@ Usage:
     # Combine per-query reports into a single final _report.md:
     python run.py --combine _report_asd.md _report_ags.md _report_dsf.md
 
+    # LLM capstone synthesis over N completed reports:
+    python run.py --capstone _report_clap.md _report_hard_neg.md _report_attn_pool.md --output _report_capstone.md
+
 Flags:
-    query           Retrieval query (required unless --dry_run or --combine)
+    query           Retrieval query (required unless --dry_run or --combine or --capstone)
     --top_k         Number of papers to return (default: 13)
     --n_papers      Standalone fallback candidate pool size (default: 13).
                     Only used when the 3-layer pgvector retriever is unavailable.
     --output        Path for the markdown report (default: _report.md)
     --combine       Combine Synthesis sections from listed report files into --output
+                    (verbatim concatenation — no LLM)
+    --capstone      LLM synthesis over N completed report files into --output.
+                    Sends all reports to gpt-4.1 for cross-domain analysis.
     --warmup_limit  Max uncached papers to process before retrieval (default: 0 = all)
     --skip_warmup   Skip the KG cache warmup stage entirely
     --extract       Run tiered on-demand methods extraction after retrieval:
@@ -220,6 +226,78 @@ def combine_reports(input_paths: list, output: str) -> None:
     print(f"\n  Combined report written → {out_path.resolve()}")
     print(f"  Sections combined: {len(parts)}")
 
+
+
+def _capstone_synthesis(input_paths: list, output: str) -> None:
+    """Send N completed report files to gpt-4.1 for a cross-domain capstone synthesis.
+
+    Reads each report in full, concatenates them with a divider, and issues a single
+    LLM call asking for cross-cutting analysis. Writes the result to --output.
+
+    Require: at least 2 valid input files; copilot-proxy running at localhost:8069.
+    Guarantee: output file is always written (may contain error message on LLM failure).
+    Failure modes: missing files are skipped with a warning; LLM errors are caught and
+                   written into the output so the run doesn't fail silently.
+    """
+    try:
+        from extract_methods import call_proxy  # noqa: PLC0415
+    except ImportError as exc:
+        print(f"  [capstone] Cannot import call_proxy from extract_methods: {exc}")
+        return
+
+    blocks = []
+    for p in input_paths:
+        path = Path(p)
+        if not path.exists():
+            print(f"  [capstone] Skipping missing file: {p}")
+            continue
+        text = path.read_text(encoding="utf-8")
+        blocks.append(f"=== Report: {path.name} ===\n\n{text}")
+        print(f"  [capstone] Loaded {path.name}  ({len(text):,} chars)")
+
+    if len(blocks) < 2:
+        print("  [capstone] Need at least 2 valid reports for capstone synthesis.")
+        return
+
+    combined_input = "\n\n" + ("─" * 60) + "\n\n".join(blocks)
+
+    system_prompt = """\
+You are a research synthesist given {n} independent research reports on related topics.
+Produce a unified capstone synthesis in markdown with these sections:
+
+## Cross-Cutting Themes
+Identify patterns, principles, or mechanisms that appear in 2+ reports. Be specific —
+name the papers and techniques, don't speak in vague generalities.
+
+## Approach Comparisons
+Where do the approaches diverge? What tradeoffs does each make? Where would you
+reach for one vs another?
+
+## Connections and Synergies
+Draw explicit cross-domain connections: where does a technique from one report
+inform, extend, or contradict an approach in another?
+
+## Unified Insights
+The 3–5 most important takeaways that only become visible by reading across all reports.
+
+## Open Questions
+Gaps, unresolved tensions, or follow-up directions the individual reports don't address.
+
+Be direct. No preamble. Lead each section with substance, not meta-commentary.
+""".format(n=len(blocks))
+
+    print(f"\n  [capstone] Sending {len(blocks)} reports to gpt-4.1 for synthesis...")
+    t0 = time.time()
+    try:
+        content = call_proxy(combined_input, system_prompt, "gpt-4.1", "localhost", 8069)
+    except Exception as exc:
+        content = f"**Capstone synthesis failed:** {exc}\n"
+        print(f"  [capstone] LLM call failed: {exc}")
+
+    elapsed = time.time() - t0
+    out_path = Path(output)
+    out_path.write_text(content, encoding="utf-8")
+    print(f"  [capstone] Done in {elapsed:.0f}s — written → {out_path.resolve()}")
 
 
 def _pgvec_id_to_csv_id(pid: str) -> str:
@@ -655,7 +733,7 @@ def main() -> None:
         epilog=__doc__,
     )
     ap.add_argument("query",          nargs="?",  default="",
-                    help="Retrieval query (required unless --dry_run)")
+                    help="Retrieval query (required unless --dry_run or --combine or --capstone)")
     ap.add_argument("--top_k",        type=int,   default=AGENT_TOP_K,
                     help=f"Final papers to return from syllogism pipeline (default: {AGENT_TOP_K})")
     ap.add_argument("--n_papers",     type=int,   default=AGENT_TOP_K,
@@ -664,7 +742,11 @@ def main() -> None:
     ap.add_argument("--output",       type=str,   default="_report.md",
                     help="Output markdown file (default: _report.md)")
     ap.add_argument("--combine",      nargs="+",  metavar="FILE",
-                    help="Combine Synthesis sections from these report files into --output")
+                    help="Combine Synthesis sections from these report files into --output "
+                         "(verbatim concatenation — no LLM)")
+    ap.add_argument("--capstone",     nargs="+",  metavar="FILE",
+                    help="LLM capstone synthesis over N completed report files into --output; "
+                         "sends all reports to gpt-4.1 for cross-domain analysis")
     ap.add_argument("--warmup_limit", type=int,   default=0,
                     help="Max uncached papers to warm before retrieval (0 = all)")
     ap.add_argument("--warmup",       action="store_true",
@@ -683,6 +765,10 @@ def main() -> None:
 
     if args.combine:
         combine_reports(args.combine, args.output)
+        return
+
+    if args.capstone:
+        _capstone_synthesis(args.capstone, args.output)
         return
 
     if args.dry_run:
