@@ -111,6 +111,54 @@ python eval/generate_qa_pairs_v2.py
 
 ---
 
+## 📄 PDF → Markdown Pipeline
+
+5-phase pipeline that converts a research PDF into enriched Markdown (with inline image descriptions) and a pseudocode methods extraction.
+
+### Usage
+
+```bat
+# Full pipeline — PDF input (runs docling internally)
+run_pipeline.bat paper.pdf
+
+# Start from an existing Markdown file (skips Phase 1 docling)
+run_pipeline.bat paper.md
+```
+
+### Phases
+
+| Phase | Script | Description |
+|-------|--------|-------------|
+| 1 | `docling` (external) | PDF → Markdown via `dlparse_v4` backend; skipped when input is `.md` |
+| 1b | `fix_formulas.py` | Recover formula placeholders from PDF text stream (PDF input only) |
+| 2 | `post_process_md-csv.py` | Strip inline base64 images → `<image_NNN>` tokens; write `{stem}.csv` |
+| 3 | `vlm_describe.py` | Describe each image via **qwen3-vl:2b** (Ollama); sets `value_added` flag to gate boilerplate |
+| 4 | `reinsert_descriptions.py` | Replace every `<image_NNN>` tag with `<image_NNN>\ntext\n</image_NNN>`; uses `"formatting"` for decorative images |
+| 5 | `extract_methods.py` | Strip references/appendix; extract core algorithms as pseudocode via **gpt-4.1** (copilot-proxy) |
+
+### Outputs
+
+| File | Description |
+|------|-------------|
+| `{stem}.md` | Enriched Markdown with inline image description spans |
+| `{stem}.csv` | Base64 image data + VLM descriptions + `value_added` flag |
+| `{stem}_methods.md` | Pseudocode extraction of core algorithms (evidence-disciplined) |
+
+### Infrastructure
+
+| Component | Config |
+|-----------|--------|
+| VLM (image descriptions) | Ollama at `192.168.3.17:11434`, model `qwen3-vl:2b` |
+| LLM (methods extraction) | copilot-proxy at `localhost:8069`, model `gpt-4.1` |
+| System prompt | `methods_sspv2.md` — pseudocode format, anti-hallucination, recursive-shape, and ambiguity rules |
+
+### Resumability
+
+Phase 3 (`vlm_describe.py`) is idempotent — rows that already have a valid `description` and `value_added` are skipped.
+Rows prefixed `[ERROR]` or `[PENDING]`, or rows missing `value_added` from an older run, are automatically retried.
+
+---
+
 ## 📊 SyllogismRetriever — Current Performance
 
 | Setting | Value |
